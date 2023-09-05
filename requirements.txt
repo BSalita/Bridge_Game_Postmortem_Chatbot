@@ -1,0 +1,21 @@
+# for app.py
+streamlit>=1.26
+openai
+pandas<2.1.0
+duckdb
+requests
+python-dotenv
+tenacity
+termcolor
+streamlit-chat
+bs4
+endplay
+
+# for mlBridgeLib
+numpy
+pathlib
+scikit-learn
+matplotlib
+IPython
+streamlit-aggrid
+seaborn
