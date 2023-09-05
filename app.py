@@ -1124,7 +1124,7 @@ def main():
         st.session_state.player_number = None
         st.session_state.game_id = None
         st.session_state.sd_observations = 10
-        st.session_state.assistant_logo = 'https://images.emojiterra.com/google/noto-emoji/unicode-15/animated/1f978.gif' # 🥸 todo: put into config file 
+        st.session_state.assistant_logo = 'https://images.emojiterra.com/google/noto-emoji/unicode-15/animated/1f978.gif' # 🥸 todo: put into config 
         st.session_state.guru_logo = 'https://images.emojiterra.com/google/noto-emoji/unicode-15/color/1024px/1f977-1f3fb.png' # 🥷todo: put into config file 
         # causes streamlit connection error
         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
