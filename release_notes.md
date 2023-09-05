@@ -27,7 +27,6 @@
 20. Howell movements.
 21. Write dataframe/SQL to in-memory SQL database? Perform queries on in-memory database instead of dataframe?
 22. Figure out how to upload binary assets to HF.
-23. Can HF webhook github? If so, then can HF webhook chatbot?
 25. Show BBO bidding, both ACBL human and BBO robot.
 26. Separate Release Notes from Project Notes?
 27. Speed up single dummy. write to file or sql database?.
