@@ -194,7 +194,7 @@
 				"prompts": [
 					{
 						"prompt": "Use opponent direction. Show board, contract, pct, score, tricks, dd tricks, parscore, sd score, sd score max, sd contract max. Show those boards opponent declared and score > parscore and score > sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Opponent_Pair_Direction} as Pct, Score_{Opponent_Pair_Direction} as Score, Tricks, DDTricks, ParScore_{Opponent_Pair_Direction} as ParScore, SDScore_{Opponent_Pair_Direction} as SDScore, SDScore_Max_{Opponent_Pair_Direction} as SDScore_Max, SDContract_Max, Opponent_Pair_Direction as Direction FROM results WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > ParScore_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} > SDScore_{Opponent_Pair_Direction}"
+						"sql": "SELECT Board, Contract, Pct_{Opponent_Pair_Direction}, Score_{Opponent_Pair_Direction}, Tricks, DDTricks, ParScore_{Opponent_Pair_Direction}, SDScore_{Opponent_Pair_Direction}, SDScore_Max_{Opponent_Pair_Direction}, SDContract_Max, Opponent_Pair_Direction as Direction FROM results WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > ParScore_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} > SDScore_{Opponent_Pair_Direction}"
 					}
 				]
 			},

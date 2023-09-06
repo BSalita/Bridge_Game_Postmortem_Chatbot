@@ -1124,8 +1124,8 @@ def main():
         st.session_state.player_number = None
         st.session_state.game_id = None
         st.session_state.sd_observations = 10
-        st.session_state.assistant_logo = 'https://images.emojiterra.com/google/noto-emoji/unicode-15/animated/1f978.gif' # 🥸 todo: put into config 
-        st.session_state.guru_logo = 'https://images.emojiterra.com/google/noto-emoji/unicode-15/color/1024px/1f977-1f3fb.png' # 🥷todo: put into config file 
+        st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+        st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
         # causes streamlit connection error
         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
         #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:

@@ -13,6 +13,7 @@
 2. Document SD_[Score,ParScore,Matchpoints,Pct][Max][Diff].
 
 ## To Be Implemented
+1. Is there some way that logo url can be file:///assets/...?
 2. Show list of acbl numbers, debug mode only, in landing page?
 3. Create .json or .toml file for settings. Use settings to turn off any debug output.
 4. Implement Checkbox for Debug Output in Advanced Settings. Use setting to turn off any debug output.
