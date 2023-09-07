@@ -255,7 +255,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, sd pct diff, contract, score, parscore, pct, parscore pct, sd pct, dd tricks, sd parscore pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
-						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} as SD_Pct_Diff, Contract, Score_{Pair_Direction} as Score, ParScore_{Pair_Direction} as ParScore, Pct_{Pair_Direction} as Pct, ParScore_Pct_{Pair_Direction} as ParScore_Pct, SDPct_{Pair_Direction} as SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} as SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} as SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
+						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} as SD_Pct_Diff, Contract, Score_{Pair_Direction} as Score, ParScore_{Pair_Direction} as ParScore, Pct_{Pair_Direction} as Pct, ParScore_Pct_{Pair_Direction} as ParScore_Pct, Pair_Number_NS, Pair_Number_EW, SDPct_{Pair_Direction} as SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} as SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} as SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
 					}
 				]
 			},
@@ -296,7 +296,7 @@
 				"prompts": [
 					{
 						"prompt": "Show concat(player name n, '-', player name s) as Names_{Pair_Direction}, concat(player name e, '-', player name w) as Names_{Opponent_Pair_Direction}, pair number ns as Pair_{Pair_Direction}, pair number ew as Pair_{Opponent_Pair_Direction}, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}. Only those boards we played.",
-						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Names_{Pair_Direction}, CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Names_{Opponent_Pair_Direction}, Pair_Number_{Pair_Direction} AS Pair_{Pair_Direction}, Pair_Number_{Opponent_Pair_Direction} AS Pair_{Opponent_Pair_Direction}, AVG(Pct_{Pair_Direction}) AS Avg_Pct FROM results WHERE Boards_We_Played = True GROUP BY Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}"
+						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Names_{Pair_Direction}, CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}"
 					}
 				]
 			},
@@ -306,8 +306,8 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction} FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction} FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board"
+						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board",
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board"
 					}
 				]
 			},
@@ -317,8 +317,8 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction}, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_I_Played=TRUE",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction}, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_I_Played=TRUE ORDER BY x.Board"
+						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_I_Played=TRUE",
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_I_Played=TRUE ORDER BY x.Board"
 					}
 				]
 			},
@@ -328,8 +328,8 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction}, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_We_Declared=TRUE",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} as Pct, y.Pair_Number_{Pair_Direction}, y.Pair_Number_{Opponent_Pair_Direction}, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
+						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_We_Declared=TRUE",
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} as Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
 					}
 				]
 			}

@@ -172,26 +172,26 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
                     {"role": "assistant", "content": chat_response_json['error']['message']})
             else:
                 messages.append(
-                    {"role": "assistant", "content": 'Unexpected response from {model}GPT (missing choices or zero length choices). Try again later.'})
+                    {"role": "assistant", "content": f'Unexpected response from {model}GPT (missing choices or zero length choices). Try again later.'})
             return False
         # chat's first and best response message.
         first_choice = chat_response_json["choices"][0]
         if 'message' not in first_choice:
             # fake message
             messages.append(
-                {"role": "assistant", "content": 'Unexpected response from {model} (missing message). Try again later.'})
+                {"role": "assistant", "content": f'Unexpected response from {model} (missing message). Try again later.'})
             return False
         assistant_message = first_choice['message']
         print('assistant_message:', assistant_message)
         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
             # fake message
             messages.append(
-                {"role": "assistant", "content": 'Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later.'})
+                {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later.'})
             return False
         if 'content' not in assistant_message:  # content of None is ok
             # fake message
             messages.append(
-                {"role": "assistant", "content": 'Unexpected response from {model} (missing choices[0].content). Try again later.'})
+                {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].content). Try again later.'})
             return False
         if "function_call" not in assistant_message:
             assert first_choice['finish_reason'] == 'stop'
@@ -204,20 +204,25 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
                     {"role": "assistant", "content": assistant_message['content']})
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": 'Unexpected response from {model} (missing function_call). Try again later.'})
+                    {"role": "assistant", "content": f'Unexpected response from {model} (missing function_call). Try again later.'})
                 return False
             sql_query = match[0]
         else:
+            if first_choice['finish_reason'] == 'length':
+                # fake message
+                messages.append(
+                    {"role": "assistant", "content": f'Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later.'})
+                return False
             assert first_choice['finish_reason'] == 'function_call'
             if 'name' not in assistant_message["function_call"] or assistant_message["function_call"]['name'] != 'ask_database':
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": 'Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later.'})
+                    {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later.'})
                 return False
             if 'arguments' not in assistant_message["function_call"]:
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": 'Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later.'})
+                    {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later.'})
                 return False
             if assistant_message["function_call"]['arguments'][0] == '{':
                 try:
@@ -765,7 +770,7 @@ def reset_data():
 
 
 def app_info():
-    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Data scraped from public ACBL webpages.")
+    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Data scraped from public ACBL webpages.")
     st.caption(
         f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
 
