@@ -1,6 +1,6 @@
 ---
 title: Bridge Game Postmortem Chatbot
-emoji: 🐨
+emoji: 🥸
 colorFrom: indigo
 colorTo: yellow
 sdk: streamlit
