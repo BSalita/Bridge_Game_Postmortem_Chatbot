@@ -1,13 +1,3 @@
----
-title: 7NT
-emoji: 🐨
-colorFrom: indigo
-colorTo: yellow
-sdk: streamlit
-sdk_version: 1.25.0
-app_file: app.py
-pinned: false
-license: mit
----
+# Bridge Game Postmortem Chatbot
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+Project to provide high-level postmortem game information using a chat interface. User can either use vetted prompts, such as Summarize, or custom prompts. Games are limited to ACBL club pair matchpoint games which used a Mitchell movement and not shuffled.
