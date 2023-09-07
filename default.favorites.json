@@ -19,6 +19,7 @@
 				"@Boards_Partner_Underperformed_DD",
 				"@Single_Dummy_Our_Boards",
 				"@Single_Dummy_All_Boards",
+				"@Frequency_of_Contracts",
 				"@Wrong_Side",
 				"@Gifts",
 				"@Mistakes",
@@ -73,7 +74,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, pct, contract, score, parscore, parscore pct, sd pct. Show those boards I played and pct > .7. Sort by pct descending.",
-						"sql": "SELECT Board, Pct_{Pair_Direction} as Pct, Contract, Score_{Pair_Direction} as Score, ParScore_{Pair_Direction} as ParScore, ParScore_Pct_{Pair_Direction} as ParScore_Pct, SDPct_{Pair_Direction} as SD_Pct FROM results WHERE Boards_I_Played = True AND Pct_{Pair_Direction} > .7 ORDER BY Pct_{Pair_Direction} DESC"
+						"sql": "SELECT Board, Pct_{Pair_Direction} AS Pct, Contract, Score_{Pair_Direction} AS Score, ParScore_{Pair_Direction} AS ParScore, ParScore_Pct_{Pair_Direction} AS ParScore_Pct, SDPct_{Pair_Direction} AS SD_Pct FROM results WHERE Boards_I_Played = True AND Pct_{Pair_Direction} > .7 ORDER BY Pct_{Pair_Direction} DESC"
 					}
 				]
 			},
@@ -83,7 +84,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, pct, contract, score, parscore, parscore pct, sd pct. Show those boards I played and pct < .3. Sort by pct ascending.",
-						"sql": "SELECT Board, Pct_{Pair_Direction} as Pct, Contract, Score_{Pair_Direction} as Score, ParScore_{Pair_Direction} as ParScore, ParScore_Pct_{Pair_Direction} as ParScore_Pct, SDPct_{Pair_Direction} as SD_Pct FROM results WHERE Boards_I_Played = True AND Pct_{Pair_Direction} < .3 ORDER BY Pct_{Pair_Direction} ASC"
+						"sql": "SELECT Board, Pct_{Pair_Direction} AS Pct, Contract, Score_{Pair_Direction} AS Score, ParScore_{Pair_Direction} AS ParScore, ParScore_Pct_{Pair_Direction} AS ParScore_Pct, SDPct_{Pair_Direction} AS SD_Pct FROM results WHERE Boards_I_Played = True AND Pct_{Pair_Direction} < .3 ORDER BY Pct_{Pair_Direction} ASC"
 					}
 				]
 			},
@@ -194,7 +195,7 @@
 				"prompts": [
 					{
 						"prompt": "Use opponent direction. Show board, contract, pct, score, tricks, dd tricks, parscore, sd score, sd score max, sd contract max. Show those boards opponent declared and score > parscore and score > sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Opponent_Pair_Direction}, Score_{Opponent_Pair_Direction}, Tricks, DDTricks, ParScore_{Opponent_Pair_Direction}, SDScore_{Opponent_Pair_Direction}, SDScore_Max_{Opponent_Pair_Direction}, SDContract_Max, Opponent_Pair_Direction as Direction FROM results WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > ParScore_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} > SDScore_{Opponent_Pair_Direction}"
+						"sql": "SELECT Board, Contract, Pct_{Opponent_Pair_Direction}, Score_{Opponent_Pair_Direction}, Tricks, DDTricks, ParScore_{Opponent_Pair_Direction}, SDScore_{Opponent_Pair_Direction}, SDScore_Max_{Opponent_Pair_Direction}, SDContract_Max, Opponent_Pair_Direction AS Direction FROM results WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > ParScore_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} > SDScore_{Opponent_Pair_Direction}"
 					}
 				]
 			},
@@ -204,7 +205,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, pct, score, tricks, dd tricks, parscore, sd score, sd score max, sd contract max. Show those boards we declared and score > 0 and score < parscore and score < sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Pair_Direction} as Pct, Score_{Pair_Direction} as Score, Tricks, DDTricks, ParScore_{Pair_Direction} as ParScore, SDScore_{Pair_Direction} as SDScore, SDScore_Max_{Pair_Direction} as SDScore_Max, SDContract_Max FROM results WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > 0 AND Score_{Pair_Direction} < ParScore_{Pair_Direction} AND Score_{Pair_Direction} < SDScore_{Pair_Direction}"
+						"sql": "SELECT Board, Contract, Pct_{Pair_Direction} AS Pct, Score_{Pair_Direction} AS Score, Tricks, DDTricks, ParScore_{Pair_Direction} AS ParScore, SDScore_{Pair_Direction} AS SDScore, SDScore_Max_{Pair_Direction} AS SDScore_Max, SDContract_Max FROM results WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > 0 AND Score_{Pair_Direction} < ParScore_{Pair_Direction} AND Score_{Pair_Direction} < SDScore_{Pair_Direction}"
 					}
 				]
 			},
@@ -255,7 +256,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, sd pct diff, contract, score, parscore, pct, parscore pct, sd pct, dd tricks, sd parscore pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
-						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} as SD_Pct_Diff, Contract, Score_{Pair_Direction} as Score, ParScore_{Pair_Direction} as ParScore, Pct_{Pair_Direction} as Pct, ParScore_Pct_{Pair_Direction} as ParScore_Pct, Pair_Number_NS, Pair_Number_EW, SDPct_{Pair_Direction} as SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} as SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} as SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
+						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} AS SD_Pct_Diff, Contract, Score_{Pair_Direction} AS Score, ParScore_{Pair_Direction} AS ParScore, Pct_{Pair_Direction} AS Pct, ParScore_Pct_{Pair_Direction} AS ParScore_Pct, Pair_Number_NS, Pair_Number_EW, SDPct_{Pair_Direction} AS SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} AS SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} AS SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
 					}
 				]
 			},
@@ -267,6 +268,16 @@
 					{
 						"prompt": "Show board, bidsuit, contract, score, pct, pair_number_ns, pair_number_ew, sd score, sd pct diff, sd pct, dd tricks, sd probs taking_* sort by board, bidsuit, sd pct diff descending.",
 						"sql": "SELECT Board, BidSuit, Contract, Score_NS, Pct_NS, Pair_Number_NS, Pair_Number_EW, SDScore_NS, SDPct_Max_Diff_NS, SDPct_NS, DDTricks, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Pair_Number_NS IS NOT NULL ORDER BY Board, BidSuit, SDPct_Max_Diff_NS DESC"
+					}
+				]
+			},
+			"Frequency_of_Contracts": {
+				"title": "Frequency of Contracts of All Boards at All Tables By Strain",
+				"help": "**Showing frequency of contracts of all boards at all tables by strain.**",
+				"prompts": [
+					{
+						"prompt": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_NS) AS SDScore_NS, ANY_VALUE(SDPct_Max_Diff_NS) AS SDPct_Max_Diff_NS, ANY_VALUE(SDPct_NS) AS SDPct_NS, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
+						"sql": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_NS) AS SDScore_NS, ANY_VALUE(SDPct_Max_Diff_NS) AS SDPct_Max_Diff_NS, ANY_VALUE(SDPct_NS) AS SDPct_NS, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
 					}
 				]
 			},
@@ -282,7 +293,7 @@
 			},
 			"Hand_Evaluation_Metrics": {
 				"title": "Hand Evaluation Metrics",
-				"help": "**Showing hand evaluation metrics such as HCP, QT (Quick Tricks), DP (Distribution Points).**",
+				"help": "**Showing hand evaluation metrics such AS HCP, QT (Quick Tricks), DP (Distribution Points).**",
 				"prompts": [
 					{
 						"prompt": "Show distinct board and all directions of HCP, QT, DP.",
@@ -295,7 +306,7 @@
 				"help": "**Showing your matchpoint percentage per round.**",
 				"prompts": [
 					{
-						"prompt": "Show concat(player name n, '-', player name s) as Names_{Pair_Direction}, concat(player name e, '-', player name w) as Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW. Only those boards we played.",
+						"prompt": "Show concat(player name n, '-', player name s) AS Names_{Pair_Direction}, concat(player name e, '-', player name w) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW. Only those boards we played.",
 						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Names_{Pair_Direction}, CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW"
 					}
 				]
@@ -329,7 +340,7 @@
 				"prompts": [
 					{
 						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_We_Declared=TRUE",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} as Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} AS Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
 					}
 				]
 			}
