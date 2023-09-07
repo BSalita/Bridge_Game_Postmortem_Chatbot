@@ -295,7 +295,7 @@
 				"help": "**Showing your matchpoint percentage per round.**",
 				"prompts": [
 					{
-						"prompt": "Show concat(player name n, '-', player name s) as Names_{Pair_Direction}, concat(player name e, '-', player name w) as Names_{Opponent_Pair_Direction}, pair number ns as Pair_{Pair_Direction}, pair number ew as Pair_{Opponent_Pair_Direction}, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}. Only those boards we played.",
+						"prompt": "Show concat(player name n, '-', player name s) as Names_{Pair_Direction}, concat(player name e, '-', player name w) as Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}. Only those boards we played.",
 						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Names_{Pair_Direction}, CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_{Pair_Direction}, Pair_{Opponent_Pair_Direction}"
 					}
 				]
