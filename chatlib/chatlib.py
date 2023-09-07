@@ -558,33 +558,6 @@ def augment_df(df,sd_cache_d):
     df = pd.concat([df,contract_types_df],axis='columns',join='inner')
     del contract_types_df,contract_types_d
 
-    # Vul columns
-    df['Vul_NS'] = (df['Vul']&1).astype('bool')
-    df['Vul_EW'] = (df['Vul']&2).astype('bool')
-
-    # board result columns
-    df.rename({'result':'Result'},axis='columns',inplace=True)
-    df['OverTricks'] = df['Result'].gt(0)
-    df['JustMade'] = df['Result'].eq(0)
-    df['UnderTricks'] = df['Result'].lt(0)
-
-    df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['DDTricks'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Declarer'],r['BidSuit']])], axis='columns')
-    df['DDTricks_Dummy'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns')
-    df['DDScore'] = df.apply(lambda r: 0 if r['BidLvl']== 0 else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
-    df['DDSLDiff']= df.apply(lambda r: pd.NA if r['BidSuit']=='N' else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-
-    df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['Pair_Number_Defender'] = df.apply(lambda r: r['Pair_Number_'+r['Opponent_Pair_Direction']], axis='columns')
-
-    df['Number_Declarer'] = df.apply(lambda r: r['Player_Number_'+r['Direction_Declarer']], axis='columns') # todo: keep as lower case?
-    df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Direction_Declarer']], axis='columns')
-    # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
-    df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
-    df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Direction_Declarer']], axis='columns')
-
     # create dict of NS matchpoint data.
     matchpoint_ns_d = {} # key is board. values are matchpoint details (score, beats, ties, matchpoints, pct).
     for board,g in df.groupby('Board'):
@@ -597,6 +570,35 @@ def augment_df(df,sd_cache_d):
         for score_ns,match_points_ns in zip(g['Score_NS'],g['MatchPoints_NS'].astype('float32')):
             if matchpoint_ns_d[board][score_ns][3] != match_points_ns: # match_points_ns is a string because it might originally have AVG+ or AVG- etc.
                 print(f'Board {board} score {matchpoint_ns_d[board][score_ns][3]} tuple {matchpoint_ns_d[board][score_ns]} does not match matchpoint score {match_points_ns}') # ok if off by epsilon
+
+    # Vul columns
+    df['Vul_NS'] = (df['Vul']&1).astype('bool')
+    df['Vul_EW'] = (df['Vul']&2).astype('bool')
+
+    # board result columns
+    df.rename({'result':'Result'},axis='columns',inplace=True)
+    df['OverTricks'] = df['Result'].gt(0)
+    df['JustMade'] = df['Result'].eq(0)
+    df['UnderTricks'] = df['Result'].lt(0)
+
+    df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Pair_Direction_Declarer']], axis='columns')
+    df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Pair_Direction_Declarer']], axis='columns')
+    df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Pair_Direction_Declarer']], axis='columns')
+    df['Pair_Number_Defender'] = df.apply(lambda r: r['Pair_Number_'+r['Opponent_Pair_Direction']], axis='columns')
+    df['Number_Declarer'] = df.apply(lambda r: r['Player_Number_'+r['Direction_Declarer']], axis='columns') # todo: keep as lower case?
+    df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Direction_Declarer']], axis='columns')
+    # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
+    df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
+    df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Direction_Declarer']], axis='columns')
+    df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Direction_Declarer']], axis='columns')
+
+    df['DDTricks'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Declarer'],r['BidSuit']])], axis='columns') # invariant
+    df['DDTricks_Dummy'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
+    df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidSuit']=='N' else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl']== 0 else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
+    df['DDScore_EW'] = -df['DDScore_NS']
+    df['DDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][4],axis='columns')
+    df['DDPct_EW'] = 1-df['DDPct_NS']
 
     # Declarer ParScore columns
     # ACBL online games have no par score data. Must create it.

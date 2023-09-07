@@ -38,6 +38,7 @@
 			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
 			"prompts": [
 				"@Actual_Score_Pcts",
+				"@DD_Score_Pcts",
 				"@Par_Score_Pcts",
 				"@SD_Score_Pcts",
 				"@SD_Optimal_Score_Pcts"
@@ -75,7 +76,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, parscore, pct, parscore pct, sd pct, DD score, tricks, DD tricks. Boards_We_Played=True",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore, Tricks, DDTricks FROM results WHERE Boards_We_Played = True"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore_{Pair_Direction}, Tricks, DDTricks FROM results WHERE Boards_We_Played = True"
 					}
 				]
 			},
@@ -236,7 +237,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, parscore, pct, parscore pct, sd pct, DD score, tricks, DD tricks. Show those boards I declared.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore, Tricks, DDTricks FROM results WHERE Boards_I_Declared = True"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore_{Pair_Direction}, Tricks, DDTricks FROM results WHERE Boards_I_Declared = True"
 					}
 				]
 			},
@@ -246,13 +247,13 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, parscore, pct, parscore pct, sd pct, DD score, tricks, DD tricks. Show those boards partner declared.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore, Tricks, DDTricks FROM results WHERE Boards_Partner_Declared = True"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, ParScore_{Pair_Direction}, Pct_{Pair_Direction}, ParScore_Pct_{Pair_Direction}, SDPct_{Pair_Direction}, DDScore_{Pair_Direction}, Tricks, DDTricks FROM results WHERE Boards_Partner_Declared = True"
 					}
 				]
 			},
 			"Actual_Score_Pcts": {
 				"title": "Actual Score Pcts",
-				"help": "Showing **Average actual pcts for contract**.",
+				"help": "**Showing Average actual pcts for contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Our_Boards THEN Pct END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct END) AS Avg_Of_Boards_Partner_Declared FROM results",
@@ -260,9 +261,19 @@
 					}
 				]
 			},
+			"DD_Score_Pcts": {
+				"title": "Double Dummy (DD) Score Pcts for Contract",
+				"help": "**Showing Average DD score pcts for contract.**",
+				"prompts": [
+					{
+						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results",
+						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results"
+					}
+				]
+			},
 			"Par_Score_Pcts": {
 				"title": "Par Score Pcts in Par Strain",
-				"help": "Showing **Average par score pcts in contract's strain**.",
+				"help": "**Showing Average par score pcts in par strain.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results",
@@ -272,7 +283,7 @@
 			},
 			"SD_Score_Pcts": {
 				"title": "Single Dummy (SD) Score Pcts in Contract's Strain",
-				"help": "Showing **Average SD score pcts in contract's strain**.",
+				"help": "**Showing Average SD score pcts in contract's strain.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results",
@@ -282,7 +293,7 @@
 			},
 			"SD_Optimal_Score_Pcts": {
 				"title": "Single Dummy (SD) Score Pcts Optimal Contract",
-				"help": "Showing **Average SD score pcts in optimal contract**.",
+				"help": "**Showing Average SD score pcts in optimal contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results",
