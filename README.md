@@ -1,10 +1,10 @@
 ---
-title: 7NT
+title: Bridge Game Postmortem Chatbot
 emoji: 🐨
 colorFrom: indigo
 colorTo: yellow
 sdk: streamlit
-sdk_version: 1.25.0
+sdk_version: 1.26.0
 app_file: app.py
 pinned: false
 license: mit
