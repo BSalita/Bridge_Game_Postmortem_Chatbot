@@ -58,7 +58,7 @@ import chatlib  # must be placed after sys.path.append. vscode re-format likes t
 rootPath = pathlib.Path('.')  # e:/bridge/data')
 acblPath = rootPath.joinpath('data')  # was 'acbl'
 
-# pd.options.display.float_format = lambda x: f'{x:.2f}' doesn't work with streamlit
+# pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
 # todo: obsolete in favor of complete_messages
 
@@ -172,26 +172,26 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
                     {"role": "assistant", "content": chat_response_json['error']['message']})
             else:
                 messages.append(
-                    {"role": "assistant", "content": f'Unexpected response from {model}GPT (missing choices or zero length choices). Try again later.'})
+                    {"role": "assistant", "content": f"Unexpected response from {model}GPT (missing choices or zero length choices). Try again later."})
             return False
         # chat's first and best response message.
         first_choice = chat_response_json["choices"][0]
         if 'message' not in first_choice:
             # fake message
             messages.append(
-                {"role": "assistant", "content": f'Unexpected response from {model} (missing message). Try again later.'})
+                {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
             return False
         assistant_message = first_choice['message']
         print('assistant_message:', assistant_message)
         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
             # fake message
             messages.append(
-                {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later.'})
+                {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later."})
             return False
         if 'content' not in assistant_message:  # content of None is ok
             # fake message
             messages.append(
-                {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].content). Try again later.'})
+                {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].content). Try again later."})
             return False
         if "function_call" not in assistant_message:
             assert first_choice['finish_reason'] == 'stop'
@@ -204,35 +204,35 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
                     {"role": "assistant", "content": assistant_message['content']})
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": f'Unexpected response from {model} (missing function_call). Try again later.'})
+                    {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
                 return False
             sql_query = match[0]
         else:
             if first_choice['finish_reason'] == 'length':
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": f'Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later.'})
+                    {"role": "assistant", "content": f"Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later."})
                 return False
             assert first_choice['finish_reason'] == 'function_call'
             if 'name' not in assistant_message["function_call"] or assistant_message["function_call"]['name'] != 'ask_database':
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later.'})
+                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later."})
                 return False
             if 'arguments' not in assistant_message["function_call"]:
                 # fake message
                 messages.append(
-                    {"role": "assistant", "content": f'Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later.'})
+                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later."})
                 return False
             if assistant_message["function_call"]['arguments'][0] == '{':
                 try:
                     function_call_json = json.loads(
                         assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
                 except Exception as e:
-                    print(f'Exception: Invalid JSON. Error: {e}')
+                    print(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
-                        {"role": "assistant", "content": f'Invalid JSON. Error: {e}'})
+                        {"role": "assistant", "content": f"valid JSON. Error: {e}"})
                     return False
                 assert 'query' in function_call_json
                 sql_query = function_call_json['query']
@@ -308,7 +308,7 @@ def create_schema_string(df, conn):
         df.drop(columns=complex_objects, inplace=True)
 
         # warning: fake sql CREATE TABLE because types are dtypes not sql types.
-        #df_schema_string = f'CREATE TABLE "results" ({",".join([n+" "+t.name for n,t in zip(df.columns,df.dtypes)])})'
+        #df_schema_string = f'CREATE TABLE "results" ({",".join([n+" "+t.name for n,t in zip(df.columns,df.dtypes)])})' # using f' not f"
         df_schema_string = 'CREATE TABLE "results" (\n'+',\n'.join(df.columns)+'\n)' # df.sort_values(key=lambda col: col.str.lower())?
 
     else:
@@ -334,9 +334,9 @@ def create_schema_string(df, conn):
         '''
         # todo: would chatgpt be more effective passing a CREATE TABLE instead of textual description of table?
         # st.session_state.df_schema_string = '\n'.join([f'Table:"{table_name}\nColumns: {", ".join(["("+n+","+t+")" for n,t in zip(column_names,column_types)])}' for table_name,
-        #                                                     column_names, column_types in zip(st.session_state.df_meta["name"], st.session_state.df_meta["column_names"], st.session_state.df_meta["column_types"])])
+        #                                                     column_names, column_types in zip(st.session_state.df_meta["name"], st.session_state.df_meta["column_names"], st.session_state.df_meta["column_types"])]) # using f' not f"
         df_schema_string = '\n'.join([f'CREATE TABLE "{table_name}" (\n{",".join([n+" "+t for n,t in zip(column_names,column_types)])}' for table_name,
-                                            column_names, column_types in zip(st.session_state.df_meta['name'], st.session_state.df_meta['column_names'], st.session_state.df_meta['column_types'])])
+                                            column_names, column_types in zip(st.session_state.df_meta['name'], st.session_state.df_meta['column_names'], st.session_state.df_meta['column_types'])]) # using f' not f"
 
     return df_schema_string
 
@@ -418,7 +418,7 @@ def chat_initialize(player_number, game_id):
         # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
         # my_table_df['game_date'] = st.session_state.game_date # temp?
         for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
-            rows = df[df[f'Player_Number_{player_direction[0]}'].str.contains(
+            rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
                 player_number)]
             if len(rows) > 0:
                 st.session_state.player_number = player_number
@@ -460,10 +460,10 @@ def chat_initialize(player_number, game_id):
                     st.session_state.section_name)
                 df['Our_Section'] = df['section_name'].eq(
                     st.session_state.section_name)
-                #df['Players'] = df.apply(lambda r: [r[f'Player_Number_{d}'] for d in 'NESW'],axis='columns')
-                df['My_Pair'] = df['My_Section'] & df[f'Pair_Number_{st.session_state.pair_direction}'].eq(
+                #df['Players'] = df.apply(lambda r: [r[f"Player_Number_{d}"] for d in 'NESW'],axis='columns')
+                df['My_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
                     st.session_state.pair_number)  # boolean
-                df['Our_Pair'] = df['My_Section'] & df[f'Pair_Number_{st.session_state.pair_direction}'].eq(
+                df['Our_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
                     st.session_state.pair_number)  # boolean # obsolete?
                 df['Boards_I_Played'] = df['My_Pair']  # boolean # obsolete?
                 df['Boards_We_Played'] = df['My_Pair']  # boolean
@@ -788,7 +788,7 @@ def create_sidebar():
     if st.session_state.game_id is None:
         st.stop()
 
-    launch_acbl_results_page = f'[ACBL Result Page]({st.session_state.game_urls[st.session_state.game_id][1]})'
+    launch_acbl_results_page = f"[ACBL Result Page]({st.session_state.game_urls[st.session_state.game_id][1]})"
     st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
 
     # These files are releoaded each time for development purposes. Only takes a second.
@@ -854,7 +854,7 @@ def create_sidebar():
 
     if st.session_state.player_number_favorites is not None:
         st.sidebar.write(
-            f'Player Number {st.session_state.player_number} Favorites')
+            f"Player Number {st.session_state.player_number} Favorites")
 
         # player number favorite buttons
         for k, button in st.session_state.player_number_favorites['Buttons'].items():
@@ -945,12 +945,12 @@ def create_tab_bar():
         with favorites:
             read_favorites()  # todo: update each time for debugging
             st.header(
-                f'Default Favorites:{st.session_state.default_favorites_file}')
+                f"Default Favorites:{st.session_state.default_favorites_file}")
             if st.session_state.favorites is not None:
                 st.write(st.session_state.favorites)
             st.divider()
             st.header(
-                f'Player Number Custom Favorites:{st.session_state.player_number_custom_favorites_file}')
+                f"Player Number Custom Favorites:{st.session_state.player_number_custom_favorites_file}")
             if st.session_state.player_number_favorites is not None:
                 st.write(st.session_state.player_number_favorites)
             if st.session_state.debug_favorites is not None:
