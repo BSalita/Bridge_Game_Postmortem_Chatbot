@@ -14,7 +14,7 @@
 				"@Boards_We_Underperformed_ParScore",
 				"@Boards_I_Declared",
 				"@Boards_Partner_Declared",
-				"@Pcts",
+				"@Actual_Score_Pcts",
 				"@Boards_I_Underperformed_DD",
 				"@Boards_Partner_Underperformed_DD",
 				"@Single_Dummy_Our_Boards",
@@ -30,6 +30,17 @@
 				"@Percentage_Per_Round",
 				"@Unique_Bids_All_Boards",
 				"@Unique_Bids_We_Played"
+			]
+		},
+		"Summarize_Expert_Only": {
+			"title": "Summarize -- Experts Only",
+			"help": "Summarize the game's results. Expert statistics only.",
+			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
+			"prompts": [
+				"@Actual_Score_Pcts",
+				"@Par_Score_Pcts",
+				"@SD_Score_Pcts",
+				"@SD_Optimal_Score_Pcts"
 			]
 		}
 	},
@@ -239,13 +250,43 @@
 					}
 				]
 			},
-			"Pcts": {
-				"title": "Pcts",
-				"help": "Showing **Average pcts of all your boards**, **Average pcts of boards your partnership declared**, **Average pcts of boards you declared**, **Average pcts of boards your partner declared**.",
+			"Actual_Score_Pcts": {
+				"title": "Actual Score Pcts",
+				"help": "Showing **Average actual pcts for contract**.",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Our_Boards THEN Pct END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct END) AS Avg_Of_Boards_Partner_Declared FROM results",
 						"sql": "SELECT AVG(CASE WHEN Our_Boards THEN Pct_{Pair_Direction} END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_Partner_Declared FROM results"
+					}
+				]
+			},
+			"Par_Score_Pcts": {
+				"title": "Par Score Pcts in Par Strain",
+				"help": "Showing **Average par score pcts in contract's strain**.",
+				"prompts": [
+					{
+						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results",
+						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results"
+					}
+				]
+			},
+			"SD_Score_Pcts": {
+				"title": "Single Dummy (SD) Score Pcts in Contract's Strain",
+				"help": "Showing **Average SD score pcts in contract's strain**.",
+				"prompts": [
+					{
+						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results",
+						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results"
+					}
+				]
+			},
+			"SD_Optimal_Score_Pcts": {
+				"title": "Single Dummy (SD) Score Pcts Optimal Contract",
+				"help": "Showing **Average SD score pcts in optimal contract**.",
+				"prompts": [
+					{
+						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results",
+						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results"
 					}
 				]
 			},
@@ -267,17 +308,17 @@
 				"prompts": [
 					{
 						"prompt": "Show board, bidsuit, contract, score, pct, pair_number_ns, pair_number_ew, sd score, sd pct diff, sd pct, dd tricks, sd probs taking_* sort by board, bidsuit, sd pct diff descending.",
-						"sql": "SELECT Board, BidSuit, Contract, Score_NS, Pct_NS, Pair_Number_NS, Pair_Number_EW, SDScore_NS, SDPct_Max_Diff_NS, SDPct_NS, DDTricks, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Pair_Number_NS IS NOT NULL ORDER BY Board, BidSuit, SDPct_Max_Diff_NS DESC"
+						"sql": "SELECT Board, BidSuit, Contract, Score_{pair_direction}, Pct_{pair_direction}, Pair_Number_NS, Pair_Number_EW, SDScore_{pair_direction}, SDPct_Max_Diff_{pair_direction}, SDPct_{pair_direction}, DDTricks, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Pair_Number_{pair_direction} IS NOT NULL ORDER BY Board, BidSuit, SDPct_Max_Diff_{pair_direction} DESC"
 					}
 				]
 			},
 			"Frequency_of_Contracts": {
-				"title": "Frequency of Contracts of All Boards at All Tables By Strain",
-				"help": "**Showing frequency of contracts of all boards at all tables by strain.**",
+				"title": "Frequency of Contracts of All Boards at All Tables",
+				"help": "**Showing frequency of contracts of all boards at all tables.**",
 				"prompts": [
 					{
-						"prompt": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_NS) AS SDScore_NS, ANY_VALUE(SDPct_Max_Diff_NS) AS SDPct_Max_Diff_NS, ANY_VALUE(SDPct_NS) AS SDPct_NS, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
-						"sql": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_NS) AS SDScore_NS, ANY_VALUE(SDPct_Max_Diff_NS) AS SDPct_Max_Diff_NS, ANY_VALUE(SDPct_NS) AS SDPct_NS, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
+						"prompt": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
+						"sql": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
 					}
 				]
 			},
