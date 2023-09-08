@@ -979,15 +979,20 @@ def create_tab_bar():
             st.write('before pdf creation')
             pdf = markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()], 'debug.pdf')
             st.write('after pdf creation:',len(pdf))
-            import base64
-            with open('debug.pdf',"rb") as f:
-                st.write('before base64 creation')
-                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                st.write('after base64 creation')
-                pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf">'
-                st.write('before markdown')
-                st.markdown(pdf_display, unsafe_allow_html=True)
-                st.write('after markdown')
+            launch_pdf_file = f"[Show as PDF](file:///{pathlib.Path('debug.pdf').absolute().as_posix()})"
+            st.sidebar.markdown(launch_pdf_file, unsafe_allow_html=True)
+            st.write('after pdf link creation:',launch_pdf_file)
+            #import base64
+            #launch_pdf_base64_page = f"[Show as PDF](data:application/pdf;base64,{base64.b64encode(pdf).decode('utf-8')}"
+            #st.sidebar.markdown(launch_pdf_base64_page, unsafe_allow_html=True)
+            # with open('debug.pdf',"rb") as f:
+            #     st.write('before base64 creation')
+            #     base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+            #     st.write('after base64 creation')
+            #     pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf">'
+            #     st.write('before markdown')
+            #     st.markdown(pdf_display, unsafe_allow_html=True)
+            #     st.write('after markdown')
 
 import pandas as pd
 import matplotlib.pyplot as plt
