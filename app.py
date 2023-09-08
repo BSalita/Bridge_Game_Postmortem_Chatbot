@@ -699,6 +699,7 @@ def reset_data():
     st.session_state.system_prompt = None
     st.session_state.augmented_system_prompt = None
     st.session_state.messages = []
+    st.session_state.pdf_link = None
     st.session_state.dataframes = defaultdict(list)
     st.session_state.df = None
     st.session_state.matchpoint_ns_d = None
@@ -815,11 +816,7 @@ def create_sidebar():
         reset_messages()
         streamlitlib.move_focus()
 
-    import base64
-    pdf = markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()])
-    pdf_base64_encoded = base64.b64encode(pdf)
-    download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}.morty.pdf">Download Conversation as PDF File</a>'
-    st.sidebar.markdown(download_pdf_html, unsafe_allow_html=True)
+    st.session_state.pdf_link = st.sidebar.empty()
 
     st.sidebar.divider()
     st.sidebar.write(
@@ -983,96 +980,6 @@ def create_tab_bar():
             st.header('Debug')
             st.write('Not yet implemented.')
 
-import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
-import markdown
-from xml.sax.saxutils import unescape
-from bs4 import BeautifulSoup
-
-def markdown_to_paragraphs(md_string, styles):
-    # Convert Markdown to HTML
-    html_content = markdown.markdown(md_string)
-    
-    # Unescape HTML entities
-    html_content = unescape(html_content)
-    
-    # Convert HTML paragraphs to reportlab paragraphs
-    paragraphs = []
-    for line in html_content.split("\n"):
-        if line.startswith("<h"):
-            # Extract header level and text
-            level = int(line[2])
-            text = line[4:-5]
-            style = styles[f"Heading{level}"]
-        else:
-            text = line[3:-4]  # Remove <p> and </p> tags
-            style = styles["Normal"]
-        
-        if text:
-            paragraphs.append(Paragraph(text, style))
-            paragraphs.append(Spacer(1, 12))
-    
-    return paragraphs
-
-def dataframe_to_table(df):
-    # Convert DataFrame to HTML
-    html_content = df.to_html(index=False)
-    
-    # Parse HTML to extract table data
-    soup = BeautifulSoup(html_content, 'html.parser')
-    table_data = []
-    for row in soup.table.findAll('tr'):
-        row_data = []
-        for cell in row.findAll(['td', 'th']):
-            row_data.append(cell.get_text())
-        table_data.append(row_data)
-    
-    # Create reportlab table
-    table = Table(table_data)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), '#E5E5E5'),
-        ('GRID', (0, 0), (-1, -1), 1, '#D5D5D5')
-    ]))
-    
-    return table
-
-def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename=None):
-    # Create a BytesIO object to capture the PDF data
-    buffer = BytesIO()
-    
-    # Create a new document with the buffer as the destination
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    
-    # Create a list to hold the document's contents
-    story = []
-    
-    # Get a sample style sheet
-    styles = getSampleStyleSheet()
-    
-    # Convert Markdown string to reportlab paragraphs and add them to the story
-    story.extend(markdown_to_paragraphs(markdown_string, styles))
-    
-    # Convert each DataFrame in the list to a reportlab table and add it to the story
-    for df in dataframes:
-        story.append(dataframe_to_table(df))
-        story.append(Spacer(1, 12))
-    
-    # Build the document using the story
-    doc.build(story)
-    
-    # Write the contents of the buffer to the output file
-    if output_filename is not None:
-        with open(output_filename, 'wb') as f:
-            f.write(buffer.getvalue())
-    
-    # Return the bytes
-    return buffer.getvalue()
-
 
 def create_main_section():
 
@@ -1090,6 +997,7 @@ def create_main_section():
     else:
         with st.container():
 
+            pdf_assets = []
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
                     assert i == 0, "First message should be system message."
@@ -1097,6 +1005,7 @@ def create_main_section():
                 if message["role"] == "user":
                     streamlit_chat.message(
                         f"You: {message['content']}", is_user=True, key='chat_messages_user_'+str(i))
+                    pdf_assets.append(f"You: {message['content']}")
                     user_prompt_help = ''
                     for k, prompt_sqls in st.session_state.vetted_prompts.items():
                         for prompt_sql in prompt_sqls['prompts']:
@@ -1115,6 +1024,7 @@ def create_main_section():
                             assert len(slash_command) == 2
                             streamlit_chat.message(
                                 f"Morty: {slash_command[1]}", key='main.slash.'+str(i), logo=st.session_state.assistant_logo)
+                            pdf_assets.append(f"Morty: {slash_command[1]}")
                         continue
                     match = re.match(
                         r'```sql\n(.*)\n```', message['content'])
@@ -1122,8 +1032,9 @@ def create_main_section():
                         # for unknown reasons, the sql query is returned in 'content'.
                         # hoping this is a SQL query
                         sql_query = message['content']
-                        streamlit_chat.message("Morty: Oy, invalid SQL query: "+sql_query,
+                        streamlit_chat.message(f"Morty: Oy, invalid SQL query: {sql_query}",
                                             key='main.invalid.'+str(i), logo=st.session_state.assistant_logo)
+                        pdf_assets.append(f"Morty: Oy, invalid SQL query: {sql_query}")
                         continue
                     else:
                         # for unknown reasons, the sql query is returned embedded in a markdown code block.
@@ -1135,6 +1046,7 @@ def create_main_section():
                 if st.session_state.show_sql_query:
                     streamlit_chat.message(f"Guru: {sql_query}",
                                         key='main.embedded_sql.'+str(i), logo=st.session_state.guru_logo)
+                    pdf_assets.append(f"Guru: {sql_query}")
                 # use sql query as key. get last dataframe in list.
                 assert len(
                     st.session_state.dataframes[sql_query]) > 0, "No dataframes for sql query."
@@ -1143,6 +1055,7 @@ def create_main_section():
                     assistant_content = f"{user_prompt_help} -- Never happened."
                     streamlit_chat.message(
                         f"Morty: {assistant_content}", key='main.empty_dataframe.'+str(i), logo=st.session_state.assistant_logo)
+                    pdf_assets.append(f"Morty: {assistant_content}")
                     continue
                 if df.shape == (1, 1):
                     assistant_answer = str(df.columns[0]).replace(
@@ -1154,16 +1067,22 @@ def create_main_section():
                         assistant_content = f"{assistant_answer} is {assistant_scaler}."
                     streamlit_chat.message(
                         f"Morty: {user_prompt_help} {assistant_content}", key='main.dataframe_is_scaler.'+str(i), logo=st.session_state.assistant_logo)
+                    pdf_assets.append(f"Morty: {user_prompt_help} {assistant_content}")
                     continue
                 assistant_content = f"{user_prompt_help} Result is a dataframe of {len(df)} rows."
                 streamlit_chat.message(
                     f"Morty: {assistant_content}", key='main.dataframe.'+str(i), logo=st.session_state.assistant_logo)
+                pdf_assets.append(f"Morty: {assistant_content}")
                 df.index.name = 'Row'
                 # if len(df) > 1:  # Issue with AgGrid displaying Series.
                 streamlitlib.ShowDataFrameTable(
                     df, key='main_messages_df_'+str(i), color_column=df.columns[1])
+                pdf_assets.append(df)
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
+            pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
+            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}.morty.pdf">Download Conversation as PDF File</a>'
+            st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
 
     # wish this would scroll to top of page but doesn't work.
     # js = '''

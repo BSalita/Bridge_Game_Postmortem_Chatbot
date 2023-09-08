@@ -188,3 +188,102 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
     else:
         st.error(f"ShowDataFrameTable: Unknown output method: {output_method}")
 
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+import markdown
+from xml.sax.saxutils import unescape
+from bs4 import BeautifulSoup
+import base64
+
+
+def markdown_to_paragraphs(md_string, styles):
+    # Convert Markdown to HTML
+    html_content = markdown.markdown(md_string)
+    
+    # Unescape HTML entities
+    html_content = unescape(html_content)
+    
+    # Convert HTML paragraphs to reportlab paragraphs
+    paragraphs = []
+    for line in html_content.split("\n"):
+        if line.startswith("<h"):
+            # Extract header level and text
+            level = int(line[2])
+            text = line[4:-5]
+            style = styles[f"Heading{level}"]
+        else:
+            text = line[3:-4]  # Remove <p> and </p> tags
+            style = styles["Normal"]
+        
+        if text:
+            paragraphs.append(Paragraph(text, style))
+            paragraphs.append(Spacer(1, 12))
+    
+    return paragraphs
+
+
+def dataframe_to_table(df):
+    # Convert DataFrame to HTML
+    html_content = df.to_html(index=False)
+    
+    # Parse HTML to extract table data
+    soup = BeautifulSoup(html_content, 'html.parser')
+    table_data = []
+    for row in soup.table.findAll('tr'):
+        row_data = []
+        for cell in row.findAll(['td', 'th']):
+            row_data.append(cell.get_text())
+        table_data.append(row_data)
+    
+    # Create reportlab table
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), '#E5E5E5'),
+        ('GRID', (0, 0), (-1, -1), 1, '#D5D5D5')
+    ]))
+    
+    return table
+
+
+def create_pdf(pdf_assets, output_filename=None):
+    # Create a BytesIO object to capture the PDF data
+    buffer = BytesIO()
+    
+    # Create a new document with the buffer as the destination
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    
+    # Create a list to hold the document's contents
+    story = []
+    
+    # Get a sample style sheet
+    styles = getSampleStyleSheet()
+    
+    for a in pdf_assets:
+        # Convert Markdown string to reportlab paragraphs and add them to the story
+        if isinstance(a, str):
+            story.extend(markdown_to_paragraphs(a, styles))
+        # Convert each DataFrame in the list to a reportlab table and add it to the story
+        elif isinstance(a, pd.DataFrame):
+            story.append(dataframe_to_table(a))
+            story.append(Spacer(1, 12))
+        else:
+            assert False, f"Unknown asset type: {type(a)}"
+    
+    # Build the document using the story
+    doc.build(story)
+    
+    # Write the contents of the buffer to the output file
+    if output_filename is not None:
+        with open(output_filename, 'wb') as f:
+            f.write(buffer.getvalue())
+    
+    # Return the bytes
+    #return buffer.getvalue()
+    return base64.b64encode(buffer.getvalue()) # return buffer.getvalue() or base64.b64encode(buffer.getvalue())?
+
