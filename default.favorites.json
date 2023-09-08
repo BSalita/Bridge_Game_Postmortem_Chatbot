@@ -253,7 +253,7 @@
 			},
 			"Actual_Score_Pcts": {
 				"title": "Actual Score Pcts",
-				"help": "**Showing Average actual pcts for contract.**",
+				"help": "**Showing average actual pcts for contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Our_Boards THEN Pct END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct END) AS Avg_Of_Boards_Partner_Declared FROM results",
@@ -263,7 +263,7 @@
 			},
 			"DD_Score_Pcts": {
 				"title": "Double Dummy (DD) Score Pcts for Contract",
-				"help": "**Showing Average DD score pcts for contract.**",
+				"help": "**Showing average DD score pcts for contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results",
@@ -273,7 +273,7 @@
 			},
 			"Par_Score_Pcts": {
 				"title": "Par Score Pcts in Par Strain",
-				"help": "**Showing Average par score pcts in par strain.**",
+				"help": "**Showing average par score pcts in par strain.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results",
@@ -283,7 +283,7 @@
 			},
 			"SD_Score_Pcts": {
 				"title": "Single Dummy (SD) Score Pcts in Contract's Strain",
-				"help": "**Showing Average SD score pcts in contract's strain.**",
+				"help": "**Showing average single dummy SD score pcts in contract's strain.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results",
@@ -293,7 +293,7 @@
 			},
 			"SD_Optimal_Score_Pcts": {
 				"title": "Single Dummy (SD) Score Pcts Optimal Contract",
-				"help": "**Showing Average SD score pcts in optimal contract.**",
+				"help": "**Showing average single dummy (SD) score pcts in optimal contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results",
@@ -302,8 +302,8 @@
 				]
 			},
 			"Single_Dummy_Our_Boards": {
-				"title": "Single Dummy (SD) Our Boards",
-				"help": "**Showing single dummy analysis (SD) of our boards. SD is an expert's statistic. sd pct diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
+				"title": "Single Dummy (SD) Analysis of Our Boards",
+				"help": "**Showing single dummy (SD) analysis of our boards. SD is an expert's statistic. sd pct diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
 				"comment": "SD_ParScore_Pct_Diff, SD_Probs_Taking_ needed to avoid oy.",
 				"prompts": [
 					{
@@ -314,7 +314,7 @@
 			},
 			"Single_Dummy_All_Boards": {
 				"title": "Single Dummy (SD) of All Boards at All Tables By Strain",
-				"help": "**Showing single dummy analysis (SD) of all boards at all tables by strain. SD is an expert's statistic. It represents the probability of taking a certain number of tricks in declared strain.**",
+				"help": "**Showing single dummy (SD) analysis of all boards at all tables by strain. SD is an expert's statistic. It represents the probability of taking a certain number of tricks in declared strain.**",
 				"comment": "SD_ParScore_Pct_Diff, SD_Probs_Taking_ needed to avoid oy.",
 				"prompts": [
 					{
@@ -358,8 +358,8 @@
 				"help": "**Showing your matchpoint percentage per round.**",
 				"prompts": [
 					{
-						"prompt": "Show concat(player name n, '-', player name s) AS Names_{Pair_Direction}, concat(player name e, '-', player name w) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, avg(Pct_{Pair_Direction}). group by Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW. Only those boards we played.",
-						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Names_{Pair_Direction}, CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Names_{Pair_Direction}, Names_{Opponent_Pair_Direction}, Pair_Number_NS, Pair_Number_EW"
+						"prompt": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, Pair_Number_NS, Pair_Number_EW FROM results WHERE Boards_We_Played = True GROUP BY Opponents, Pair_Number_NS, Pair_Number_EW",
+						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, Pair_Number_NS, Pair_Number_EW FROM results WHERE Boards_We_Played = True GROUP BY Opponents, Pair_Number_NS, Pair_Number_EW"
 					}
 				]
 			},
