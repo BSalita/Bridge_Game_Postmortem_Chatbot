@@ -10,6 +10,9 @@ termcolor
 streamlit-chat
 bs4
 endplay
+reportlab
+markdown
+xml
 
 # for mlBridgeLib
 numpy
