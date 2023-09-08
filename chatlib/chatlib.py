@@ -597,6 +597,8 @@ def augment_df(df,sd_cache_d):
     df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidSuit']=='N' else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
     df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl']== 0 else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
     df['DDScore_EW'] = -df['DDScore_NS']
+    df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
+    df['DDMPs_EW'] = df['Board_Top']-df['DDMPs_NS']
     df['DDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][4],axis='columns')
     df['DDPct_EW'] = 1-df['DDPct_NS']
 
@@ -645,13 +647,11 @@ def augment_df(df,sd_cache_d):
 
 def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
-    #df = df[df['Board'].eq(1)]
-    # single dummy augments. computed per result based on contract.
     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
     df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']][r['Pair_Direction_Declarer'],r['Direction_Declarer'],r['BidSuit']],axis='columns')
     df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
-    df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16')
-    df['SDScore_EW'] = -df['SDScore_NS'].astype('int16')
+    df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
+    df['SDScore_EW'] = -df['SDScore_NS']
     df['SDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][3],axis='columns')
     df['SDMPs_EW'] = (df['Board_Top']-df['SDMPs_NS']).astype('float32')
     df['SDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][4],axis='columns')
@@ -706,8 +706,8 @@ def Create_SD_Scores(r):
 def Create_SD_Score(r):
     probs = r['SDProbs']
     scores_l = r['SDScores']
-    return sum(prob*score for prob,score in zip(probs,scores_l))
-
+    ps = sum(prob*score for prob,score in zip(probs,scores_l))
+    return ps if r['Direction_Declarer'] in 'NS' else -ps
 
 
 # Highest expected score, same suit, any level
