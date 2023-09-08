@@ -975,7 +975,92 @@ def create_tab_bar():
 
         with debug:
             st.header('Debug')
-            st.write('Not yet implemented.')
+            #st.write('Not yet implemented.')
+            markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()], 'debug.pdf')
+            import base64
+            with open('debug.pdf',"rb") as f:
+                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf">'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+import markdown
+from xml.sax.saxutils import unescape
+from bs4 import BeautifulSoup
+
+def markdown_to_paragraphs(md_string, styles):
+    # Convert Markdown to HTML
+    html_content = markdown.markdown(md_string)
+    
+    # Unescape HTML entities
+    html_content = unescape(html_content)
+    
+    # Convert HTML paragraphs to reportlab paragraphs
+    paragraphs = []
+    for line in html_content.split("\n"):
+        if line.startswith("<h"):
+            # Extract header level and text
+            level = int(line[2])
+            text = line[4:-5]
+            style = styles[f"Heading{level}"]
+        else:
+            text = line[3:-4]  # Remove <p> and </p> tags
+            style = styles["Normal"]
+        
+        if text:
+            paragraphs.append(Paragraph(text, style))
+            paragraphs.append(Spacer(1, 12))
+    
+    return paragraphs
+
+def dataframe_to_table(df):
+    # Convert DataFrame to HTML
+    html_content = df.to_html(index=False)
+    
+    # Parse HTML to extract table data
+    soup = BeautifulSoup(html_content, 'html.parser')
+    table_data = []
+    for row in soup.table.findAll('tr'):
+        row_data = []
+        for cell in row.findAll(['td', 'th']):
+            row_data.append(cell.get_text())
+        table_data.append(row_data)
+    
+    # Create reportlab table
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), '#E5E5E5'),
+        ('GRID', (0, 0), (-1, -1), 1, '#D5D5D5')
+    ]))
+    
+    return table
+
+def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename):
+    # Create a new document with a given filename and page size
+    doc = SimpleDocTemplate(output_filename, pagesize=letter)
+    
+    # Create a list to hold the document's contents
+    story = []
+    
+    # Get a sample style sheet
+    styles = getSampleStyleSheet()
+    
+    # Convert Markdown string to reportlab paragraphs and add them to the story
+    story.extend(markdown_to_paragraphs(markdown_string, styles))
+    
+    # Convert each DataFrame in the list to a reportlab table and add it to the story
+    for df in dataframes:
+        story.append(dataframe_to_table(df))
+        story.append(Spacer(1, 12))
+    
+    # Build the document using the story
+    doc.build(story)
 
 
 def create_main_section():
