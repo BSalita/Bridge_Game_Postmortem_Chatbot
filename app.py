@@ -976,12 +976,18 @@ def create_tab_bar():
         with debug:
             st.header('Debug')
             #st.write('Not yet implemented.')
-            markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()], 'debug.pdf')
+            st.write('before pdf creation')
+            pdf = markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()], 'debug.pdf')
+            st.write('after pdf creation:',len(pdf))
             import base64
             with open('debug.pdf',"rb") as f:
+                st.write('before base64 creation')
                 base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                st.write('after base64 creation')
                 pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf">'
+                st.write('before markdown')
                 st.markdown(pdf_display, unsafe_allow_html=True)
+                st.write('after markdown')
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -1042,8 +1048,11 @@ def dataframe_to_table(df):
     return table
 
 def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename):
-    # Create a new document with a given filename and page size
-    doc = SimpleDocTemplate(output_filename, pagesize=letter)
+    # Create a BytesIO object to capture the PDF data
+    buffer = BytesIO()
+    
+    # Create a new document with the buffer as the destination
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
     
     # Create a list to hold the document's contents
     story = []
@@ -1061,6 +1070,13 @@ def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename)
     
     # Build the document using the story
     doc.build(story)
+    
+    # Write the contents of the buffer to the output file
+    with open(output_filename, 'wb') as f:
+        f.write(buffer.getvalue())
+    
+    # Return the bytes
+    return buffer.getvalue()
 
 
 def create_main_section():
