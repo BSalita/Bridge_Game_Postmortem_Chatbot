@@ -41,7 +41,8 @@ def get_club_results_details_data(url):
     elif soup.find('result-details'):
         data = soup.find('result-details')['v-bind:data']
     elif soup.find('team-result-details'):
-        data = soup.find('team-result-details',attrs='v-bind:data')
+        return None # todo: handle team events
+        data = soup.find('team-result-details')['v-bind:data']
     else:
         assert False, "Can't find data tag."
     assert data is not None and isinstance(data,str) and len(data), [url, data]
@@ -198,6 +199,8 @@ def json_dict_to_types(json_dict,root_name,path):
 
 def create_dfs(acbl_number,event_url):
     data = get_club_results_details_data(event_url)
+    if data is None:
+        return None
     dfs = {}
     dfs['event'] = pd.json_normalize(data,max_level=0)
     for k,v in dfs['event'].items():

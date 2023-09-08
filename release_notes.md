@@ -11,6 +11,7 @@
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?
 2. Document SD_[Score,ParScore,Matchpoints,Pct][Max][Diff].
+3. Implement stats in https://stats.lovebridge.com/statistics/lb_02_107602 -- 
 
 ## To Be Implemented
 1. Is there some way that logo url can be file:///assets/...?
@@ -51,6 +52,7 @@
 14. implement rankings. can this be done using a prompt or must webpage be scrapped?
 15. Overall and directional rankings. Or can this be done using a prompt?
 16. Show rank of best declarers, best defenders (boards we declared).
+17. Implement freqs of who's declarer, defender, and dummy.
 18. Show list of prompts in Help tab.
 
 ## Column Issues
