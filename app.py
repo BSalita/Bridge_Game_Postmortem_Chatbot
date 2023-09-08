@@ -815,6 +815,12 @@ def create_sidebar():
         reset_messages()
         streamlitlib.move_focus()
 
+    import base64
+    pdf = markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()])
+    pdf_base64_encoded = base64.b64encode(pdf)
+    download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}.morty.pdf">Download Conversation as PDF File</a>'
+    st.sidebar.markdown(download_pdf_html, unsafe_allow_html=True)
+
     st.sidebar.divider()
     st.sidebar.write(
         'Below are favorite prompts. Either click a button below or enter a question in the prompt box at the bottom of the main section to the right.')
@@ -975,29 +981,7 @@ def create_tab_bar():
 
         with debug:
             st.header('Debug')
-            #st.write('Not yet implemented.')
-            st.write('before pdf creation')
-            pdf = markdown_and_dataframes_to_pdf(st.session_state.help, [df[0] for df in st.session_state.dataframes.values()], 'debug.pdf')
-            st.write('after pdf creation:',len(pdf))
-            launch_pdf_file = f"[Show as PDF](file://{pathlib.Path('debug.pdf').absolute().as_posix()})"
-            st.sidebar.markdown(launch_pdf_file, unsafe_allow_html=True)
-            st.write('after pdf link creation:',launch_pdf_file)
-            import base64
-            b64 = base64.b64encode(pdf)
-            launch_pdf_base64 = f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="debug.pdf">Show PDF File</a>' # f"[Show as PDF](data:application/pdf;base64,{base64.b64encode(pdf).decode('utf-8')}"
-            st.write('after b64 link creation:',launch_pdf_base64)
-            st.sidebar.markdown(launch_pdf_base64, unsafe_allow_html=True)
-            pdf_display = f'<embed src="data:application/pdf;base64,{b64.decode()}" width="700" height="1000" type="application/pdf">'
-            st.markdown(pdf_display, unsafe_allow_html=True)
-            st.write('after b64 embed creation:',pdf_display)
-            # with open('debug.pdf',"rb") as f:
-            #     st.write('before base64 creation')
-            #     base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-            #     st.write('after base64 creation')
-            #     pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf">'
-            #     st.write('before markdown')
-            #     st.markdown(pdf_display, unsafe_allow_html=True)
-            #     st.write('after markdown')
+            st.write('Not yet implemented.')
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -1057,7 +1041,7 @@ def dataframe_to_table(df):
     
     return table
 
-def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename):
+def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename=None):
     # Create a BytesIO object to capture the PDF data
     buffer = BytesIO()
     
@@ -1082,8 +1066,9 @@ def markdown_and_dataframes_to_pdf(markdown_string, dataframes, output_filename)
     doc.build(story)
     
     # Write the contents of the buffer to the output file
-    with open(output_filename, 'wb') as f:
-        f.write(buffer.getvalue())
+    if output_filename is not None:
+        with open(output_filename, 'wb') as f:
+            f.write(buffer.getvalue())
     
     # Return the bytes
     return buffer.getvalue()
