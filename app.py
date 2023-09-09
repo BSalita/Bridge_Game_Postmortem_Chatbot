@@ -1083,7 +1083,7 @@ def create_main_section():
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
             pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
-            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Conversation as PDF File</a>'
+            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
             st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
 
     # wish this would scroll to top of page but doesn't work.
