@@ -998,6 +998,8 @@ def create_main_section():
         with st.container():
 
             pdf_assets = []
+            pdf_assets.append(f"# Bridge Game Postmortem Chatbot Report")
+            pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.game_id}")
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
                     assert i == 0, "First message should be system message."

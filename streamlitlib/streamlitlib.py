@@ -192,14 +192,25 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle, Flowable
+from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 import markdown
 from xml.sax.saxutils import unescape
 from bs4 import BeautifulSoup
 import base64
+
+class HorizontalLine(Flowable):
+    """A custom flowable that draws a horizontal line."""
+
+    def __init__(self, width):
+        Flowable.__init__(self)
+        self.width = width
+
+    def draw(self):
+        self.canv.line(0, 0, self.width, 0)
 
 
 def markdown_to_paragraphs(md_string, styles):
@@ -230,7 +241,7 @@ def markdown_to_paragraphs(md_string, styles):
 
 def dataframe_to_table(df):
     # Convert DataFrame to HTML
-    html_content = df.to_html(index=False)
+    html_content = df.to_html()
     
     # Parse HTML to extract table data
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -243,10 +254,24 @@ def dataframe_to_table(df):
     
     # Create reportlab table
     table = Table(table_data)
-    table.setStyle(TableStyle([
+    
+    table_style = [
         ('BACKGROUND', (0, 0), (-1, 0), '#E5E5E5'),
-        ('GRID', (0, 0), (-1, -1), 1, '#D5D5D5')
-    ]))
+        ('GRID', (0, 0), (-1, -1), 1, '#D5D5D5'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9) # cell font size is 8 throughout grid
+    ]
+
+    # Alternate row colors for even and odd rows
+    for i, _ in enumerate(table_data[1:], start=1):  # Skip header row
+        if i % 2 == 0:
+            bg_color = '#F5F5F5'  # Even row color
+        else:
+            bg_color = '#FFFFFF'  # Odd row color
+        table_style.append(('BACKGROUND', (0, i), (-1, i), bg_color))
+    
+    table_style.append(('BACKGROUND', (2, 1), (2, -1), '#E5E5E5')) # 2nd column should be colored
+    
+    table.setStyle(TableStyle(table_style))
     
     return table
 
@@ -256,8 +281,8 @@ def create_pdf(pdf_assets, output_filename=None):
     buffer = BytesIO()
     
     # Create a new document with the buffer as the destination
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+
     # Create a list to hold the document's contents
     story = []
     
@@ -267,10 +292,13 @@ def create_pdf(pdf_assets, output_filename=None):
     for a in pdf_assets:
         # Convert Markdown string to reportlab paragraphs and add them to the story
         if isinstance(a, str):
+            if a.startswith("You:"):
+                story.append(HorizontalLine(doc.width))
+                story.append(Spacer(1, 20))
             story.extend(markdown_to_paragraphs(a, styles))
         # Convert each DataFrame in the list to a reportlab table and add it to the story
         elif isinstance(a, pd.DataFrame):
-            story.append(dataframe_to_table(a))
+            story.append(dataframe_to_table(a.iloc[0:30,0:11])) # take only first 30 rows and 12 columns
             story.append(Spacer(1, 12))
         else:
             assert False, f"Unknown asset type: {type(a)}"
