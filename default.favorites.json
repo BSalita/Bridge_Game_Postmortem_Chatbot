@@ -41,7 +41,8 @@
 				"@DD_Score_Pcts",
 				"@Par_Score_Pcts",
 				"@SD_Score_Pcts",
-				"@SD_Optimal_Score_Pcts"
+				"@SD_Optimal_Score_Pcts",
+				"@ParScore_Rankings"
 			]
 		}
 	},
@@ -393,6 +394,20 @@
 					{
 						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_We_Declared=TRUE",
 						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} AS Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
+					}
+				]
+			},
+			"ParScore_Rankings": {
+				"title": "Rank Pairs by ParScore Success",
+				"help": "**Ranking pairs having the most scores greater than or equal to parscore.**",
+				"prompts": [
+					{
+						"prompt": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Pair_Name_NS, COUNT(Pair_Number_NS) AS Count_GE, Pair_Number_NS AS Pair, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ FROM results WHERE Score_NS >= ParScore_NS GROUP BY Pair, Pair_Name_NS ORDER BY Count_GE DESC",
+						"sql": "SELECT CONCAT(Player_Name_N, ' - ', Player_Name_S) AS Pair_Name_NS, COUNT(Pair_Number_NS) AS Count_GE, Pair_Number_NS AS Pair, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ FROM results WHERE Score_NS >= ParScore_NS GROUP BY Pair, Pair_Name_NS ORDER BY Count_GE DESC"
+					},
+					{
+						"prompt": "SELECT CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Pair_Name_EW, COUNT(Pair_Number_EW) AS Count_GE, Pair_Number_EW AS Pair, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ FROM results WHERE Score_EW >= ParScore_EW GROUP BY Pair, Pair_Name_EW ORDER BY Count_GE DESC",
+						"sql": "SELECT CONCAT(Player_Name_E, ' - ', Player_Name_W) AS Pair_Name_EW, COUNT(Pair_Number_EW) AS Count_GE, Pair_Number_EW AS Pair, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ FROM results WHERE Score_EW >= ParScore_EW GROUP BY Pair, Pair_Name_EW ORDER BY Count_GE DESC"
 					}
 				]
 			}
