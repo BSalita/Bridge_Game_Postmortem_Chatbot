@@ -10,6 +10,8 @@ termcolor
 streamlit-chat
 bs4
 endplay
+
+# for streamlitlib
 reportlab
 markdown
 

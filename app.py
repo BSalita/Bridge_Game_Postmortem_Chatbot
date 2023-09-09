@@ -998,7 +998,7 @@ def create_main_section():
         with st.container():
 
             pdf_assets = []
-            pdf_assets.append(f"# Bridge Game Postmortem Chatbot Report")
+            pdf_assets.append(f"# Bridge Game Postmortem Personalized Report Created for {st.session_state.player_number}")
             pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.game_id}")
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
@@ -1026,7 +1026,7 @@ def create_main_section():
                             assert len(slash_command) == 2
                             streamlit_chat.message(
                                 f"Morty: {slash_command[1]}", key='main.slash.'+str(i), logo=st.session_state.assistant_logo)
-                            pdf_assets.append(f"Morty: {slash_command[1]}")
+                            pdf_assets.append(f"🥸 Morty: {slash_command[1]}")
                         continue
                     match = re.match(
                         r'```sql\n(.*)\n```', message['content'])
@@ -1036,7 +1036,7 @@ def create_main_section():
                         sql_query = message['content']
                         streamlit_chat.message(f"Morty: Oy, invalid SQL query: {sql_query}",
                                             key='main.invalid.'+str(i), logo=st.session_state.assistant_logo)
-                        pdf_assets.append(f"Morty: Oy, invalid SQL query: {sql_query}")
+                        pdf_assets.append(f"🥸 Morty: Oy, invalid SQL query: {sql_query}")
                         continue
                     else:
                         # for unknown reasons, the sql query is returned embedded in a markdown code block.
@@ -1057,7 +1057,7 @@ def create_main_section():
                     assistant_content = f"{user_prompt_help} -- Never happened."
                     streamlit_chat.message(
                         f"Morty: {assistant_content}", key='main.empty_dataframe.'+str(i), logo=st.session_state.assistant_logo)
-                    pdf_assets.append(f"Morty: {assistant_content}")
+                    pdf_assets.append(f"🥸 Morty: {assistant_content}")
                     continue
                 if df.shape == (1, 1):
                     assistant_answer = str(df.columns[0]).replace(
@@ -1069,12 +1069,12 @@ def create_main_section():
                         assistant_content = f"{assistant_answer} is {assistant_scaler}."
                     streamlit_chat.message(
                         f"Morty: {user_prompt_help} {assistant_content}", key='main.dataframe_is_scaler.'+str(i), logo=st.session_state.assistant_logo)
-                    pdf_assets.append(f"Morty: {user_prompt_help} {assistant_content}")
+                    pdf_assets.append(f"🥸 Morty: {user_prompt_help} {assistant_content}")
                     continue
                 assistant_content = f"{user_prompt_help} Result is a dataframe of {len(df)} rows."
                 streamlit_chat.message(
                     f"Morty: {assistant_content}", key='main.dataframe.'+str(i), logo=st.session_state.assistant_logo)
-                pdf_assets.append(f"Morty: {assistant_content}")
+                pdf_assets.append(f"🥸 Morty: {assistant_content}")
                 df.index.name = 'Row'
                 # if len(df) > 1:  # Issue with AgGrid displaying Series.
                 streamlitlib.ShowDataFrameTable(
@@ -1083,7 +1083,7 @@ def create_main_section():
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
             pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
-            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}.morty.pdf">Download Conversation as PDF File</a>'
+            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Conversation as PDF File</a>'
             st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
 
     # wish this would scroll to top of page but doesn't work.

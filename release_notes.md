@@ -1,5 +1,5 @@
 ## Bugs:
-2. Missing error message when invalid ACBL player number entered into debug selectbox.
+1. Missing error message when invalid ACBL player number entered into debug selectbox.
 3. Don't let prompt create new columns. Check that dataframe results are all in results columns.
 4. regex in commands.sql not working. SD_Prob_Take_[0-9]+ not excluded.
 
@@ -11,10 +11,10 @@
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?
 2. Document SD_[Score,ParScore,Matchpoints,Pct][Max][Diff].
-3. Implement stats in https://stats.lovebridge.com/statistics/lb_02_107602 -- 
+3. Any interesting stats in https://stats.lovebridge.com/statistics/lb_02_107602 ?
 
 ## To Be Implemented
-1. Is there some way that logo url can be file:///assets/...?
+1. Is there some way that logo url can be using file:///assets/...?
 2. Show list of acbl numbers, debug mode only, in landing page?
 3. Create .json or .toml file for settings. Use settings to turn off any debug output.
 4. Implement Checkbox for Debug Output in Advanced Settings. Use setting to turn off any debug output.
@@ -25,15 +25,14 @@
 9. Other online bridge services.
 13. Implement downloading of chat session or perhaps output as markdown.
 17. Check if ACBL online games are in my DB.
-19. prompts and responses to dict to mimimize API calls working?
 20. Howell movements.
 21. Write dataframe/SQL to in-memory SQL database? Perform queries on in-memory database instead of dataframe?
-22. Figure out how to upload binary assets to HF.
 25. Show BBO bidding, both ACBL human and BBO robot.
 26. Separate Release Notes from Project Notes?
 27. Speed up single dummy. write to file or sql database?.
 28. Highlight columns used in ORDER BY? Requires parsing of SQL statement.
 29. Experiment with charts. Use ChartAI?
+30. Flesh out README.md
 
 ## Prompt Issues
 1. Check each prompt for missing statistics. Make list of minimum statistics.
@@ -43,16 +42,13 @@
 5. Overbid prompt uses score < sd score. Should be making contract score < sd score. e.g. 2N < 129 is False.
 6. Overbid prompt doubled contract looks like SD Contract Max is doubled too. Doesn't seem right.
 7. Overbid prompt should use Declarer DD Score?
-8. scores vs sd scores
-9. parscores vs sd scores.
+8. actual, parscore, dd, sd, sd max -- need matrix of pcts and score diffs.
 10. Show percentages loss/gain for in categories: gift, fix, luck, unlucky, ...
 11. Develop prompt to show variance between actual scores, DD, and SD for same contract.
-12. Show field vs actual, par_score, and SD.
 13. Use emojis in prompts? 🥸
 14. implement rankings. can this be done using a prompt or must webpage be scrapped?
 15. Overall and directional rankings. Or can this be done using a prompt?
-16. Show rank of best declarers, best defenders (boards we declared).
-17. Implement freqs of who's declarer, defender, and dummy.
+16. Show rank of best declarers, best defenders from all pairs.
 18. Show list of prompts in Help tab.
 
 ## Column Issues
