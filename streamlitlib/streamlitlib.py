@@ -200,7 +200,7 @@ from reportlab.lib.units import inch
 import markdown
 from xml.sax.saxutils import unescape
 from bs4 import BeautifulSoup
-import base64
+#import base64
 
 class HorizontalLine(Flowable):
     """A custom flowable that draws a horizontal line."""
@@ -313,5 +313,5 @@ def create_pdf(pdf_assets, output_filename=None):
     
     # Return the bytes
     #return buffer.getvalue()
-    return base64.b64encode(buffer.getvalue()) # return buffer.getvalue() or base64.b64encode(buffer.getvalue())?
+    return buffer.getvalue() # works for st.download() otherwise use base64.b64encode(buffer.getvalue()) # return buffer.getvalue() or base64.b64encode(buffer.getvalue())?
 

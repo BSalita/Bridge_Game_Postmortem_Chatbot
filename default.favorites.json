@@ -9,17 +9,8 @@
 				"@Boards_We_Played",
 				"@Our_Best_Boards",
 				"@Our_Worst_Boards",
-				"@Boards_We_Beat_ParScore",
-				"@Boards_We_Equaled_ParScore",
-				"@Boards_We_Underperformed_ParScore",
 				"@Boards_I_Declared",
 				"@Boards_Partner_Declared",
-				"@Actual_Score_Pcts",
-				"@Boards_I_Underperformed_DD",
-				"@Boards_Partner_Underperformed_DD",
-				"@Single_Dummy_Our_Boards",
-				"@Single_Dummy_All_Boards",
-				"@Frequency_of_Contracts",
 				"@Wrong_Side",
 				"@Gifts",
 				"@Mistakes",
@@ -27,22 +18,41 @@
 				"@Opponent_Underbid",
 				"@We_Fixed_Opponents",
 				"@We_Got_Fixed",
-				"@Percentage_Per_Round",
-				"@Unique_Bids_All_Boards",
-				"@Unique_Bids_We_Played"
-			]
-		},
-		"Summarize_Expert_Only": {
-			"title": "Summarize -- Experts Only",
-			"help": "Summarize the game's results. Expert statistics only.",
-			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
-			"prompts": [
 				"@Actual_Score_Pcts",
 				"@DD_Score_Pcts",
 				"@Par_Score_Pcts",
 				"@SD_Score_Pcts",
 				"@SD_Optimal_Score_Pcts",
-				"@ParScore_Rankings"
+				"@ParScore_Rankings",
+				"@Percentage_Per_Round",
+				"@Frequency_of_Contracts",
+				"@Unique_Bids_All_Boards",
+				"@Unique_Bids_We_Played",
+				"@Boards_I_Underperformed_DD",
+				"@Boards_Partner_Underperformed_DD",
+				"@Boards_We_Beat_ParScore",
+				"@Boards_We_Equaled_ParScore",
+				"@Boards_We_Underperformed_ParScore",
+				"@Single_Dummy_Our_Boards",
+				"@Single_Dummy_All_Boards"
+			]
+		},
+		"Summarize_Briefly": {
+			"title": "Summarize Briefly",
+			"help": "Summarize the game's results. Expert statistics only.",
+			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
+			"prompts": [
+				"@About",
+				"@Boards_We_Played",
+				"@Our_Best_Boards",
+				"@Our_Worst_Boards",
+				"@Boards_I_Declared",
+				"@Boards_Partner_Declared",
+				"@Actual_Score_Pcts",
+				"@Frequency_of_Contracts",
+				"@Gifts",
+				"@Mistakes",
+				"@Percentage_Per_Round"
 			]
 		}
 	},

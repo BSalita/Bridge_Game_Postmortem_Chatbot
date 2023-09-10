@@ -1082,9 +1082,15 @@ def create_main_section():
                 pdf_assets.append(df)
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
-            pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
-            download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
-            st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
+
+            if st.session_state.pdf_link.download_button(label="Download Personalized Report",
+                    data=streamlitlib.create_pdf(pdf_assets),
+                    file_name = f"{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf",
+                    mime='application/octet-stream'):
+                st.warning('download triggered') # todo: this never works. why?
+            #pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
+            #download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
+            #st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
 
     # wish this would scroll to top of page but doesn't work.
     # js = '''
