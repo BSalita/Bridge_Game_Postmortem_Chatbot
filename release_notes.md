@@ -67,9 +67,16 @@
 3. Implement audio, avatar, video.
 4. Analyze opening leads; nth longest, top of sequence, top of nothing, etc. Probably requires DD analysis of opening lead.
 5. Show deal's cards, dd, sd, par using graphical output? Maybe not because ACBL link seems adequate enough.
+6. Allow inputting of PBN file and its analysis.
+7. Create command line interface which can read prompts (internal or external) and output report.
+8. Implement play engine for analysis of play.
+9. Implement bidding engine for analysis of bidding.
 
 ## Test
 1. How many simultaneous users can be supported?
+
+## Documentation Aids
+1. https://markdown.land/markdown-cheat-sheet
 
 ## Experiments:
 Experimental prompts:

@@ -199,8 +199,8 @@ def sort_hand(h):
 
 
 # Create a board_record_string from hand.
-def HandToBoardRecordString(hand):
-    return ''.join([s+c for h in [hand[0],hand[3],hand[1],hand[2]] for s,c in zip('SHDC',h)])
+#def HandToBoardRecordString(hand):
+#    return ''.join([s+c for h in [hand[0],hand[3],hand[1],hand[2]] for s,c in zip('SHDC',h)])
 
 
 # Create a tuple of suit lengths per direction (NESW).
@@ -247,10 +247,10 @@ def SuitToDistributionPoints(suit):
 # pbn is NESW, SHDC order
 # hands is NESW, SHDC order
 
-def pbn_to_brs(pbn):
+def pbn_to_brs(pbn,void=''):
     r = [r'(.*)\.(.*)\.(.*)\.(.*)']
     rs = r'^N\:'+' '.join(r*4)+r'$'
-    nesw = [shdc+(hand if len(hand) else '-') for shdc,hand in zip(SHDC*4,re.match(rs,pbn).groups())] # both use SHDC order
+    nesw = [shdc+(hand if len(hand) else void) for shdc,hand in zip(SHDC*4,re.match(rs,pbn).groups())] # both use SHDC order
     return ''.join([''.join(nesw[i*4:i*4+4]) for i in [0,3,1,2]]).replace('T','10') # pbn uses NESW order but we want NWES
 
 
@@ -261,14 +261,14 @@ def pbn_to_hands(pbn):
 
 
 def validate_brs(brs):
-    s = brs.replace('-','').replace('10','T')
+    s = brs.replace('-','').replace('10','T') # void may or may not contain '-'
     b = ''.join(sorted(s)) != '22223333444455556666777788889999AAAACCCCDDDDHHHHJJJJKKKKQQQQSSSSTTTT'
     if b:
         #print('b=',b)
         return b
     for i in range(0,17,17*4):
         split_shdc = re.split(r'[SHDC]',s[i:i+17])
-        b = len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13 # todo: probably should validate sort order of each hand
+        b = len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13 # not validating sort order. call it correct-ish.
         if b:
             #print('b=',b)
             return b
@@ -279,7 +279,7 @@ def brs_to_pbn(brs):
     r = r'S(.*)H(.*)D(.*)C(.*)'
     rs = r*4
     suits = [suit for suit in re.match(rs,brs).groups()]
-    return 'N:'+' '.join(['.'.join(suits[i*4:i*4+4]) for i in [0,2,3,1]]).replace('10','T').replace('-','') # brs uses NWES order but we want NESW
+    return 'N:'+' '.join(['.'.join(suits[i*4:i*4+4]) for i in [0,2,3,1]]).replace('10','T').replace('-','') # brs uses NWES order but we want NESW. void may or not contain '-'
 
 
 def brs_to_hands(brss):
@@ -297,8 +297,8 @@ def brs_to_hand(brs):
     return tuple(sort_hand(split_shdc[1:]))
 
 
-def hands_to_brs(hands):
-    brs = ''.join([c+(suit if len(suit) else '-') for i in [0,3,1,2] for c,suit in zip(SHDC,hands[i])]).replace('T','10') # hands uses NESW order but we want NWSE.
+def hands_to_brs(hands,void=''):
+    brs = ''.join([c+(suit if len(suit) else void) for i in [0,3,1,2] for c,suit in zip(SHDC,hands[i])]).replace('T','10') # hands uses NESW order but we want NWSE.
     return brs
 
 

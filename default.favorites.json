@@ -12,8 +12,8 @@
 				"@Boards_I_Declared",
 				"@Boards_Partner_Declared",
 				"@Wrong_Side",
-				"@Gifts",
-				"@Mistakes",
+				"@We_Got_Gifts",
+				"@Our_Mistakes",
 				"@We_Underbid",
 				"@Opponent_Underbid",
 				"@We_Fixed_Opponents",
@@ -181,8 +181,8 @@
 					}
 				]
 			},
-			"Gifts": {
-				"title": "Gifts",
+			"We_Got_Gifts": {
+				"title": "We Got Gifts",
 				"help": "**Showing boards your partnership declared which your opponents gifted you the contract or tricks.**",
 				"prompts": [
 					{
@@ -212,13 +212,13 @@
 					}
 				]
 			},
-			"Mistakes": {
-				"title": "Mistakes",
+			"Our_Mistakes": {
+				"title": "Our Mistakes",
 				"help": "**Showing boards your partnership messed up on defense or competitive bidding.**",
 				"prompts": [
 					{
-						"prompt": "Use opponent direction. Show board, contract, pct, score, tricks, dd tricks, parscore, sd score, sd score max, sd contract max. Show those boards opponent declared and score > parscore and score > sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Opponent_Pair_Direction}, Score_{Opponent_Pair_Direction}, Tricks, DDTricks, ParScore_{Opponent_Pair_Direction}, SDScore_{Opponent_Pair_Direction}, SDScore_Max_{Opponent_Pair_Direction}, SDContract_Max, Opponent_Pair_Direction AS Direction FROM results WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > ParScore_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} > SDScore_{Opponent_Pair_Direction}"
+						"prompt": "Show board, contract, pct, score, tricks, dd tricks, parscore, sd score, sd score max, sd contract max. Show those boards opponent declared and score < parscore and score < sd score.",
+						"sql": "SELECT Board, Contract, Pct_{Pair_Direction}, Score_{Pair_Direction}, Tricks, DDTricks, ParScore_{Pair_Direction}, SDScore_{Pair_Direction}, SDScore_Max_{Pair_Direction}, SDContract_Max FROM results WHERE Boards_Opponent_Declared = True AND Score_{Pair_Direction} < ParScore_{Pair_Direction} AND Score_{Pair_Direction} < SDScore_{Pair_Direction}"
 					}
 				]
 			},
@@ -274,7 +274,7 @@
 			},
 			"DD_Score_Pcts": {
 				"title": "Double Dummy (DD) Score Pcts for Contract",
-				"help": "**Showing average DD score pcts for contract.**",
+				"help": "**Showing average double dummy (DD) score pcts for contract.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results",
@@ -294,7 +294,7 @@
 			},
 			"SD_Score_Pcts": {
 				"title": "Single Dummy (SD) Score Pcts in Contract's Strain",
-				"help": "**Showing average single dummy SD score pcts in contract's strain.**",
+				"help": "**Showing average single dummy (SD) score pcts in contract's strain.**",
 				"prompts": [
 					{
 						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results",
@@ -339,8 +339,8 @@
 				"help": "**Showing frequency of contracts of all boards at all tables.**",
 				"prompts": [
 					{
-						"prompt": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
-						"sql": "SELECT Board, COUNT(Contract), Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
+						"prompt": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
+						"sql": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
 					}
 				]
 			},
@@ -409,7 +409,7 @@
 			},
 			"ParScore_Rankings": {
 				"title": "Rank Pairs by ParScore Success",
-				"help": "**Ranking pairs having the most scores greater than or equal to parscore.**",
+				"help": "**Ranking pairs (NS, EW) having the most scores greater than or equal to parscore.**",
 				"prompts": [
 					{
 						"prompt": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, COUNT(CASE WHEN Score_NS>=Parscore_NS THEN 1 END) AS Count_GE, AVG(Pct_NS) AS Pct, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_NS < ParScore_NS THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_NS ORDER BY Count_GE DESC",
