@@ -1,5 +1,6 @@
 ## Bugs:
 1. Missing error message when invalid ACBL player number entered into debug selectbox.
+2. Find how score_NS_1 and score_EW_1 have creeped into df.
 3. Don't let prompt create new columns. Check that dataframe results are all in results columns.
 4. regex in commands.sql not working. SD_Prob_Take_[0-9]+ not excluded.
 
@@ -42,9 +43,11 @@
 5. Overbid prompt uses score < sd score. Should be making contract score < sd score. e.g. 2N < 129 is False.
 6. Overbid prompt doubled contract looks like SD Contract Max is doubled too. Doesn't seem right.
 7. Overbid prompt should use Declarer DD Score?
-8. actual, parscore, dd, sd, sd max -- need matrix of pcts and score diffs.
+8. Implement list of best bids at any point in auction. It was done in 7NT.info?
+9. actual, parscore, dd, sd, sd max -- need matrix of pcts and score diffs.
 10. Show percentages loss/gain for in categories: gift, fix, luck, unlucky, ...
 11. Develop prompt to show variance between actual scores, DD, and SD for same contract.
+12. Distinguish underbids as contract mistakes if double dummy score < parscore and double dummy score < sd score.
 13. Use emojis in prompts? 🥸
 14. implement rankings. can this be done using a prompt or must webpage be scrapped?
 15. Overall and directional rankings. Or can this be done using a prompt?

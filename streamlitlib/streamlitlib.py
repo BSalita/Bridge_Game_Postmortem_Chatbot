@@ -146,14 +146,23 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
         #gb.configure_side_bar() #Add a sidebar
         #gb.configure_selection('multiple', use_checkbox=True, groupSelectsChildren="Group checkbox select children") #Enable multi-row selection
         gb.configure_default_column(cellStyle={'color': 'black', 'font-size': '12px'}, suppressMenu=True, wrapHeaderText=True, autoHeaderHeight=True)
+        # some streamlit custom_css examples: https://discuss.streamlit.io/t/how-to-use-custom-css-in-ag-grid-tables/26743
         # patch - 17-Aug-2023 - added - #gridToolBar to fix missing horizontal scrollbar. https://discuss.streamlit.io/t/st-aggrid-horizontal-scroll-bar-disappears-when-i-define-a-height/46217/10?u=bsalita
-        custom_css = {".ag-header-cell-text": {"font-size": "12px", 'text-overflow': 'revert;', 'font-weight': 700},
-          ".ag-theme-streamlit": {'transform': "scale(0.8)", "transform-origin": '0 0'}, "#gridToolBar": {"padding-bottom": "0px !important"}}
+        custom_css = {
+            '.ag-header-cell-text': {'font-size': '12px', 'text-overflow': 'revert;', 'font-weight': 700},
+            '.ag-theme-streamlit': {'transform': 'scale(0.8)', 'transform-origin': '0 0'},
+            # odd/even not working # '.ag-row-hover(odd)': {'background-color': '#ffffb3', 'cursor': 'pointer'},
+            # odd/even not working # '.ag-row-hover(even)': {'background-color': '#ffd700', 'cursor': 'pointer'},
+            '#gridToolBar': {'padding-bottom': '0px !important'}
+            }
         if color_column is not None:
-            gb.configure_column(color_column, cellStyle={'color': 'black', 'background-color': 'WhiteSmoke'}) # must be executed before build()
+            gb.configure_column(color_column, cellStyle={'color': 'black', 'background-color': '#FEFBF7'}) # must be executed before build()
         gridOptions = gb.build()
-        # ngroup_name is the name of a column which contains the same value for every member of a group. Used to alternate colors.
-        if ngroup_name is not None:
+        # ngroup_name is the name of a column which contains the same value for every member of a group. Used to alternate colors for a group as opposed to odd/even.
+        if ngroup_name is None:
+            custom_css['.ag-row:nth-child(odd)'] = {'background-color': 'white'}
+            custom_css['.ag-row:nth-child(even)'] = {'background-color': 'whitesmoke'}
+        else:
             jscode = """
                 function(params) {
                     if (params.data.ngroup_name%2 === 0) {
@@ -241,7 +250,7 @@ def markdown_to_paragraphs(md_string, styles):
 
 def dataframe_to_table(df):
     # Convert DataFrame to HTML
-    html_content = df.to_html()
+    html_content = df.to_html(index=False) # index=False to omit index column
     
     # Parse HTML to extract table data
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -263,13 +272,9 @@ def dataframe_to_table(df):
 
     # Alternate row colors for even and odd rows
     for i, _ in enumerate(table_data[1:], start=1):  # Skip header row
-        if i % 2 == 0:
-            bg_color = '#F5F5F5'  # Even row color
-        else:
-            bg_color = '#FFFFFF'  # Odd row color
-        table_style.append(('BACKGROUND', (0, i), (-1, i), bg_color))
+        table_style.append(('BACKGROUND', (0, i), (-1, i), 'white' if i % 2 else 'whitesmoke'))
     
-    table_style.append(('BACKGROUND', (2, 1), (2, -1), '#E5E5E5')) # 2nd column should be colored
+    table_style.append(('BACKGROUND', (2, 1), (2, -1), '#FEFBF7')) # 2nd column should be colored
     
     table.setStyle(TableStyle(table_style))
     

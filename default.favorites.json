@@ -50,8 +50,8 @@
 				"@Boards_Partner_Declared",
 				"@Actual_Score_Pcts",
 				"@Frequency_of_Contracts",
-				"@Gifts",
-				"@Mistakes",
+				"@We_Got_Gifts",
+				"@Our_Mistakes",
 				"@Percentage_Per_Round"
 			]
 		}
