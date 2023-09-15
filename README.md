@@ -18,6 +18,6 @@ Project to provide high-level postmortem game information using a chat interface
 
 Try it live at: https://huggingface.co/spaces/bsalita/Bridge_Game_Postmortem_Chatbot
 
-## Related Projects
-For a list of related projects see: https://github.com/BSalita/BridgeStats
+## Related Projects and Documents
+For a list of related projects and documents see: https://github.com/BSalita/BridgeStats
 
