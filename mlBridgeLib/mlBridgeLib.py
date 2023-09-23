@@ -243,6 +243,11 @@ def SuitToDistributionPoints(suit):
 #    return tuple((t[i],i,'SHDC'[i]) for (v, i) in sorted([(v, i) for (i, v) in enumerate(t)],reverse=True))
 
 
+def hrs_to_brss(hrs):
+    cols = [d+'_'+s for d in ['north','west','east','south'] for s in ['spades','hearts','diamonds','clubs']] # remake of hands below, comments says the order needs to be NWES?????
+    return hrs[cols].apply(lambda r: ''.join(['SHDC'[i%4]+c for i,c in enumerate(r.values)]).replace(' ','').replace('-','').replace('10','T'), axis='columns')
+
+
 # board_record_string (brs) is NWES, SHDC order
 # pbn is NESW, SHDC order
 # hands is NESW, SHDC order
@@ -496,6 +501,12 @@ def DDmakesToScores(ddmakes,vuls):
             directionsl.append(sorted_direction)
         scoresl.append(directionsl)
     return scoresl
+
+
+def ContractToScores(df):
+    # obsoleted 'NSEW'. renamed to 'declarer'
+    assert 'NSEW' not in df and 'declarer' in df
+    return df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['declarer']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
 
 
 # Convert score tuples into Par.

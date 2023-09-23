@@ -1,84 +1,22 @@
-#import openai
-#from openai import openai_object # used to suppress vscode type checking errors
 import pandas as pd
-import re
-#import time
-import json
-import requests
-from bs4 import BeautifulSoup
 from pprint import pprint
 import pathlib
 import sys
+
+sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib'))) # removed .parent
+sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('acbllib'))) # removed .parent
+sys.path
+import mlBridgeLib
+import acbllib
+
+
+# obsolete?
 #from tenacity import retry, wait_random_exponential, stop_after_attempt
 #from termcolor import colored
 #import dotenv
 #from dotenv import load_dotenv
 #import os
 #import inspect
-
-
-sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib'))) # removed .parent
-sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('chatlib'))) # removed .parent
-sys.path
-import mlBridgeLib
-import endplay.parsers.lin as lin
-import endplay.parsers.pbn as pbn
-#load_dotenv()
-#openai.api_key = os.getenv("OPENAI_API_KEY")
-#GPT_MODEL = "gpt-3.5-turbo-0613"
-
-
-def get_club_results_details_data(url):
-    print('details url:',url)
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-    response = requests.get(url, headers=headers)
-    assert response.status_code == 200, [url, response.status_code]
-
-    soup = BeautifulSoup(response.content, "html.parser")
-
-    if soup.find('result-details-combined-section'):
-        data = soup.find('result-details-combined-section')['v-bind:data']
-    elif soup.find('result-details'):
-        data = soup.find('result-details')['v-bind:data']
-    elif soup.find('team-result-details'):
-        return None # todo: handle team events
-        data = soup.find('team-result-details')['v-bind:data']
-    else:
-        assert False, "Can't find data tag."
-    assert data is not None and isinstance(data,str) and len(data), [url, data]
-
-    details_data = json.loads(data) # returns dict from json
-    return details_data
-
-
-def get_club_results_from_acbl_number(acbl_number):
-    url = f"https://my.acbl.org/club-results/my-results/{acbl_number}"
-    print('my-results url:',url)
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-    response = requests.get(url, headers=headers)
-    assert response.status_code == 200, [url, response.status_code]
-
-    soup = BeautifulSoup(response.content, "html.parser")
-
-    # Find all anchor tags with href attributes
-    anchor_pattern = re.compile(r'/club\-results/details/\d{6}$')
-    anchor_tags = soup.find_all('a', href=anchor_pattern)
-    anchor_d = {a['href']:a for a in anchor_tags}
-    hrefs = sorted(anchor_d.keys(),reverse=True)
-    # 847339 2023-08-21, Ft Lauderdale Bridge Club, Mon Aft Stratified Pair, Monday Afternoon, 58.52%
-    msgs = [', '.join([anchor_d[href].parent.parent.find_all('td')[i].text.replace('\n','').strip() for i in [0,1,2,3,5]]) for href in hrefs]
-    assert len(hrefs) == len(msgs)
-
-    # Print the href attributes
-    my_results_details_data = {}
-    for href,msg in zip(hrefs,msgs):
-        detail_url = 'https://my.acbl.org'+href
-        game_id = int(href.split('/')[-1]) # extract event_id from href which is the last part of url
-        my_results_details_data[game_id] = (url, detail_url, msg)
-    return my_results_details_data
-
-
-# obsolete?
 # def pretty_print_conversation(messages):
 #     role_to_color = {
 #         "system": "red",
@@ -139,6 +77,7 @@ def json_dict_to_df(d,kl,jdl):
     return d
 
 
+# todo: obsolete?
 # todo: if dtype isnumeric() downcast to minimal size. Some columns may have dtype of int64 because of sql declaration ('Board').
 def convert_to_best_dtype(k,v):
     vv = v.convert_dtypes(infer_objects=True)
@@ -197,8 +136,8 @@ def json_dict_to_types(json_dict,root_name,path):
     return dfs
 
 
-def create_dfs(acbl_number,event_url):
-    data = get_club_results_details_data(event_url)
+def create_club_dfs(acbl_number,event_url):
+    data = acbllib.get_club_results_details_data(event_url)
     if data is None:
         return None
     dfs = {}
@@ -224,7 +163,132 @@ def create_dfs(acbl_number,event_url):
     return dfs
 
 
-def merge_clean_augment_dfs(dfs,sd_cache_d,acbl_number):
+# ['mp_won', 'mp_color', 'percentage', 'score', 'sanction', 'event_id', 'session_id', 'trax_master_event_code', 'score_tournament_name', 'score_event_name', 'score_session_number', 'score_session_time_description', 'score_event_type', 'score_score_type', 'section', 'results_last_updated', 'session', 'event', 'tournament', 'date']
+def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
+
+    print('dfs keys:',dfs.keys())
+
+    df = pd.DataFrame({k:[v] for k,v in dfs.items() if not (isinstance(v,dict) or isinstance(v,list))})
+    print('df:', df)
+    assert len(df) == 1, len(df)
+    
+    print('dfs session:',type(dfs['session']))
+    df_session = pd.DataFrame({k:[v] for k,v in dfs['session'].items() if not (isinstance(v,dict) or isinstance(v,list))})
+    assert len(df_session) == 1, len(df_session)
+    print({k:pd.DataFrame(v) for k,v in dfs['session'].items() if (isinstance(v,dict) or isinstance(v,list))})
+
+    print('dfs event:',type(dfs['event']))
+    df_event = pd.DataFrame({k:[v] for k,v in dfs['event'].items() if not (isinstance(v,dict) or isinstance(v,list))})
+    assert len(df_event) == 1, len(df_event)
+    print({k:pd.DataFrame(v) for k,v in dfs['event'].items() if (isinstance(v,dict) or isinstance(v,list))})
+
+    print('dfs tournament:',type(dfs['tournament']))
+    df_tournament = pd.DataFrame({k:[v] for k,v in dfs['tournament'].items() if not (isinstance(v,dict) or isinstance(v,list))})
+    assert len(df_tournament) == 1, len(df_tournament)
+    print({k:pd.DataFrame(v) for k,v in dfs['tournament'].items() if (isinstance(v,dict) or isinstance(v,list))})
+
+    for col in df.columns:
+        print(col,df[col].dtype)
+
+    # dfs scalers: ['_id', '_event_id', 'id', 'session_number', 'start_date', 'start_time', 'description', 'sess_type', 'box_number', 'is_online', 'results_available', 'was_not_played', 'results_last_updated']
+    # dfs dicts: ['tournament', 'event', 'handrecord', 'sections']
+    # dfs lists: ['overalls']
+
+    dfs_results = acbllib.get_tournament_session_results(df['session_id'].iloc[0], acbl_api_key)
+    
+    print('dfs_results tournament:',type(dfs_results['tournament']))
+    df_results_tournament = pd.DataFrame({k:[v] for k,v in dfs_results['tournament'].items() if not (isinstance(v,dict) or isinstance(v,list))})
+    assert len(df_results_tournament) == 1, len(df_results_tournament)
+    print({k:pd.DataFrame(v) for k,v in dfs_results['tournament'].items() if (isinstance(v,dict) or isinstance(v,list))})
+
+    print('dfs_results event:',type(dfs_results['event']))
+    df_results_event = pd.DataFrame({k:[v] for k,v in dfs_results['event'].items() if not (isinstance(v,dict) or isinstance(v,list))})
+    assert len(df_event) == 1, len(df_event)
+    print({k:pd.DataFrame(v) for k,v in dfs_results['event'].items() if (isinstance(v,dict) or isinstance(v,list))})
+
+    print('dfs_results overalls:',type(dfs_results['overalls']))
+    df_results_overalls = pd.DataFrame(dfs_results['overalls'])
+    #assert len(df_results_overalls) == 1, len(df_results_overalls)
+    print(pd.DataFrame(dfs_results['overalls']))
+
+    print('dfs_results handrecord:',type(dfs_results['handrecord']))
+    df_results_handrecord = pd.DataFrame(dfs_results['handrecord'])
+    #assert len(df_results_handrecord) == 1, len(df_results_handrecord)
+    print(pd.DataFrame(dfs_results['handrecord']))
+
+    print('dfs_results sections:',type(dfs_results['sections']))
+    df_results_sections = pd.DataFrame(dfs_results['sections'])
+
+    df_board_results = pd.DataFrame()
+    for i,section in df_results_sections.iterrows():
+        br = pd.DataFrame(section['board_results'])
+        if all(br['pair_acbl'].map(lambda x: int(acbl_number) not in x)): # if acbl_number is not in this section then skip
+            continue
+        df_board_results = pd.concat([df_board_results,br],axis='rows')
+        ns_df = df_board_results[df_board_results['orientation'].eq('N-S')]
+        ew_df = df_board_results[df_board_results['orientation'].eq('E-W')][['board_number','pair_number','pair_names','pair_acbl','score','match_points','percentage']]
+        df_board_results = pd.merge(ns_df,ew_df,left_on=['board_number','opponent_pair_number'],right_on=['board_number','pair_number'],suffixes=('_NS','_EW'),how='left')
+        df_board_results.drop(['opponent_pair_number','opponent_pair_names'],inplace=True,axis='columns')
+        df_board_results.rename({
+            'board_number':'Board',
+            'contract':'Contract',
+            'score_NS':'Score_NS',
+            'score_EW':'Score_EW',
+            'match_points_NS':'MatchPoints_NS',
+            'match_points_EW':'MatchPoints_EW',
+            'percentage_NS':'Percentage_NS', # temp - only for comparision with computed version
+            'percentage_EW':'Percentage_EW', # temp - only for comparision with computed version
+            'pair_number_NS':'Pair_Number_NS',
+            'pair_number_EW':'Pair_Number_EW',
+        },axis='columns',inplace=True)
+        df_board_results['pair_direction'] = df_board_results['orientation'].map({'N-S':'NS','E-W':'EW'})
+        df_board_results['player_number_n'] = df_board_results.apply(lambda r: r['pair_acbl_NS'][0],axis='columns').astype('string')
+        df_board_results['player_number_s'] = df_board_results.apply(lambda r: r['pair_acbl_NS'][1],axis='columns').astype('string')
+        df_board_results['player_number_e'] = df_board_results.apply(lambda r: r['pair_acbl_EW'][0],axis='columns').astype('string')
+        df_board_results['player_number_w'] = df_board_results.apply(lambda r: r['pair_acbl_EW'][1],axis='columns').astype('string')
+        df_board_results['player_name_n'] = df_board_results.apply(lambda r: r['pair_names_NS'][0],axis='columns')
+        df_board_results['player_name_s'] = df_board_results.apply(lambda r: r['pair_names_NS'][1],axis='columns')
+        df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_EW'][0],axis='columns')
+        df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_EW'][1],axis='columns')
+        df_board_results['declarer'] = df_board_results['declarer'].map(lambda x: x[0].upper() if len(x) else None) # None is needed for PASS
+        df_board_results['table_number'] = None
+        df_board_results['round_number'] = None
+        df_board_results['dealer'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToDealer)
+        df_board_results['Vul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3 # todo: use 'vul' instead for consistency?
+        df_board_results['event_id'] = section['session_id'] # for club compatibility
+        df_board_results['section_name'] = section['section_label'] # for club compatibility
+        df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
+        df_board_results['game_date'] = df_event['start_date'] # for club compatibility
+        df_board_results['game_type'] = df_event['game_type'] # for club compatibility
+        board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
+        df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
+        df_board_results.drop(['orientation','pair_acbl_NS', 'pair_acbl_EW', 'pair_names_NS', 'pair_names_EW'],inplace=True,axis='columns')
+        break # todo: temp!!!!!
+
+    df = clean_validate_df(df_board_results)
+    df, sd_cache_d, matchpoint_ns_d = augment_df(df,{})
+
+    # dfs['board_results']
+
+    return df, sd_cache_d, matchpoint_ns_d
+
+
+# obsolete?
+def clean_validate_tournament_df(df):
+
+    # par, hand_record_id, DD, Vul, Hands, board_record_string?, ns_score, ew_score, Final_Stand_NS|EW, MatchPoints_NS, MatchPoints_EW, player_number_[nesw], contract, BidLvl, BidSuit, Dbl, Direction_Declarer
+
+    # change clean_validate_club_df to handle these missing columns; par, Pair_Number_NS|EW, table_number, round_number, double_dummy_ns|ew, board_record_string, hand_record_id.
+
+    return df
+
+
+# obsolete?
+def augment_tournament_df(df,sd_cache_d):
+    return df, sd_cache_d, {}
+
+
+def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_number obsolete?
 
     print('dfs keys:',dfs.keys())
 
@@ -345,6 +409,31 @@ def merge_clean_augment_dfs(dfs,sd_cache_d,acbl_number):
     for col in df.columns:
         print(col,df[col].dtype)
 
+    df.drop(['id','created_at','updated_at','board_id','double_dummy_ns','double_dummy_ew','pair_summary_id_NS','pair_summary_id_EW'],axis='columns',inplace=True)
+
+    df.rename({
+        'board':'Board',
+        'contract':'Contract',
+        'ns_pair':'Pair_Number_NS',
+        'ew_pair':'Pair_Number_EW',
+        'ns_match_points':'MatchPoints_NS',
+        'ew_match_points':'MatchPoints_EW',
+        'ns_score':'Score_NS',
+        'ew_score':'Score_EW',
+        'tricks_taken':'Tricks',
+        'percentage_NS':'Final_Standing_NS',
+        'percentage_EW':'Final_Standing_EW',
+        'result':'Result'
+       },axis='columns',inplace=True)
+
+    # columns unique to club results
+    df.astype({
+        'Final_Standing_NS':'float32',
+        'Final_Standing_EW':'float32',
+        'hand_record_id':'string',
+        'board_record_string':'string',
+        })
+
     df = clean_validate_df(df)
     df, sd_cache_d, matchpoint_ns_d = augment_df(df,sd_cache_d)
 
@@ -353,21 +442,21 @@ def merge_clean_augment_dfs(dfs,sd_cache_d,acbl_number):
 
 def clean_validate_df(df):
 
-    # cleanup all sorts of columns including: 'round_number','table_number','board_number','dealer','Vul','contract','BidLvl','BidSuit','Dbl','declarer','tricks_taken','result','ns_score','ew_score','par'
+    # Cleanup all sorts of columns. Create new columns where missing.
+    df['Board'] = df['Board'].astype('uint8')
+    assert df['Board'].ge(1).all()
 
     # if any rows were dropped, the calculation of board's top/pct will be wrong (outside of (0,1)). Need to calculate Board_Top now, before dropping rows.
     tops = {}
-    df.rename({'board':'Board','ns_match_points':'MatchPoints_NS','ew_match_points':'MatchPoints_EW'},axis='columns',inplace=True)
-    df['Board'] = df['Board'].astype('uint8')
     for b in df['Board'].unique():
         tops[b] = df[df['Board'].eq(b)]['MatchPoints_NS'].count()-1
         assert tops[b] == df[df['Board'].eq(b)]['MatchPoints_EW'].count()-1
     df['Board_Top'] = df['Board'].map(tops)
     df['Pct_NS'] = df['MatchPoints_NS'].astype('float32').div(df['Board_Top'])
-    df[df['Pct_NS']>1] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
+    df.loc[df['Pct_NS']>1,'Pct_NS'] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
     assert df['Pct_NS'].between(0,1).all(), [df[~df['Pct_NS'].between(0,1)][['Board','MatchPoints_NS','Board_Top','Pct_NS']]]
     df['Pct_EW'] = df['MatchPoints_EW'].astype('float32').div(df['Board_Top'])
-    df[df['Pct_EW']>1] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
+    df.loc[df['Pct_EW']>1,'Pct_EW'] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
     assert df['Pct_EW'].between(0,1).all(), [df[~df['Pct_EW'].between(0,1)][['Board','MatchPoints_EW','Board_Top','Pct_EW']]]
 
     # transpose pair_name (last name, first_name).
@@ -377,8 +466,8 @@ def clean_validate_df(df):
         df.drop(['player_name_'+d.lower()],axis='columns',inplace=True)
 
     # clean up contracts. Create BidLvl, BidSuit, Dbl columns.
-    contractdf = df['contract'].str.replace(' ','').str.upper().str.replace('NT','N').str.extract(r'^(?P<BidLvl>\d)(?P<BidSuit>C|D|H|S|N)(?P<Dbl>X*)$')
-    df.drop(['contract'],axis='columns',inplace=True)
+    contractdf = df['Contract'].str.replace(' ','').str.upper().str.replace('NT','N').str.extract(r'^(?P<BidLvl>\d)(?P<BidSuit>C|D|H|S|N)(?P<Dbl>X*)$')
+    df.drop(['Contract'],axis='columns',inplace=True)
     df['BidLvl'] = contractdf['BidLvl']
     df['BidSuit'] = contractdf['BidSuit']
     df['Dbl'] = contractdf['Dbl']
@@ -396,66 +485,56 @@ def clean_validate_df(df):
     assert df['Dbl'].isna().sum() == 0
     assert df['Dbl'].isin(['','X','XX']).all()
 
-    # validate table_number, declarer, board_number
     assert df['table_number'].isna().all() or df['table_number'].ge(1).all() # some events have NaN table_numbers.
-    assert df['board_number'].ge(1).all()
-
+ 
     # create more useful Vul column
-    df['Vul'] = df['board_number'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3
+    df['Vul'] = df['Board'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3
 
-    # drop invalid tricks taken
-
-    assert df['result'].notna().all() and df['result'].notnull().all()
-    df['result'] = df['result'].map(lambda x: 0 if x=='=' else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # todo: use transform instead of map?
-
-    if df['tricks_taken'].notna().any() or df['tricks_taken'].notnull().any(): # some events have empty tricks_taken. They're all None (not same as NaN).
-        assert df['tricks_taken'].notnull().all()
-        drop_rows = ~df['tricks_taken'].str.isnumeric()
+    if not pd.api.types.is_numeric_dtype(df['Score_NS']):
+        df['Score_NS'] = df['Score_NS'].astype('string') # make sure all elements are a string
+        df.loc[df['Score_NS'].isin(['','PASS']),'Score_NS'] = '0'
+        assert df['Score_NS'].ne('PASS').all()
+        drop_rows = ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric()) | ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric())
         df.drop(df[drop_rows].index,inplace=True)
-        df['tricks_taken'] = df['tricks_taken'].astype('uint8')
-        assert df['tricks_taken'].eq(df['BidLvl']+6+df['result']).all()
+        assert df['Score_NS'].isna().sum() == 0
+        assert df['Score_NS'].isna().sum() == 0
+    df['Score_NS'] = df['Score_NS'].astype('int16')
+    df['Score_EW'] = -df['Score_NS']
+
+    # tournaments do not have Tricks or Result columns. Create them.
+    df['scores_l'] = mlBridgeLib.ContractToScores(df)
+    if 'Result' in df.columns:
+        assert df['Result'].notna().all() and df['Result'].notnull().all()
+        df['Result'] = df['Result'].map(lambda x: 0 if x=='=' else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # todo: use transform instead of map?
     else:
-        df['tricks_taken'] = (df['BidLvl']+6+df['result']).astype('uint8')
-    drop_rows = ~df['tricks_taken'].between(0,13,inclusive='both')
-    df.drop(df[drop_rows].index,inplace=True)
-    df.rename({'tricks_taken':'Tricks'},axis='columns',inplace=True)
+        df['Result'] = df.apply(lambda r: r['scores_l'].index(r['Score_NS']),axis='columns')-(df['BidLvl']+6).astype('int8')
+
+    if 'Tricks' not in df or df['Tricks'].isnull().any():
+        df['Tricks'] = (df['BidLvl']+6+df['Result']).astype('uint8')
+    else:
+        assert df['Tricks'].notnull().all()
+        #drop_rows = ~df['Tricks'].str.isnumeric() # removed because wasn't a string. was None?
+        #df.drop(df[drop_rows].index,inplace=True)
+        df['Tricks'] = df['Tricks'].astype('uint8')
+        assert df['Tricks'].eq(df['BidLvl']+6+df['Result']).all()
+    #drop_rows = ~df['Tricks'].between(0,13,inclusive='both')
+    #df.drop(df[drop_rows].index,inplace=True)
+    assert df['Tricks'].between(0,13,inclusive='both').all()
 
     # drop invalid round numbers
     if df['round_number'].notnull().any():
         drop_rows = df['round_number'].isna()
         df.drop(df[drop_rows].index,inplace=True)
 
-    # cleanup invalid 'ns_score','ew_score','scores_l','Tricks','board_number','BidLvl','BidSuit','Vul','Dbl','declarer' 
-    df.rename({'ns_score':'Score_NS', 'ew_score':'Score_EW'},axis='columns',inplace=True)
-    df.loc[df['Score_NS'] == 'PASS','Score_NS'] = '0'
-    assert df['Score_NS'].ne('PASS').all()
-    drop_rows = ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric()) | ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric())
-    df.drop(df[drop_rows].index,inplace=True)
-    assert df['Score_NS'].isna().sum() == 0
-    assert df['Score_NS'].isna().sum() == 0
-    df['Score_NS'] = df['Score_NS'].astype('int16')
-    df['Score_EW'] = -df['Score_NS']
-
-    scoresd, setScoresd, makeScoresd = mlBridgeLib.ScoreDicts() # (level, suit, vulnerability, double, declarer)
-    df['scores_l'] = df.apply(lambda r: scoresd[r['BidLvl']-1,mlBridgeLib.StrainSymToValue(r['BidSuit']),mlBridgeLib.DirectionSymToDealer(r['declarer']) in mlBridgeLib.vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
     drop_rows = df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')].index
     df.drop(drop_rows,inplace=True)
     drop_rows = df[df.apply(lambda r: (r['scores_l'].index(r['Score_NS']) != r['Tricks']) | (r['Score_NS'] != -r['Score_EW']),axis='columns')].index
     df.drop(drop_rows,inplace=True)
     df.drop(['scores_l'],axis='columns',inplace=True)
 
-    # todo: create table of renames instead of discrete renames.
-    df.rename({'ns_pair':'Pair_Number_NS','ew_pair':'Pair_Number_EW'},axis='columns',inplace=True)
-    df.rename({'pair_summary_id_ns':'Pair_Summary_ID_NS','pair_summary_id_ew':'Pair_Summary_ID_EW'},axis='columns',inplace=True)
-    df.rename({'double_dummy_ns':'Double_Dummy_NS','double_dummy_ew':'Double_Dummy_EW'},axis='columns',inplace=True)
-    df.rename({'percentage_NS':'Final_Standing_NS','percentage_EW':'Final_Standing_EW'},axis='columns',inplace=True) # attempting to give unique name so ChatGPT doesn't confuse with Pct_NS, Pct_EW.
-    df.astype({'Final_Standing_NS':'float32','Final_Standing_EW':'float32'})
-
-    # todo: move ns_matchpoints rename to here.
-    # rename pair_summary_ns and ew. rename double_dummy_ns and ew.
     for col in df.columns:
         assert not (col.startswith('ns_') or col.startswith('ew_') or col.startswith('NS_') or col.startswith('EW_') or col.endswith('_ns') or col.endswith('_ew')), col
-    
+
     assert len(df) > 0
     return df.reset_index(drop=True)
 
@@ -493,7 +572,6 @@ def augment_df(df,sd_cache_d):
 
     # positions
     df.rename({'declarer':'Direction_Declarer'},axis='columns',inplace=True)
-    df['Direction_Declarer'] = df['Direction_Declarer']
     df['Pair_Direction_Declarer'] = df['Direction_Declarer'].map(mlBridgeLib.PlayerDirectionToPairDirection)
     df['Opponent_Pair_Direction'] = df['Pair_Direction_Declarer'].map(mlBridgeLib.PairDirectionToOpponentPairDirection)
     df['Direction_OnLead'] = df['Direction_Declarer'].map(mlBridgeLib.NextPosition)
@@ -502,12 +580,12 @@ def augment_df(df,sd_cache_d):
 
     # hands
     df['hands'] = df['board_record_string'].map(mlBridgeLib.brs_to_hands)
-    # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without and club f-f with? Removing '-' in both so compare works.
-    assert df['hands'].map(mlBridgeLib.hands_to_brs).str.replace('-','').eq(df['board_record_string'].str.replace('-','')).all(), [df['hands'].map(mlBridgeLib.hands_to_brs).iloc[0], df['board_record_string'].iloc[0]]
+    # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without '-' and club f-f with '-'? Removing '-' in both so compare works.
+    assert df['hands'].map(mlBridgeLib.hands_to_brs).eq(df['board_record_string'].str.replace('-','').str.replace('T','10')).all(), df[df['hands'].map(mlBridgeLib.hands_to_brs).ne(df['board_record_string'])][['Board','board_record_string','hands']]
     df['PBN'] = df['hands'].map(mlBridgeLib.HandToPBN)
-    assert df['PBN'].map(mlBridgeLib.pbn_to_hands).eq(df['hands']).all(), [df['PBN'].map(mlBridgeLib.pbn_to_hands).iloc[0],df['hands'].iloc[0]]
+    assert df['PBN'].map(mlBridgeLib.pbn_to_hands).eq(df['hands']).all(), df[df['PBN'].map(mlBridgeLib.pbn_to_hands).ne(df['hands'])]
     brs = df['PBN'].map(mlBridgeLib.pbn_to_brs)
-    assert brs.map(mlBridgeLib.brs_to_pbn).eq(df['PBN']).all(), [brs.map(mlBridgeLib.brs_to_pbn).iloc[0],df['PBN'].iloc[0]]
+    assert brs.map(mlBridgeLib.brs_to_pbn).eq(df['PBN']).all(), df[brs.map(mlBridgeLib.brs_to_pbn).ne(df['PBN'])]
 
     # hand evaluation metrics
     # todo: use Augment_Metric_By_Suits or TuplesToSuits?
@@ -579,7 +657,6 @@ def augment_df(df,sd_cache_d):
     df['Vul_EW'] = (df['Vul']&2).astype('bool')
 
     # board result columns
-    df.rename({'result':'Result'},axis='columns',inplace=True)
     df['OverTricks'] = df['Result'].gt(0)
     df['JustMade'] = df['Result'].eq(0)
     df['UnderTricks'] = df['Result'].lt(0)
@@ -607,7 +684,7 @@ def augment_df(df,sd_cache_d):
 
     # Declarer ParScore columns
     # ACBL online games have no par score data. Must create it.
-    if df['par'].eq('').all():
+    if 'par' not in df or df['par'].eq('').all():
         df.rename({'ParScore_EndPlay_NS':'ParScore_NS','ParScore_EndPlay_EW':'ParScore_EW','ParContracts_EndPlay':'ParContracts'},axis='columns',inplace=True)
         #df['ParScore_NS'] = df['ParScore_EndPlay_NS']
         #df['ParScore_EW'] = df['ParScore_EndPlay_EW']
@@ -618,7 +695,8 @@ def augment_df(df,sd_cache_d):
         df['ParScore_NS'] = df['par'].map(lambda x: x.split(' ')[1]).astype('int16')
         df['ParScore_EW'] = -df['ParScore_NS']
         df['ParContracts'] = df['par'].map(lambda x: x.split(' ')[2:]).astype('string')
-    df.drop(['par'],axis='columns',inplace=True)
+    if 'par' in df:
+        df.drop(['par'],axis='columns',inplace=True)
     df['ParScore_MPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][3],axis='columns')
     df['ParScore_MPs_EW'] = df['Board_Top']-df['ParScore_MPs_NS']
     df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
@@ -639,11 +717,9 @@ def augment_df(df,sd_cache_d):
 
     # todo: verify every dtype is correct.
     # todo: rename columns when there's a better name
-    df['hand_record_id'] = df['hand_record_id'].astype('string')
     df.rename({'dealer':'Dealer'},axis='columns',inplace=True)
     df['Dealer'] = df['Dealer'].astype('string')
     df['Vul'] = df['Vul'].astype('string')
-    df['board_record_string'] = df['board_record_string'].astype('string')
     
     return df, sd_cache_d, matchpoint_ns_d
 

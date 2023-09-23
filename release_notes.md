@@ -20,10 +20,11 @@
 3. Create .json or .toml file for settings. Use settings to turn off any debug output.
 4. Implement Checkbox for Debug Output in Advanced Settings. Use setting to turn off any debug output.
 5. Setting to disable single dummy calculations (avoid delay)?
-6. ACBL Tournaments
+6. ACBL Tournaments (no json, maybe api instead of scrapping) - player: https://live.acbl.org/player-results/2663279 event: https://live.acbl.org/event/NABC232/23FP/1/summary
 7. ACBL Individuals
 8. ACBL Teams
 9. Other online bridge services.
+10. Further reduce autosizing of columns. Dataframes doesn't look minimized although reportlab does.
 13. Implement downloading of chat session or perhaps output as markdown.
 17. Check if ACBL online games are in my DB.
 20. Howell movements.
@@ -52,7 +53,11 @@
 14. implement rankings. can this be done using a prompt or must webpage be scrapped?
 15. Overall and directional rankings. Or can this be done using a prompt?
 16. Show rank of best declarers, best defenders from all pairs.
+17. Historical Data: Calculate STDev of dealer DD, SD, Parscore, SD Max.
 18. Show list of prompts in Help tab.
+19. Create a single dataframe for DD, SD, SD Max, Par, and Actual instead of separate dataframes.
+20. Does low SD Max correlate to bad bidding/contract?
+21. What does low SD but high Pct say about a declarer? 
 
 ## Column Issues
 1. Rename any column names?
@@ -80,6 +85,7 @@
 
 ## Documentation Aids
 1. https://markdown.land/markdown-cheat-sheet
+2. https://www.color-hex.com/
 
 ## Experiments:
 Experimental prompts:

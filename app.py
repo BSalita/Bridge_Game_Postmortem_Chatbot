@@ -30,24 +30,23 @@ import asyncio
 #from pandasai.llm import OpenAI
 
 load_dotenv()
+acbl_api_key = os.getenv("ACBL_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DEFAULT_AI_MODEL = "gpt-3.5-turbo" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
 DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
 DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
-# removed .parent
-# sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib')))
-# removed .parent
-# sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('chatlib')))
-# print(sys.path)
 # todo: doesn't some variation of import chatlib.chatlib work instead of using sys.path.append such as exporting via __init__.py?
+#import acbllib.acbllib
 #import streamlitlib.streamlitlib
 #import chatlib.chatlib
 #import mlBridgeLib.mlBridgeLib
+sys.path.append(str(pathlib.Path.cwd().joinpath('acbllib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('chatlib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 # streamlitlib, mlBridgeLib, chatlib must be placed after sys.path.append. vscode re-format likes to move them to the top
+import acbllib
 import streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
 import mlBridgeLib # must be placed after sys.path.append. vscode re-format likes to move this to the top
 import chatlib  # must be placed after sys.path.append. vscode re-format likes to move this to the top
@@ -264,19 +263,24 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
     return True
 
 
-#@st.cache_data  # although this causes no refresh of new results
 def get_club_results_from_acbl_number(acbl_number):
-    return chatlib.get_club_results_from_acbl_number(acbl_number)
+    return acbllib.get_club_results_from_acbl_number(acbl_number)
 
 
-#@st.cache_data
-def create_dfs(player_number, event_url):
-    return chatlib.create_dfs(player_number, event_url)
+def get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key):
+    return acbllib.get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key)
 
 
-#@st.cache_data
-def merge_clean_augment_dfs(dfs, sd_cache_d, player_number):
-    return chatlib.merge_clean_augment_dfs(dfs, sd_cache_d, player_number)
+def create_club_dfs(player_number, event_url):
+    return chatlib.create_club_dfs(player_number, event_url)
+
+
+def merge_clean_augment_club_dfs(dfs, sd_cache_d, player_number):
+    return chatlib.merge_clean_augment_club_dfs(dfs, sd_cache_d, player_number)
+
+
+def merge_clean_augment_tournament_dfs(dfs, sd_cache_d, player_number):
+    return chatlib.merge_clean_augment_tournament_dfs(dfs, sd_cache_d, player_number)
 
 
 # no caching because of hashing parameter concerns
@@ -341,7 +345,7 @@ def create_schema_string(df, conn):
     return df_schema_string
 
 
-def chat_initialize(player_number, game_id):
+def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
     print(f"Retrieving latest results for {player_number}")
 
@@ -355,130 +359,153 @@ def chat_initialize(player_number, game_id):
         if len(game_urls) == 0:
             st.error(f"Could not find any games for {player_number}.")
             return False
-        if game_id is None:
-            game_id = list(game_urls.keys())[0]  # default to most event_id
-        reset_data()
-        st.session_state.player_number = player_number
-        st.session_state.game_urls = game_urls
+        if session_id is None and len(game_urls):
+            session_id = list(game_urls.keys())[0]  # default to most recent event_id
 
-    with st.spinner(f"Creating data table of game {game_id} for player {player_number}. Might take a minute ..."):
-        # game_urls[game_id][1] is detail_url
-        dfs = create_dfs(player_number, game_urls[game_id][1])
-        if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
-            st.error(
-                f"Game {game_id} has missing or invalid game data. Try another game.")
+    with st.spinner(f"Retrieving a list of tournament sessions for {player_number} ..."):
+        tournament_session_urls = get_tournament_sessions_from_acbl_number(player_number, acbl_api_key) # returns [url, url, description, dfs]
+        if tournament_session_urls is None:
+            st.error(f"Player number {player_number} not found.")
             return False
-        print(dfs.keys())
-
-        if dfs['pair_summaries']['pair_number'].value_counts().eq(1).all(): # Assuming pair_numbers are all unique for Howell
-            st.error(
-                f"Game {game_id}. I can only chat about Mitchell movements. Try another game.")
+        if len(tournament_session_urls) == 0:
+            st.error(f"Could not find any games for {player_number}.")
             return False
+        if session_id is None and len(tournament_session_urls):
+            session_id = list(tournament_session_urls.keys())[0]  # default to most recent session
 
-        if dfs['event']['type'].iloc[0] != 'PAIRS':
-            st.error(
-                f"Game {game_id} is {dfs['event']['type'].iloc[0]}. Expecting an ACBL pairs match point game. Try another game.")
-            return False
+    if session_id is None:
+        return False
+    
+    reset_data()
+    st.session_state.player_number = player_number
+    st.session_state.game_urls = game_urls
+    st.session_state.tournament_session_urls = tournament_session_urls
 
-        if dfs['event']['board_scoring_method'].iloc[0] != 'MATCH_POINTS':
-            st.error(
-                f"Game {game_id} is {dfs['event']['board_scoring_method'].iloc[0]}. Expecting an ACBL pairs match point game. Try another game.")
-            return False
+    if session_id in game_urls:
+        with st.spinner(f"Creating data table of club game {session_id} for player {player_number}. Might take a minute ..."):
+            # game_urls[session_id][1] is detail_url
+            dfs = create_club_dfs(player_number, game_urls[session_id][1])
+            if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
+                st.error(
+                    f"Game {session_id} has missing or invalid game data. Try another game.")
+                return False
+            print(dfs.keys())
 
-        if not dfs['sessions']['hand_record_id'].iloc[0][0].isdigit():
-            st.error(
-                f"Game {game_id} is {dfs['sessions']['hand_record_id'].iloc[0]}. Expecting a valid hand record number. Try another game.")
-            return False
+            if dfs['pair_summaries']['pair_number'].value_counts().eq(1).all(): # Assuming pair_numbers are all unique for Howell
+                st.error(
+                    f"Game {session_id}. I can only chat about Mitchell movements. Try another game.")
+                return False
 
-        #with Profiler():
-        df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_dfs(dfs, {}, player_number) # cache is ignored
-        if df is None:
-            st.error(
-                f"Game {game_id} has an invalid game file. Try another game.")
-            return False
+            if dfs['event']['type'].iloc[0] != 'PAIRS':
+                st.error(
+                    f"Game {session_id} is {dfs['event']['type'].iloc[0]}. Expecting an ACBL pairs match point game. Try another game.")
+                return False
 
-        # game appears valid. Save it.
-        st.session_state.game_id = game_id
+            if dfs['event']['board_scoring_method'].iloc[0] != 'MATCH_POINTS':
+                st.error(
+                    f"Game {session_id} is {dfs['event']['board_scoring_method'].iloc[0]}. Expecting an ACBL pairs match point game. Try another game.")
+                return False
 
-        results = ask_database(st.session_state.commands_sql)
-        assert isinstance(results, duckdb.DuckDBPyConnection), results
-        df = results.df()  # update df with results of SQL query.
-        assert df is not None
-        move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS',
-                         'Pct_NS', 'ParScore_NS']  # arbitrary list of columns to show first
-        df = df[move_to_front + (df.columns.drop(move_to_front).tolist())]
-        df.index.name = 'Row'
-        st.session_state.df = df
-        st.session_state.matchpoint_ns_d = matchpoint_ns_d
+            if not dfs['sessions']['hand_record_id'].iloc[0][0].isdigit():
+                st.error(
+                    f"Game {session_id} is {dfs['sessions']['hand_record_id'].iloc[0]}. Expecting a valid hand record number. Try another game.")
+                return False
 
-        # extract scalers
-        st.session_state.game_date = pd.to_datetime(st.session_state.df['game_date'].iloc[0]).strftime(
-            '%Y-%m-%d')
-        assert st.session_state.df['event_id'].eq(game_id).all()
-        # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
-        # my_table_df['game_date'] = st.session_state.game_date # temp?
-        for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
-            rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
-                player_number)]
-            if len(rows) > 0:
-                st.session_state.player_number = player_number
-                st.session_state.player_direction = player_direction
-                st.session_state.pair_direction = pair_direction
-                st.session_state.partner_direction = partner_direction
-                st.session_state.opponent_pair_direction = opponent_pair_direction
-                section_ids = rows['section_id']
-                assert section_ids.nunique() == 1, f"Oops. section_id non-unique."
-                st.session_state.section_id = section_ids.iloc[0]
-                section_names = rows['section_name']
-                assert section_names.nunique() == 1, f"Oops. section_name non-unique."
-                st.session_state.section_name = section_names.iloc[0]
-                player_names = rows[f"Player_Name_{player_direction[0]}"]
-                assert player_names.nunique() == 1, f"Oops. player_names non-unique."
-                st.session_state.player_name = player_names.iloc[0]
-                pair_numbers = rows[f"Pair_Number_{pair_direction}"]
-                assert pair_numbers.nunique() == 1,  f"Oops. pair_numbers non-unique."
-                st.session_state.pair_number = pair_numbers.iloc[0]
-                partner_numbers = rows[f"Player_Number_{partner_direction}"]
-                assert partner_numbers.nunique() == 1, f"Oops. partner_numbers non-unique."
-                st.session_state.partner_number = partner_numbers.iloc[0]
-                partner_names = rows[f"Player_Name_{partner_direction}"]
-                assert partner_names.nunique() == 1, f"Oops. partner_names non-unique."
-                st.session_state.partner_name = partner_names.iloc[0]
+            #with Profiler():
+            df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_number) # doesn't use any caching
+            if df is None:
+                st.error(
+                    f"Game {session_id} has an invalid game file. Try another game.")
+                return False
 
-                # hack: this dopey hack works really well! chatgpt gets much less confused.
-                # create columns for these scalers just to make it easier to use them in SQL queries.
-                #df['My_Player_Number'] = st.session_state.player_number
-                #df['My_Player_Name'] = st.session_state.player_name
-                #df['My_Player_Direction'] = st.session_state.player_direction
-                #df['My_Pair_Direction'] = st.session_state.pair_direction
-                #df['My_Pair_Number'] = st.session_state.pair_number
-                #df['My_Partner_Number'] = st.session_state.partner_number
-                #df['My_Partner_Name'] = st.session_state.partner_name
-                #df['My_Partner_Direction'] = st.session_state.partner_direction
-                df['Opponent_Pair_Direction'] = st.session_state.opponent_pair_direction
-                df['My_Section'] = df['section_name'].eq(
-                    st.session_state.section_name)
-                df['Our_Section'] = df['section_name'].eq(
-                    st.session_state.section_name)
-                #df['Players'] = df.apply(lambda r: [r[f"Player_Number_{d}"] for d in 'NESW'],axis='columns')
-                df['My_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
-                    st.session_state.pair_number)  # boolean
-                df['Our_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
-                    st.session_state.pair_number)  # boolean # obsolete?
-                df['Boards_I_Played'] = df['My_Pair']  # boolean # obsolete?
-                df['Boards_We_Played'] = df['My_Pair']  # boolean
-                df['Our_Boards'] = df['My_Pair']  # boolean # obsolete?
-                df['Boards_I_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                    st.session_state.player_number)  # boolean
-                df['Boards_We_Declared'] = df['My_Pair'] & df['Number_Declarer'].isin(
-                    [st.session_state.player_number, st.session_state.partner_number])  # boolean
-                df['Boards_Partner_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                    st.session_state.partner_number)  # boolean
-                df['Partners_Boards'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                    st.session_state.partner_number)  # boolean
-                df['Boards_Opponent_Declared'] = df['My_Pair'] & ~df['Number_Declarer'].isin(
-                    [st.session_state.player_number, st.session_state.partner_number])  # boolean
-                break
+    elif session_id in tournament_session_urls:
+        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}. Might take a minute ..."):
+            df, sd_cache_d, matchpoint_ns_d = chatlib.merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], acbl_api_key, player_number) # doesn't use any caching
+    else:
+        assert False, f"session_id not found: {session_id}"
+
+    # game appears valid. Save it.
+    st.session_state.session_id = session_id
+
+    results = ask_database(st.session_state.commands_sql)
+    assert isinstance(results, duckdb.DuckDBPyConnection), results
+    df = results.df()  # update df with results of SQL query.
+    assert df is not None
+    move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS',
+                        'Pct_NS', 'ParScore_NS']  # arbitrary list of columns to show first
+    df = df[move_to_front + (df.columns.drop(move_to_front).tolist())]
+    df.index.name = 'Row'
+    st.session_state.df = df
+    st.session_state.matchpoint_ns_d = matchpoint_ns_d
+
+    # extract scalers
+    st.session_state.game_date = pd.to_datetime(st.session_state.df['game_date'].iloc[0]).strftime(
+        '%Y-%m-%d')
+    assert st.session_state.df['event_id'].eq(session_id).all()
+    # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
+    # my_table_df['game_date'] = st.session_state.game_date # temp?
+    for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
+        rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
+            player_number)]
+        if len(rows) > 0:
+            st.session_state.player_number = player_number
+            st.session_state.player_direction = player_direction
+            st.session_state.pair_direction = pair_direction
+            st.session_state.partner_direction = partner_direction
+            st.session_state.opponent_pair_direction = opponent_pair_direction
+            section_ids = rows['section_id']
+            assert section_ids.nunique() == 1, f"Oops. section_id non-unique."
+            st.session_state.section_id = section_ids.iloc[0]
+            section_names = rows['section_name']
+            assert section_names.nunique() == 1, f"Oops. section_name non-unique."
+            st.session_state.section_name = section_names.iloc[0]
+            player_names = rows[f"Player_Name_{player_direction[0]}"]
+            assert player_names.nunique() == 1, f"Oops. player_names non-unique."
+            st.session_state.player_name = player_names.iloc[0]
+            pair_numbers = rows[f"Pair_Number_{pair_direction}"]
+            assert pair_numbers.nunique() == 1,  f"Oops. pair_numbers non-unique."
+            st.session_state.pair_number = pair_numbers.iloc[0]
+            partner_numbers = rows[f"Player_Number_{partner_direction}"]
+            assert partner_numbers.nunique() == 1, f"Oops. partner_numbers non-unique."
+            st.session_state.partner_number = partner_numbers.iloc[0]
+            partner_names = rows[f"Player_Name_{partner_direction}"]
+            assert partner_names.nunique() == 1, f"Oops. partner_names non-unique."
+            st.session_state.partner_name = partner_names.iloc[0]
+
+            # hack: this dopey hack works really well! chatgpt gets much less confused.
+            # create columns for these scalers just to make it easier to use them in SQL queries.
+            #df['My_Player_Number'] = st.session_state.player_number
+            #df['My_Player_Name'] = st.session_state.player_name
+            #df['My_Player_Direction'] = st.session_state.player_direction
+            #df['My_Pair_Direction'] = st.session_state.pair_direction
+            #df['My_Pair_Number'] = st.session_state.pair_number
+            #df['My_Partner_Number'] = st.session_state.partner_number
+            #df['My_Partner_Name'] = st.session_state.partner_name
+            #df['My_Partner_Direction'] = st.session_state.partner_direction
+            df['Opponent_Pair_Direction'] = st.session_state.opponent_pair_direction
+            df['My_Section'] = df['section_name'].eq(
+                st.session_state.section_name)
+            df['Our_Section'] = df['section_name'].eq(
+                st.session_state.section_name)
+            #df['Players'] = df.apply(lambda r: [r[f"Player_Number_{d}"] for d in 'NESW'],axis='columns')
+            df['My_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
+                st.session_state.pair_number)  # boolean
+            df['Our_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
+                st.session_state.pair_number)  # boolean # obsolete?
+            df['Boards_I_Played'] = df['My_Pair']  # boolean # obsolete?
+            df['Boards_We_Played'] = df['My_Pair']  # boolean
+            df['Our_Boards'] = df['My_Pair']  # boolean # obsolete?
+            df['Boards_I_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                st.session_state.player_number)  # boolean
+            df['Boards_We_Declared'] = df['My_Pair'] & df['Number_Declarer'].isin(
+                [st.session_state.player_number, st.session_state.partner_number])  # boolean
+            df['Boards_Partner_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                st.session_state.partner_number)  # boolean
+            df['Partners_Boards'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                st.session_state.partner_number)  # boolean
+            df['Boards_Opponent_Declared'] = df['My_Pair'] & ~df['Number_Declarer'].isin(
+                [st.session_state.player_number, st.session_state.partner_number])  # boolean
+            break
 
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
@@ -528,7 +555,7 @@ def chat_initialize(player_number, game_id):
 
 
 def slash_about():
-    content = f"Hey {st.session_state.player_name} ({st.session_state.player_number}), let's chat about your game on {st.session_state.game_date} (event id {st.session_state.game_id}). Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_number}) who played {st.session_state.partner_direction}."
+    content = f"Hey {st.session_state.player_name} ({st.session_state.player_number}), let's chat about your game on {st.session_state.game_date} (event id {st.session_state.session_id}). Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_number}) who played {st.session_state.partner_direction}."
     return content
 
 
@@ -589,7 +616,7 @@ def reset_messages():
     #augmented_system_prompt += f" Player Name is '{st.session_state.player_name}'."
     # todo: howell, individual, team not implemented!
     #augmented_system_prompt += f" Game Date is always {st.session_state.game_date}."
-    #augmented_system_prompt += f" Event ID is always {st.session_state.game_id}."
+    #augmented_system_prompt += f" Event ID is always {st.session_state.session_id}."
     #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
     #augmented_system_prompt += f" My Player Direction is always {st.session_state.player_direction[0]}."
     #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
@@ -625,9 +652,14 @@ def debug_player_number_names_change():
     chat_initialize(player_number_name[0], None)  # grab player number
 
 
-def game_id_change():
-    game_id = int(st.session_state.recent_game_ids_selectbox.split(' ')[0])
-    chat_initialize(st.session_state.player_number, game_id)
+def club_session_id_change():
+    session_id = int(st.session_state.session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
+    chat_initialize(st.session_state.player_number, session_id)
+
+
+def tournament_session_id_change():
+    tournament_session_id = st.session_state.tournament_session_ids_selectbox.split(',')[0] # split selectbox item on commas. only want first split.
+    chat_initialize(st.session_state.player_number, tournament_session_id)
 
 
 def show_sql_query_change():
@@ -691,8 +723,10 @@ def reset_data():
 
     # game
     st.session_state.game_urls = {}
+    st.session_state.tournament_session_urls = {}
+    st.session_state.tournament_sessions = {}
     st.session_state.game_date = None
-    st.session_state.game_id = None
+    st.session_state.session_id = None
 
     # chat
     #st.session_state.ai_api = None
@@ -783,13 +817,19 @@ def create_sidebar():
     st.sidebar.text_input(
         "ACBL player number", on_change=player_number_change, placeholder=st.session_state.player_number, key='player_number_input')
 
-    st.sidebar.selectbox("Choose a recent game.", options=[f"{k} {v[2]}" for k, v in st.session_state.game_urls.items(
-    )], on_change=game_id_change, key='recent_game_ids_selectbox')  # options are event_id + event description
+    st.sidebar.selectbox("Choose a club game.", options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
+    )], on_change=club_session_id_change, key='session_ids_selectbox')  # options are event_id + event description
 
-    if st.session_state.game_id is None:
+    st.sidebar.selectbox("Choose a tournament session.", options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
+    )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
+
+    if st.session_state.session_id is None:
         st.stop()
 
-    launch_acbl_results_page = f"[ACBL Result Page]({st.session_state.game_urls[st.session_state.game_id][1]})"
+    if st.session_state.session_id in st.session_state.game_urls:
+        launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls[st.session_state.session_id][1]})"
+    else:
+        launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls[st.session_state.session_id][1]})"
     st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
 
     # These files are releoaded each time for development purposes. Only takes a second.
@@ -936,8 +976,10 @@ def create_tab_bar():
             st.write(
                 f"Player number is {st.session_state.player_number}")
             st.divider()
-            st.write('Game URLs')
+            st.write('Club Game URLs')
             st.write(st.session_state.game_urls.values())
+            st.write('Tournament Sessions')
+            st.write(st.session_state.tournament_session_urls.values())
 
         with system_prompt_tab:
             st.header('System Prompt')
@@ -999,7 +1041,7 @@ def create_main_section():
 
             pdf_assets = []
             pdf_assets.append(f"# Bridge Game Postmortem Report Personalized for {st.session_state.player_number}")
-            pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.game_id}")
+            pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.session_id}")
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
                     assert i == 0, "First message should be system message."
@@ -1085,11 +1127,11 @@ def create_main_section():
 
             if st.session_state.pdf_link.download_button(label="Download Personalized Report",
                     data=streamlitlib.create_pdf(pdf_assets),
-                    file_name = f"{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf",
+                    file_name = f"{st.session_state.session_id}-{st.session_state.player_number}-morty.pdf",
                     mime='application/octet-stream'):
                 st.warning('download triggered') # todo: this never works. why?
             #pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
-            #download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.game_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
+            #download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.session_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
             #st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
 
     # wish this would scroll to top of page but doesn't work.
@@ -1150,7 +1192,8 @@ def main():
         st.session_state.conn = duckdb.connect()
         st.session_state.show_sql_query = False
         st.session_state.player_number = None
-        st.session_state.game_id = None
+        st.session_state.session_id = None
+        st.session_state_tournament_session_id = None
         st.session_state.sd_observations = 10
         st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
         st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
@@ -1180,7 +1223,7 @@ def main():
         st.sidebar.text_input(
             "Enter an ACBL player number", on_change=player_number_change, placeholder='2663279', key='player_number_input')
         streamlit_chat.message(
-            "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about recent ACBL games which are club pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
+            "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
         streamlit_chat.message(
             "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_2', logo=st.session_state.assistant_logo)
         streamlit_chat.message(

@@ -4,6 +4,7 @@ openai
 pandas<2.1.0
 duckdb
 requests
+urllib3
 python-dotenv
 tenacity
 termcolor
@@ -23,3 +24,7 @@ matplotlib
 IPython
 streamlit-aggrid
 seaborn
+
+# for acbllib
+
+# for chatlib
