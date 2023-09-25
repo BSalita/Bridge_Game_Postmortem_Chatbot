@@ -15,19 +15,13 @@ import openai
 from openai import openai_object  # used to suppress vscode type checking errors
 import pandas as pd
 import duckdb
-import requests
-import pprint
 import json
 import os
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from tenacity import retry, wait_random_exponential, stop_after_attempt
-from termcolor import colored
 import streamlit_chat
 import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
-#from pandasai import SmartDataframe
-#from pandasai.llm import OpenAI
 
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
@@ -1105,6 +1099,7 @@ def create_main_section():
 
             pdf_assets = []
             pdf_assets.append(f"# Bridge Game Postmortem Report Personalized for {st.session_state.player_number}")
+            pdf_assets.append(f"### Created by http://postmortem.chat")
             pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.session_id}")
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
@@ -1190,7 +1185,7 @@ def create_main_section():
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
 
             if st.session_state.pdf_link.download_button(label="Download Personalized Report",
-                    data=streamlitlib.create_pdf(pdf_assets),
+                    data=streamlitlib.create_pdf(pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_number}"),
                     file_name = f"{st.session_state.session_id}-{st.session_state.player_number}-morty.pdf",
                     mime='application/octet-stream'):
                 st.warning('download triggered') # todo: this never works. why?

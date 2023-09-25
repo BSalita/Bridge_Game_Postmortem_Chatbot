@@ -281,12 +281,13 @@ def dataframe_to_table(df):
     return table
 
 
-def create_pdf(pdf_assets, output_filename=None):
+def create_pdf(pdf_assets, title, output_filename=None):
     # Create a BytesIO object to capture the PDF data
     buffer = BytesIO()
     
     # Create a new document with the buffer as the destination
     doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+    doc.title = title
 
     # Create a list to hold the document's contents
     story = []
