@@ -249,6 +249,8 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_EW'][0],axis='columns')
         df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_EW'][1],axis='columns')
         df_board_results['declarer'] = df_board_results['declarer'].map(lambda x: x[0].upper() if len(x) else None) # None is needed for PASS
+        df_board_results['Pct_NS'] = df_board_results['Pct_NS'].div(100)
+        df_board_results['Pct_EW'] = df_board_results['Pct_NS'].div(100)
         df_board_results['table_number'] = None
         df_board_results['round_number'] = None
         df_board_results['dealer'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToDealer)

@@ -442,7 +442,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 f"Session {session_id} is {dfs['score_score_type']}. Expecting an ACBL pairs match point session. Choose another session.")
             return False
 
-        with st.spinner(f"Retrieving tournament session {session_id} for player {player_number} from ACBL. Might take a minute ..."):
+        with st.spinner(f"Retrieving tournament session {session_id} for player {player_number} from ACBL."):
 
             dfs_results = get_tournament_session_results(session_id, acbl_api_key)
             if dfs_results is None:
@@ -473,7 +473,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                         f"Session {session_id} section {section['section_label']} is {section['movement_type']}. I can only chat about Mitchell movements. Choose another session.")
                     return False
 
-        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}."):
+        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}. Might take a minute ..."):
             #with Profiler():
 
             df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], dfs_results, acbl_api_key, player_number) # doesn't use any caching
