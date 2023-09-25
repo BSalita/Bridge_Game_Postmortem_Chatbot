@@ -883,7 +883,8 @@ def create_sidebar():
     st.sidebar.selectbox("Choose a club game.", options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
     )], on_change=club_session_id_change, key='session_ids_selectbox')  # options are event_id + event description
 
-    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
+    # todo: can use index=None when HF allows streamlit>=1.27.
+    st.sidebar.selectbox("Choose a tournament session.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
     if st.session_state.session_id is None:
