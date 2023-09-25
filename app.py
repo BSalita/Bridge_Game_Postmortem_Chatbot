@@ -271,6 +271,10 @@ def get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key):
     return acbllib.get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key)
 
 
+def get_tournament_session_results(session_id, acbl_api_key):
+    return acbllib.get_tournament_session_results(session_id, acbl_api_key)
+
+
 def create_club_dfs(player_number, event_url):
     return chatlib.create_club_dfs(player_number, event_url)
 
@@ -279,8 +283,8 @@ def merge_clean_augment_club_dfs(dfs, sd_cache_d, player_number):
     return chatlib.merge_clean_augment_club_dfs(dfs, sd_cache_d, player_number)
 
 
-def merge_clean_augment_tournament_dfs(dfs, sd_cache_d, player_number):
-    return chatlib.merge_clean_augment_tournament_dfs(dfs, sd_cache_d, player_number)
+def merge_clean_augment_tournament_dfs(dfs, dfs_results, sd_cache_d, player_number):
+    return chatlib.merge_clean_augment_tournament_dfs(dfs, dfs_results, sd_cache_d, player_number)
 
 
 # no caching because of hashing parameter concerns
@@ -391,6 +395,8 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 return False
             print(dfs.keys())
 
+            # todo: probably need to check if keys exist to control error processing -- pair_summaries, event, sessions, ...
+
             if dfs['pair_summaries']['pair_number'].value_counts().eq(1).all(): # Assuming pair_numbers are all unique for Howell
                 st.error(
                     f"Game {session_id}. I can only chat about Mitchell movements. Try another game.")
@@ -419,8 +425,64 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 return False
 
     elif session_id in tournament_session_urls:
-        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}. Might take a minute ..."):
-            df, sd_cache_d, matchpoint_ns_d = chatlib.merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], acbl_api_key, player_number) # doesn't use any caching
+        dfs = tournament_session_urls[session_id][3]
+        if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
+            st.error(
+                f"Session {session_id}has missing or invalid session data. Choose another session.")
+            return False
+        print(dfs.keys())
+
+        if dfs['event']['game_type'] != 'Pairs':
+            st.error(
+                f"Session {session_id} is {dfs['event']['game_type']}. Expecting an ACBL pairs match point session. Choose another session.")
+            return False
+
+        if dfs['score_score_type'] != 'Matchpoints':
+            st.error(
+                f"Session {session_id} is {dfs['score_score_type']}. Expecting an ACBL pairs match point session. Choose another session.")
+            return False
+
+        with st.spinner(f"Retrieving tournament session {session_id} for player {player_number} from ACBL. Might take a minute ..."):
+
+            dfs_results = get_tournament_session_results(session_id, acbl_api_key)
+            if dfs_results is None:
+                st.error(
+                    f"Session {session_id} has an invalid tournament session file. Choose another session.")
+                return False
+            print(dfs_results.keys())
+
+            if len(dfs_results['sections']) == 0:
+                st.error(
+                    f"Session {session_id} has no sections. Choose another session.")
+                return False
+
+            if 'handrecord' not in dfs_results or len(dfs_results['handrecord']) == 0 or 'box_number' not in dfs_results or not dfs_results['box_number'].isdigit():
+                st.error(
+                    f"Session {session_id} has a missing hand record. Cannot chat about shuffled sessions. Choose another session.")
+                return False
+
+            for section in dfs_results['sections']: # is it better/possible to only examine the section which the player played in?
+
+                if section['scoring_type'] != 'Matchpoints':
+                    st.error(
+                        f"Session {session_id} section {section['section_label']} is {section['scoring_type']}. Expecting an ACBL pairs match point session. Choose another session.")
+                    return False
+
+                if section['movement_type'] != 'Mitchell':
+                    st.error(
+                        f"Session {session_id} section {section['section_label']} is {section['movement_type']}. I can only chat about Mitchell movements. Choose another session.")
+                    return False
+
+        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}."):
+            #with Profiler():
+
+            df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], dfs_results, acbl_api_key, player_number) # doesn't use any caching
+            if df is None:
+                st.error(
+                    f"Session {session_id} has an invalid tournament session file. Choose another session.")
+                return False
+
+        st.session_state.dfs_results = dfs_results
     else:
         assert False, f"session_id not found: {session_id}"
 
@@ -727,6 +789,7 @@ def reset_data():
     st.session_state.tournament_sessions = {}
     st.session_state.game_date = None
     st.session_state.session_id = None
+    st.session_state.dfs_results = None
 
     # chat
     #st.session_state.ai_api = None
@@ -820,7 +883,7 @@ def create_sidebar():
     st.sidebar.selectbox("Choose a club game.", options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
     )], on_change=club_session_id_change, key='session_ids_selectbox')  # options are event_id + event description
 
-    st.sidebar.selectbox("Choose a tournament session.", options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
+    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
     if st.session_state.session_id is None:

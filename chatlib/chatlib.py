@@ -164,7 +164,7 @@ def create_club_dfs(acbl_number,event_url):
 
 
 # ['mp_won', 'mp_color', 'percentage', 'score', 'sanction', 'event_id', 'session_id', 'trax_master_event_code', 'score_tournament_name', 'score_event_name', 'score_session_number', 'score_session_time_description', 'score_event_type', 'score_score_type', 'section', 'results_last_updated', 'session', 'event', 'tournament', 'date']
-def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
+def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_number):
 
     print('dfs keys:',dfs.keys())
 
@@ -193,9 +193,7 @@ def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
     # dfs scalers: ['_id', '_event_id', 'id', 'session_number', 'start_date', 'start_time', 'description', 'sess_type', 'box_number', 'is_online', 'results_available', 'was_not_played', 'results_last_updated']
     # dfs dicts: ['tournament', 'event', 'handrecord', 'sections']
     # dfs lists: ['overalls']
-
-    dfs_results = acbllib.get_tournament_session_results(df['session_id'].iloc[0], acbl_api_key)
-    
+   
     print('dfs_results tournament:',type(dfs_results['tournament']))
     df_results_tournament = pd.DataFrame({k:[v] for k,v in dfs_results['tournament'].items() if not (isinstance(v,dict) or isinstance(v,list))})
     assert len(df_results_tournament) == 1, len(df_results_tournament)
@@ -223,7 +221,7 @@ def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
     for i,section in df_results_sections.iterrows():
         br = pd.DataFrame(section['board_results'])
         if all(br['pair_acbl'].map(lambda x: int(acbl_number) not in x)): # if acbl_number is not in this section then skip
-            continue
+            continue # todo: what to do with sections not containing acbl_number? concat all sections? concat may be correct since they may be included in matchpoint calculations.
         df_board_results = pd.concat([df_board_results,br],axis='rows')
         ns_df = df_board_results[df_board_results['orientation'].eq('N-S')]
         ew_df = df_board_results[df_board_results['orientation'].eq('E-W')][['board_number','pair_number','pair_names','pair_acbl','score','match_points','percentage']]
@@ -236,8 +234,8 @@ def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
             'score_EW':'Score_EW',
             'match_points_NS':'MatchPoints_NS',
             'match_points_EW':'MatchPoints_EW',
-            'percentage_NS':'Percentage_NS', # temp - only for comparision with computed version
-            'percentage_EW':'Percentage_EW', # temp - only for comparision with computed version
+            'percentage_NS':'Pct_NS',
+            'percentage_EW':'Pct_EW',
             'pair_number_NS':'Pair_Number_NS',
             'pair_number_EW':'Pair_Number_EW',
         },axis='columns',inplace=True)
@@ -263,7 +261,6 @@ def merge_clean_augment_tournament_dfs(dfs, acbl_api_key, acbl_number):
         board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
         df_board_results.drop(['orientation','pair_acbl_NS', 'pair_acbl_EW', 'pair_names_NS', 'pair_names_EW'],inplace=True,axis='columns')
-        break # todo: temp!!!!!
 
     df = clean_validate_df(df_board_results)
     df, sd_cache_d, matchpoint_ns_d = augment_df(df,{})
@@ -446,16 +443,19 @@ def clean_validate_df(df):
     df['Board'] = df['Board'].astype('uint8')
     assert df['Board'].ge(1).all()
 
-    # if any rows were dropped, the calculation of board's top/pct will be wrong (outside of (0,1)). Need to calculate Board_Top now, before dropping rows.
+    assert 'Board_Top' not in df.columns
     tops = {}
     for b in df['Board'].unique():
         tops[b] = df[df['Board'].eq(b)]['MatchPoints_NS'].count()-1
         assert tops[b] == df[df['Board'].eq(b)]['MatchPoints_EW'].count()-1
+    # if any rows were dropped, the calculation of board's top/pct will be wrong (outside of (0,1)). Need to calculate Board_Top before dropping any rows.
     df['Board_Top'] = df['Board'].map(tops)
-    df['Pct_NS'] = df['MatchPoints_NS'].astype('float32').div(df['Board_Top'])
+    if set(['Pct_NS', 'Pct_EW']).isdisjoint(df.columns): # disjoint means no elements of set are in df.columns
+        df['Pct_NS'] = df['MatchPoints_NS'].astype('float32').div(df['Board_Top'])
+        df['Pct_EW'] = df['MatchPoints_EW'].astype('float32').div(df['Board_Top'])
+    assert set(['Pct_NS', 'Pct_EW', 'Board_Top']).issubset(df.columns) # subset means all elements of the set are in df.columns
     df.loc[df['Pct_NS']>1,'Pct_NS'] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
     assert df['Pct_NS'].between(0,1).all(), [df[~df['Pct_NS'].between(0,1)][['Board','MatchPoints_NS','Board_Top','Pct_NS']]]
-    df['Pct_EW'] = df['MatchPoints_EW'].astype('float32').div(df['Board_Top'])
     df.loc[df['Pct_EW']>1,'Pct_EW'] = 1 # assuming this can only happen if director adjusts score. todo: print >1 cases.
     assert df['Pct_EW'].between(0,1).all(), [df[~df['Pct_EW'].between(0,1)][['Board','MatchPoints_EW','Board_Top','Pct_EW']]]
 
@@ -492,7 +492,7 @@ def clean_validate_df(df):
 
     if not pd.api.types.is_numeric_dtype(df['Score_NS']):
         df['Score_NS'] = df['Score_NS'].astype('string') # make sure all elements are a string
-        df.loc[df['Score_NS'].isin(['','PASS']),'Score_NS'] = '0'
+        df.loc[df['Score_NS'].eq('PASS'),'Score_NS'] = '0'
         assert df['Score_NS'].ne('PASS').all()
         drop_rows = ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric()) | ~df['Score_NS'].map(lambda c: c[c[0] == '-':].isnumeric())
         df.drop(df[drop_rows].index,inplace=True)
@@ -609,7 +609,7 @@ def augment_df(df,sd_cache_d):
     df = mlBridgeLib.append_double_dummy_results(df)
 
     # LoTT
-    ddmakes = df.apply(lambda r: tuple([tuple([r['_'.join(['DD',d,s])] for s in 'SHDC']) for d in 'NESW']),axis='columns')
+    ddmakes = df.apply(lambda r: tuple([tuple([r['_'.join(['DD',d,s])] for s in 'CDHSN']) for d in 'NESW']),axis='columns')
     LoTT_l = [mlBridgeLib.LoTT_SHDC(t,l) for t,l in zip(ddmakes,sl)] # [mlBridgeLib.LoTT_SHDC(ddmakes[i],sl[i]) for i in range(len(df))]
     df['LoTT_Tricks'] = [t for t,l,v in LoTT_l]
     df['LoTT_Suit_Length'] = [l for t,l,v in LoTT_l]
@@ -623,20 +623,7 @@ def augment_df(df,sd_cache_d):
     contract_types_d = mlBridgeLib.CategorifyContractType(ddmakes)
     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
     assert len(df) == len(contract_types_df)
-    df = pd.concat([df,contract_types_df],axis='columns',join='inner')
-    del contract_types_df,contract_types_d
-    # Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
-    contract_types_d = {}
-    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
-    for c in cols:
-        for t in mlBridgeLib.contract_types:
-            print(c,t,len((t == df[c]).values))
-            new_c = c+'_'+t
-            contract_types_d[new_c] = (t == df[c]).values
-    #contract_types_d = CategorifyContractType(ddmakes)
-    contract_types_df = pd.DataFrame(contract_types_d)
-    assert len(df) == len(contract_types_df)
-    df = pd.concat([df,contract_types_df],axis='columns',join='inner')
+    df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
     del contract_types_df,contract_types_d
 
     # create dict of NS matchpoint data.

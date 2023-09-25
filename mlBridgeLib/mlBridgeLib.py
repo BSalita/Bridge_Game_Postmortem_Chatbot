@@ -243,20 +243,20 @@ def SuitToDistributionPoints(suit):
 #    return tuple((t[i],i,'SHDC'[i]) for (v, i) in sorted([(v, i) for (i, v) in enumerate(t)],reverse=True))
 
 
-def hrs_to_brss(hrs):
+def hrs_to_brss(hrs,void='',ten='10'):
     cols = [d+'_'+s for d in ['north','west','east','south'] for s in ['spades','hearts','diamonds','clubs']] # remake of hands below, comments says the order needs to be NWES?????
-    return hrs[cols].apply(lambda r: ''.join(['SHDC'[i%4]+c for i,c in enumerate(r.values)]).replace(' ','').replace('-','').replace('10','T'), axis='columns')
+    return hrs[cols].apply(lambda r: ''.join(['SHDC'[i%4]+c for i,c in enumerate(r.values)]).replace(' ','').replace('-',void).replace('10',ten), axis='columns')
 
 
 # board_record_string (brs) is NWES, SHDC order
 # pbn is NESW, SHDC order
 # hands is NESW, SHDC order
 
-def pbn_to_brs(pbn,void=''):
+def pbn_to_brs(pbn,void='',ten='10'):
     r = [r'(.*)\.(.*)\.(.*)\.(.*)']
     rs = r'^N\:'+' '.join(r*4)+r'$'
     nesw = [shdc+(hand if len(hand) else void) for shdc,hand in zip(SHDC*4,re.match(rs,pbn).groups())] # both use SHDC order
-    return ''.join([''.join(nesw[i*4:i*4+4]) for i in [0,3,1,2]]).replace('T','10') # pbn uses NESW order but we want NWES
+    return ''.join([''.join(nesw[i*4:i*4+4]) for i in [0,3,1,2]]).replace('T',ten) # pbn uses NESW order but we want NWES
 
 
 def pbn_to_hands(pbn):
@@ -266,32 +266,32 @@ def pbn_to_hands(pbn):
 
 
 def validate_brs(brs):
-    s = brs.replace('-','').replace('10','T') # void may or may not contain '-'
-    b = ''.join(sorted(s)) != '22223333444455556666777788889999AAAACCCCDDDDHHHHJJJJKKKKQQQQSSSSTTTT'
-    if b:
-        #print('b=',b)
-        return b
-    for i in range(0,17,17*4):
-        split_shdc = re.split(r'[SHDC]',s[i:i+17])
-        b = len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13 # not validating sort order. call it correct-ish.
-        if b:
-            #print('b=',b)
-            return b
-    return False
+    assert '-' not in brs and 'T' not in brs, brs # must not have a '-' or 'T'
+    sorted_brs = '22223333444455556666777788889999AAAACCCCDDDDHHHHJJJJKKKKQQQQSSSSTTTT' # sorted brs must match this string
+    s = brs.replace('10','T')
+    if ''.join(sorted(s)) != sorted_brs:
+        print('validate_brs: Invalid brs:', brs, s)
+        return False
+    for i in range(0,len(sorted_brs),len(sorted_brs)*4):
+        split_shdc = re.split(r'[SHDC]',s[i:i+13+4])
+        if len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13: # not validating sort order. call it correct-ish.
+            print('validate_brs: Invalid len:', i, brs, s[i:i+13+4], split_shdc)
+            return False
+    return True
 
 
-def brs_to_pbn(brs):
+def brs_to_pbn(brs,void='',ten='T'):
     r = r'S(.*)H(.*)D(.*)C(.*)'
     rs = r*4
     suits = [suit for suit in re.match(rs,brs).groups()]
-    return 'N:'+' '.join(['.'.join(suits[i*4:i*4+4]) for i in [0,2,3,1]]).replace('10','T').replace('-','') # brs uses NWES order but we want NESW. void may or not contain '-'
+    return 'N:'+' '.join(['.'.join(suits[i*4:i*4+4]) for i in [0,2,3,1]]).replace('10',ten).replace('-',void) # brs uses NWES order but we want NESW. void may or not contain '-'
 
 
-def brs_to_hands(brss):
-    no_10s = brss.replace('10','T').replace('-','') # replace 10 with T and remove unnecessary '-' which signifies a void suit.
-    assert len(no_10s) == (13+len('SHDC'))*4, [len(no_10s),no_10s, brss]
+def brs_to_hands(brs,void='',ten='T'):
+    no_10s = brs.replace('10',ten).replace('-',void) # replace 10 with T and remove unnecessary '-' which signifies a void suit.
+    assert len(no_10s) == (13+len('SHDC'))*4 # (13 cards per suit + 4 suit symbols) * 4
     nesw = tuple([no_10s[i:i+17] for i in range(0,17*4,17)])
-    assert len(nesw) == 4 and all(len(s) == 17 for s in nesw), [nesw, brss]
+    assert len(nesw) == 4 and all(len(s) == 17 for s in nesw), [nesw, brs]
     return tuple([brs_to_hand(nesw[i]) for i in [0,2,3,1]]) # brs uses NWES order but we want NESW
 
 
@@ -302,8 +302,8 @@ def brs_to_hand(brs):
     return tuple(sort_hand(split_shdc[1:]))
 
 
-def hands_to_brs(hands,void=''):
-    brs = ''.join([c+(suit if len(suit) else void) for i in [0,3,1,2] for c,suit in zip(SHDC,hands[i])]).replace('T','10') # hands uses NESW order but we want NWSE.
+def hands_to_brs(hands,void='',ten='10'):
+    brs = ''.join([c+(suit if len(suit) else void) for i in [0,3,1,2] for c,suit in zip(SHDC,hands[i])]).replace('T',ten) # hands uses NESW order but we want NWSE.
     return brs
 
 
@@ -410,15 +410,19 @@ def BoardNumberToVul(bn):
 #    return tuple([tuple([[df['_'.join(['DD',d,s])] for s in 'SHDC']]) for d in NESW])
 
 
-# create column of LoTT. 
-# todo: changed lengths from CDHS to SHDC. Need to fix other callers. Renamed to LoTT_SHDC until others are fixed.
+# create column of LoTT.
+# todo: verify algorithm against actual LoTT.
+# I'm confused about the order of the suits and lengths. What about a tie between max suits. It should use highest ranking suit. 
+# Are all callers really passing dd ordered CDHSN/SHDC, and SL ordered CDHS?
+# Renamed to LoTT_SHDC until verified.
+# Callers should use a dict so LoTT isn't recomputed for every board result. Only cache by board, not by board result.
 def LoTT_SHDC(ddmakes,lengths):
     maxnsl = []
     maxewl = []
-    for nsidx,(nmakes,smakes,nlength,slength) in enumerate(zip(ddmakes[0][:4],ddmakes[2][:4],lengths[1][0][1],lengths[1][2][1])):
+    for nsidx,(nmakes,smakes,nlength,slength) in enumerate(zip(ddmakes[0][:4][::-1],ddmakes[2][:4][::-1],lengths[1][0][1],lengths[1][2][1])): # [::-1] to reverse ddmakes
         nsmax = max(nmakes,smakes)
         maxnsl.append((nlength+slength,nsmax,nsidx))
-    for ewidx,(emakes,wmakes,elength,wlength) in enumerate(zip(ddmakes[1][:4],ddmakes[3][:4],lengths[1][1][1],lengths[1][3][1])):
+    for ewidx,(emakes,wmakes,elength,wlength) in enumerate(zip(ddmakes[1][:4][::-1],ddmakes[3][:4][::-1],lengths[1][1][1],lengths[1][3][1])): # [::-1] to reverse ddmakes
         ewmax = max(emakes,wmakes)
         maxewl.append((elength+wlength,ewmax,ewidx))
     sorted_maxnsl = sorted(maxnsl,reverse=True)
@@ -505,6 +509,7 @@ def DDmakesToScores(ddmakes,vuls):
 
 def ContractToScores(df):
     # obsoleted 'NSEW'. renamed to 'declarer'
+    # todo: rename declarer to Declarer for consistancy?
     assert 'NSEW' not in df and 'declarer' in df
     return df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['declarer']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
 

@@ -3,6 +3,9 @@
 2. Find how score_NS_1 and score_EW_1 have creeped into df.
 3. Don't let prompt create new columns. Check that dataframe results are all in results columns.
 4. regex in commands.sql not working. SD_Prob_Take_[0-9]+ not excluded.
+5. What to do with (tournament) sections not containing user's acbl_number? concat all sections by rows? concat may be correct if other sections' results are included in matchpoint calculations.
+6. Delete tournaments/players directory. Only use players and tournaments/sessions?
+7. What's the diff between acbl_tournament_layer_history and acbl_tournament_sessions?
 
 ## Non-Deterministic Prompt responses:
 1. CASE WHEN
@@ -82,6 +85,7 @@
 
 ## Test
 1. How many simultaneous users can be supported?
+2. Verify mlBridgeLib.Lott is correct for all callers: Morty, 7NT, board_results.ipynb.
 
 ## Documentation Aids
 1. https://markdown.land/markdown-cheat-sheet

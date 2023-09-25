@@ -1,7 +1,7 @@
 # for app.py
-streamlit>=1.26
+streamlit>=1.27
 openai
-pandas<2.1.0
+pandas
 duckdb
 requests
 urllib3
