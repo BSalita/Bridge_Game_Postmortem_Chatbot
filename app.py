@@ -862,7 +862,7 @@ def reset_data():
 
 
 def app_info():
-    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Data scraped from public ACBL webpages.")
+    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
     st.caption(
         f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
 
