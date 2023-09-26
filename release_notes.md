@@ -6,6 +6,7 @@
 5. What to do with (tournament) sections not containing user's acbl_number? concat all sections by rows? concat may be correct if other sections' results are included in matchpoint calculations.
 6. Delete tournaments/players directory. Only use players and tournaments/sessions?
 7. What's the diff between acbl_tournament_layer_history and acbl_tournament_sessions?
+8. Looks like passed out hands are disappearing (row is dropped from results). Game ID 868296.
 
 ## Non-Deterministic Prompt responses:
 1. CASE WHEN
