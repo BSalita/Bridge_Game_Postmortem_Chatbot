@@ -34,7 +34,8 @@
 				"@Boards_We_Equaled_ParScore",
 				"@Boards_We_Underperformed_ParScore",
 				"@Single_Dummy_Our_Boards",
-				"@Single_Dummy_All_Boards"
+				"@Single_Dummy_All_Boards",
+				"@Declarer_Rankings"
 			]
 		},
 		"Summarize_Briefly": {
@@ -267,7 +268,7 @@
 				"help": "**Showing average actual pcts for contract.**",
 				"prompts": [
 					{
-						"prompt": "SELECT AVG(CASE WHEN Our_Boards THEN Pct END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct END) AS Avg_Of_Boards_Partner_Declared FROM results",
+						"prompt": "",
 						"sql": "SELECT AVG(CASE WHEN Our_Boards THEN Pct_{Pair_Direction} END) AS Avg_Of_All_Our_Boards, AVG(CASE WHEN Boards_We_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN Pct_{Pair_Direction} END) AS Avg_Of_Boards_Partner_Declared FROM results"
 					}
 				]
@@ -277,7 +278,7 @@
 				"help": "**Showing average double dummy (DD) score pcts for contract.**",
 				"prompts": [
 					{
-						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results",
+						"prompt": "",
 						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN DDPct_{Pair_Direction} END) AS Avg_DD_Pct_Of_Boards_Partner_Declared FROM results"
 					}
 				]
@@ -287,7 +288,7 @@
 				"help": "**Showing average par score pcts in par strain.**",
 				"prompts": [
 					{
-						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results",
+						"prompt": "",
 						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN ParScore_Pct_{Pair_Direction} END) AS Avg_ParScore_Pct_Of_Boards_Partner_Declared FROM results"
 					}
 				]
@@ -297,7 +298,7 @@
 				"help": "**Showing average single dummy (SD) score pcts in contract's strain.**",
 				"prompts": [
 					{
-						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results",
+						"prompt": "",
 						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_{pair_direction} END) AS Avg_SD_Pct_Of_Boards_Partner_Declared FROM results"
 					}
 				]
@@ -307,7 +308,7 @@
 				"help": "**Showing average single dummy (SD) score pcts in optimal contract.**",
 				"prompts": [
 					{
-						"prompt": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results",
+						"prompt": "",
 						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN SDPct_Max_{pair_direction} END) AS Avg_SDPct_Max_Of_Boards_Partner_Declared FROM results"
 					}
 				]
@@ -339,7 +340,7 @@
 				"help": "**Showing frequency of contracts of all boards at all tables.**",
 				"prompts": [
 					{
-						"prompt": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract",
+						"prompt": "",
 						"sql": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{pair_direction}) AS SDScore_{pair_direction}, ANY_VALUE(SDPct_Max_Diff_{pair_direction}) AS SDPct_Max_Diff_{pair_direction}, ANY_VALUE(SDPct_{pair_direction}) AS SDPct_{pair_direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
 					}
 				]
@@ -369,7 +370,7 @@
 				"help": "**Showing your matchpoint percentage per round.**",
 				"prompts": [
 					{
-						"prompt": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, Pair_Number_NS, Pair_Number_EW FROM results WHERE Boards_We_Played = True GROUP BY Opponents, Pair_Number_NS, Pair_Number_EW",
+						"prompt": "",
 						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, Pair_Number_NS, Pair_Number_EW FROM results WHERE Boards_We_Played = True GROUP BY Opponents, Pair_Number_NS, Pair_Number_EW"
 					}
 				]
@@ -380,7 +381,7 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board",
+						"prompt": "",
 						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board"
 					}
 				]
@@ -391,7 +392,7 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_I_Played=TRUE",
+						"prompt": "",
 						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_I_Played=TRUE ORDER BY x.Board"
 					}
 				]
@@ -402,7 +403,7 @@
 				"comment": "Too difficult to devise a user friendly prompt using ChatGPT 3.5 Turbo. Must use near total SQL. GPT4 seems to get it right most of the time but too costly. Need x.Pct because x.pct doesn't work.",
 				"prompts": [
 					{
-						"prompt": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board WHERE y.Boards_We_Declared=TRUE",
+						"prompt": "",
 						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} AS Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
 					}
 				]
@@ -412,12 +413,22 @@
 				"help": "**Ranking pairs (NS, EW) having the most scores greater than or equal to parscore.**",
 				"prompts": [
 					{
-						"prompt": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, COUNT(CASE WHEN Score_NS>=Parscore_NS THEN 1 END) AS Count_GE, AVG(Pct_NS) AS Pct, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_NS < ParScore_NS THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_NS ORDER BY Count_GE DESC",
+						"prompt": "",
 						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, COUNT(CASE WHEN Score_NS>=Parscore_NS THEN 1 END) AS Count_GE, AVG(Pct_NS) AS Pct, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_NS < ParScore_NS THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_NS ORDER BY Count_GE DESC"
 					},
 					{
-						"prompt": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, COUNT(CASE WHEN Score_EW>=Parscore_EW THEN 1 END) AS Count_GE, AVG(Pct_EW) AS Pct, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_EW < ParScore_EW THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_EW ORDER BY Count_GE DESC",
+						"prompt": "",
 						"sql": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, COUNT(CASE WHEN Score_EW>=Parscore_EW THEN 1 END) AS Count_GE, AVG(Pct_EW) AS Pct, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_EW < ParScore_EW THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_EW ORDER BY Count_GE DESC"
+					}
+				]
+			},
+			"Declarer_Rankings": {
+				"title": "Rank Declarers by Percentage",
+				"help": "**Ranking declarers by average percent who played 4 or more boards.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Name_Declarer AS Name, CASE WHEN Direction_Declarer IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg, COUNT(*) AS Count, Number_Declarer AS Declarer, Direction_Declarer AS Direction FROM results GROUP BY Number_Declarer, Name_Declarer, Direction_Declarer HAVING COUNT(*) >= 4 ORDER BY Avg DESC"
 					}
 				]
 			}

@@ -1112,7 +1112,7 @@ def create_main_section():
                     user_prompt_help = ''
                     for k, prompt_sqls in st.session_state.vetted_prompts.items():
                         for prompt_sql in prompt_sqls['prompts']:
-                            if message["content"] == prompt_keyword_replacements(prompt_sql['prompt']): # for message['content'] to match, must replace any keywords in prompt_sql['prompt'] with substitute values.
+                            if message["content"] == '' or message["content"] == prompt_keyword_replacements(prompt_sql['prompt']): # for message['content'] to match, must replace any keywords in prompt_sql['prompt'] with substitute values.
                                 user_prompt_help = prompt_sqls['help']
                                 break
                     continue

@@ -56,7 +56,6 @@
 13. Use emojis in prompts? 🥸
 14. implement rankings. can this be done using a prompt or must webpage be scrapped?
 15. Overall and directional rankings. Or can this be done using a prompt?
-16. Show rank of best declarers, best defenders from all pairs.
 17. Historical Data: Calculate STDev of dealer DD, SD, Parscore, SD Max.
 18. Show list of prompts in Help tab.
 19. Create a single dataframe for DD, SD, SD Max, Par, and Actual instead of separate dataframes.
