@@ -513,7 +513,7 @@ def clean_validate_df(df):
     else:
         df['Result'] = df.apply(lambda r: r['scores_l'].index(r['Score_NS']),axis='columns')-(df['BidLvl']+6).astype('int8')
 
-    if 'Tricks' in df:
+    if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
         assert df['Tricks'].notnull().all()
         df.loc[df['Contract'].eq('PASS'),'Tricks'] = pd.NA
     else:
