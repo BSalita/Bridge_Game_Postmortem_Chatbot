@@ -1,22 +1,14 @@
 ## Bugs:
 1. Missing error message when invalid ACBL player number entered into debug selectbox.
-2. Find how score_NS_1 and score_EW_1 have creeped into df.
+2. Find where score_NS_1 and score_EW_1 have creeped into df.
 3. Don't let prompt create new columns. Check that dataframe results are all in results columns.
 4. regex in commands.sql not working. SD_Prob_Take_[0-9]+ not excluded.
 5. What to do with (tournament) sections not containing user's acbl_number? concat all sections by rows? concat may be correct if other sections' results are included in matchpoint calculations.
-6. Delete tournaments/players directory. Only use players and tournaments/sessions?
-7. What's the diff between acbl_tournament_layer_history and acbl_tournament_sessions?
-8. Looks like passed out hands are disappearing (row is dropped from results). Game ID 868296.
-
-## Non-Deterministic Prompt responses:
-1. CASE WHEN
-2. Pct (ChatGPT 3.5 but happened once in 4)
-3. Unique boards
 
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?
 2. Document SD_[Score,ParScore,Matchpoints,Pct][Max][Diff].
-3. Any interesting stats in https://stats.lovebridge.com/statistics/lb_02_107602 ?
+3. Any interesting stats to grab from https://stats.lovebridge.com/statistics/lb_02_107602 ?
 
 ## To Be Implemented
 1. Is there some way that logo url can be using file:///assets/...?
@@ -24,7 +16,6 @@
 3. Create .json or .toml file for settings. Use settings to turn off any debug output.
 4. Implement Checkbox for Debug Output in Advanced Settings. Use setting to turn off any debug output.
 5. Setting to disable single dummy calculations (avoid delay)?
-6. ACBL Tournaments (no json, maybe api instead of scrapping) - player: https://live.acbl.org/player-results/2663279 event: https://live.acbl.org/event/NABC232/23FP/1/summary
 7. ACBL Individuals
 8. ACBL Teams
 9. Other online bridge services.
@@ -90,6 +81,17 @@
 ## Documentation Aids
 1. https://markdown.land/markdown-cheat-sheet
 2. https://www.color-hex.com/
+
+## Related Projects Bugs
+1. What's the diff between acbl_tournament_player_history and acbl_tournament_sessions?
+2. Delete tournaments/players directory. Only use players and tournaments/sessions?
+3. Looks like passed out hands are disappearing (row is dropped from results). Game ID 868296.
+
+## Non-Deterministic Prompt responses:
+1. CASE WHEN
+2. Pct (ChatGPT 3.5 but happened once in 4)
+3. Unique boards
+
 
 ## Experiments:
 Experimental prompts:

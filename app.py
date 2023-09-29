@@ -109,7 +109,10 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT
     if 'sql' in prompt_sql and prompt_sql['sql']: # already has sql. no need for chat-to-sql call.
         sql_query = prompt_sql['sql']
         sql_query = prompt_keyword_replacements(sql_query)
-        up = prompt_keyword_replacements(up)
+        if up == '':
+            up = sql_query
+        else:
+            up = prompt_keyword_replacements(up)
         messages.append({"role": "user", "content": up})
         # fake message
         assistant_message = {'function_call':{'name':'ask_database'}}
@@ -1112,7 +1115,7 @@ def create_main_section():
                     user_prompt_help = ''
                     for k, prompt_sqls in st.session_state.vetted_prompts.items():
                         for prompt_sql in prompt_sqls['prompts']:
-                            if message["content"] == '' or message["content"] == prompt_keyword_replacements(prompt_sql['prompt']): # for message['content'] to match, must replace any keywords in prompt_sql['prompt'] with substitute values.
+                            if message["content"] == prompt_keyword_replacements(prompt_sql['prompt']) or (prompt_sql['prompt'] == '' and message["content"] == prompt_keyword_replacements(prompt_sql['sql'])):
                                 user_prompt_help = prompt_sqls['help']
                                 break
                     continue

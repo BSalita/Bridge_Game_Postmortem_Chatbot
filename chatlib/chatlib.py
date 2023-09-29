@@ -469,23 +469,25 @@ def clean_validate_df(df):
 
     # clean up contracts. Create BidLvl, BidSuit, Dbl columns.
     contractdf = df['Contract'].str.replace(' ','').str.upper().str.replace('NT','N').str.extract(r'^(?P<BidLvl>\d)(?P<BidSuit>C|D|H|S|N)(?P<Dbl>X*)$')
-    df.drop(['Contract'],axis='columns',inplace=True)
     df['BidLvl'] = contractdf['BidLvl']
     df['BidSuit'] = contractdf['BidSuit']
     df['Dbl'] = contractdf['Dbl']
     del contractdf
-    drop_rows = df['BidLvl'].isna()
+    # There's all sorts of exceptional crap which needs to be done for 'PASS', 'NP', 'BYE', 'AVG', 'AV+', 'AV-', 'AVG+', 'AVG-', 'AVG+/-'. Only 'PASS' is handled, the rest are dropped.
+    drop_rows = df['Contract'].ne('PASS')&(df['Score_NS'].eq('PASS')&df['Score_EW'].eq('PASS')&df['BidLvl'].isna()|df['BidSuit'].isna()|df['Dbl'].isna())
+    print('Invalid contracts: drop_rows:',drop_rows.sum(),df[drop_rows][['Contract','BidLvl','BidSuit','Dbl']])
     df.drop(df[drop_rows].index,inplace=True)
     drop_rows = ~df['declarer'].isin(list('NSEW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
+    print('Invalid declarers: drop_rows:',drop_rows.sum(),df[drop_rows][['declarer']])
     df.drop(df[drop_rows].index,inplace=True)
-    df['Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['declarer']
-    df['BidLvl'] = df['BidLvl'].astype('uint8')
-    assert df['BidLvl'].isna().sum() == 0
-    assert df['BidLvl'].between(1,7,inclusive='both').all()
-    assert df['BidSuit'].isna().sum() == 0
-    assert df['BidSuit'].isin(list('CDHSN')).all()
-    assert df['Dbl'].isna().sum() == 0
-    assert df['Dbl'].isin(['','X','XX']).all()
+    df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['declarer']
+    df['BidLvl'] = df['BidLvl'].astype('UInt8') # using UInt8 instead of uint8 because of NaNs
+    assert (df['Contract'].eq('PASS')|df['BidLvl'].notna()).all()
+    assert (df['Contract'].eq('PASS')|df['BidLvl'].between(1,7,inclusive='both')).all()
+    assert (df['Contract'].eq('PASS')|df['BidSuit'].notna()).all()
+    assert (df['Contract'].eq('PASS')|df['BidSuit'].isin(list('CDHSN'))).all()
+    assert (df['Contract'].eq('PASS')|df['Dbl'].notna()).all()
+    assert (df['Contract'].eq('PASS')|df['Dbl'].isin(['','X','XX'])).all()
 
     assert df['table_number'].isna().all() or df['table_number'].ge(1).all() # some events have NaN table_numbers.
  
@@ -505,22 +507,18 @@ def clean_validate_df(df):
 
     # tournaments do not have Tricks or Result columns. Create them.
     df['scores_l'] = mlBridgeLib.ContractToScores(df)
-    if 'Result' in df.columns:
+    if 'Result' in df:
         assert df['Result'].notna().all() and df['Result'].notnull().all()
-        df['Result'] = df['Result'].map(lambda x: 0 if x=='=' else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # todo: use transform instead of map?
+        df['Result'] = df['Result'].map(lambda x: 0 if x in ['=','0',''] else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # 0 for PASS
     else:
         df['Result'] = df.apply(lambda r: r['scores_l'].index(r['Score_NS']),axis='columns')-(df['BidLvl']+6).astype('int8')
 
-    if 'Tricks' not in df or df['Tricks'].isnull().any():
-        df['Tricks'] = (df['BidLvl']+6+df['Result']).astype('uint8')
-    else:
+    if 'Tricks' in df:
         assert df['Tricks'].notnull().all()
-        #drop_rows = ~df['Tricks'].str.isnumeric() # removed because wasn't a string. was None?
-        #df.drop(df[drop_rows].index,inplace=True)
-        df['Tricks'] = df['Tricks'].astype('uint8')
-        assert df['Tricks'].eq(df['BidLvl']+6+df['Result']).all()
-    #drop_rows = ~df['Tricks'].between(0,13,inclusive='both')
-    #df.drop(df[drop_rows].index,inplace=True)
+        df.loc[df['Contract'].eq('PASS'),'Tricks'] = pd.NA
+    else:
+        df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
+    df['Tricks'] = df['Tricks'].astype('UInt8')
     assert df['Tricks'].between(0,13,inclusive='both').all()
 
     # drop invalid round numbers
@@ -530,7 +528,8 @@ def clean_validate_df(df):
 
     drop_rows = df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')].index
     df.drop(drop_rows,inplace=True)
-    drop_rows = df[df.apply(lambda r: (r['scores_l'].index(r['Score_NS']) != r['Tricks']) | (r['Score_NS'] != -r['Score_EW']),axis='columns')].index
+    drop_rows = df[df.apply(lambda r: r['Tricks'] is not pd.NA and ((r['scores_l'].index(r['Score_NS']) != r['Tricks']) or (r['Score_NS'] != -r['Score_EW'])),axis='columns')].index
+    print('Invalid Tricks: drop_rows:',df.loc[drop_rows,['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df.drop(drop_rows,inplace=True)
     df.drop(['scores_l'],axis='columns',inplace=True)
 
@@ -620,7 +619,7 @@ def augment_df(df,sd_cache_d):
     df = df.astype({'LoTT_Tricks':'uint8','LoTT_Suit_Length':'uint8','LoTT_Variance':'int8'})
 
     # ContractType
-    df['ContractType'] = df.apply(lambda r: mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
+    df['ContractType'] = df.apply(lambda r: 'PASS' if r['BidLvl'] is pd.NA else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
     # Create column of contract types by partnership by suit. e.g. CT_NS_C.
     contract_types_d = mlBridgeLib.CategorifyContractType(ddmakes)
     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
@@ -661,10 +660,10 @@ def augment_df(df,sd_cache_d):
     df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Direction_Declarer']], axis='columns')
     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Direction_Declarer']], axis='columns')
 
-    df['DDTricks'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Declarer'],r['BidSuit']])], axis='columns') # invariant
-    df['DDTricks_Dummy'] = df.apply(lambda r: r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
-    df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidSuit']=='N' else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl']== 0 else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
+    df['DDTricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Declarer'],r['BidSuit']])], axis='columns') # invariant
+    df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
+    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
     df['DDScore_EW'] = -df['DDScore_NS']
     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
     df['DDMPs_EW'] = df['Board_Top']-df['DDMPs_NS']
@@ -716,7 +715,7 @@ def augment_df(df,sd_cache_d):
 def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
-    df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']][r['Pair_Direction_Declarer'],r['Direction_Declarer'],r['BidSuit']],axis='columns')
+    df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Pair_Direction_Declarer'],r['Direction_Declarer'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
     df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
     df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
     df['SDScore_EW'] = -df['SDScore_NS']
@@ -807,4 +806,7 @@ def Create_SD_Score_Max(r):
             elif nsew in 'EW' and (score_max is None or score < score_max):
                 score_max = score
                 contract_max = str(level+1)+suit+['','X','XX'][isdoubled]+' '+nsew
+    else:
+        score_max = 0
+        contract_max = 'PASS'
     return (score_max, contract_max)
