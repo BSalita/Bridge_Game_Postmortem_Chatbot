@@ -511,8 +511,9 @@ def ContractToScores(df):
     # obsoleted 'NSEW'. renamed to 'declarer'
     # todo: rename declarer to Declarer for consistancy?
     assert 'NSEW' not in df and 'declarer' in df
-    return df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['declarer']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
-
+    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['declarer']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
+    # adjusted score? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
+    return scores_l
 
 # Convert score tuples into Par.
 # todo: rewrite into two defs; looping, core logic

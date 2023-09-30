@@ -16,6 +16,7 @@
 3. Create .json or .toml file for settings. Use settings to turn off any debug output.
 4. Implement Checkbox for Debug Output in Advanced Settings. Use setting to turn off any debug output.
 5. Setting to disable single dummy calculations (avoid delay)?
+6. Don't perform string replacements on quoted prompts. Use as SQL.
 7. ACBL Individuals
 8. ACBL Teams
 9. Other online bridge services.

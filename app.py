@@ -425,7 +425,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
         dfs = tournament_session_urls[session_id][3]
         if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
             st.error(
-                f"Session {session_id}has missing or invalid session data. Choose another session.")
+                f"Session {session_id} has missing or invalid session data. Choose another session.")
             return False
         print(dfs.keys())
 
@@ -834,8 +834,9 @@ def reset_data():
     for k, v in st.session_state.items():
         print(k)
         if k.startswith('main_messages_df_'):
-            assert st.session_state[k] is None
-            # st.session_state[k].clear()
+            # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
+            #st.session_state[k].clear() # error: no such attribute as clear
+            pass
 
     # These files are repeatedly reloaded for development purposes. Only takes a second.
 

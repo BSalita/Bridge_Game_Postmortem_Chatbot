@@ -511,15 +511,16 @@ def clean_validate_df(df):
         assert df['Result'].notna().all() and df['Result'].notnull().all()
         df['Result'] = df['Result'].map(lambda x: 0 if x in ['=','0',''] else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # 0 for PASS
     else:
-        df['Result'] = df.apply(lambda r: r['scores_l'].index(r['Score_NS']),axis='columns')-(df['BidLvl']+6).astype('int8')
+        df['Result'] = df.apply(lambda r: pd.NA if  r['Score_NS'] not in r['scores_l'] else r['scores_l'].index(r['Score_NS'])-(r['BidLvl']+6),axis='columns').astype('Int8') # pd.NA is due to director's adjustment
+    assert df['Result'].map(lambda x: x is pd.NA or -13 <= x <= 13).all()
 
     if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
         assert df['Tricks'].notnull().all()
         df.loc[df['Contract'].eq('PASS'),'Tricks'] = pd.NA
     else:
-        df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
+        df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA or r['Result'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    assert df['Tricks'].between(0,13,inclusive='both').all()
+    assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
 
     # drop invalid round numbers
     if df['round_number'].notnull().any():
