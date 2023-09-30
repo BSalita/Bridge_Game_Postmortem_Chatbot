@@ -169,7 +169,7 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
     print('dfs keys:',dfs.keys())
 
     df = pd.DataFrame({k:[v] for k,v in dfs.items() if not (isinstance(v,dict) or isinstance(v,list))})
-    print('df:', df)
+    print('df:\n', df)
     assert len(df) == 1, len(df)
     
     print('dfs session:',type(dfs['session']))
@@ -264,10 +264,9 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
         df_board_results.drop(['orientation','pair_acbl_NS', 'pair_acbl_EW', 'pair_names_NS', 'pair_names_EW'],inplace=True,axis='columns')
 
+
     df = clean_validate_df(df_board_results)
     df, sd_cache_d, matchpoint_ns_d = augment_df(df,{})
-
-    # dfs['board_results']
 
     return df, sd_cache_d, matchpoint_ns_d
 
@@ -512,6 +511,8 @@ def clean_validate_df(df):
         df['Result'] = df['Result'].map(lambda x: 0 if x in ['=','0',''] else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # 0 for PASS
     else:
         df['Result'] = df.apply(lambda r: pd.NA if  r['Score_NS'] not in r['scores_l'] else r['scores_l'].index(r['Score_NS'])-(r['BidLvl']+6),axis='columns').astype('Int8') # pd.NA is due to director's adjustment
+    if df['Result'].isna().any():
+        print('NaN Results:\n',df[df['Result'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Result','scores_l']])
     assert df['Result'].map(lambda x: x is pd.NA or -13 <= x <= 13).all()
 
     if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
@@ -519,6 +520,8 @@ def clean_validate_df(df):
         df.loc[df['Contract'].eq('PASS'),'Tricks'] = pd.NA
     else:
         df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA or r['Result'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
+    if df['Tricks'].isna().any():
+        print('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
     assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
 
@@ -527,11 +530,6 @@ def clean_validate_df(df):
         drop_rows = df['round_number'].isna()
         df.drop(df[drop_rows].index,inplace=True)
 
-    drop_rows = df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')].index
-    df.drop(drop_rows,inplace=True)
-    drop_rows = df[df.apply(lambda r: r['Tricks'] is not pd.NA and ((r['scores_l'].index(r['Score_NS']) != r['Tricks']) or (r['Score_NS'] != -r['Score_EW'])),axis='columns')].index
-    print('Invalid Tricks: drop_rows:',df.loc[drop_rows,['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Tricks','Result','scores_l']])
-    df.drop(drop_rows,inplace=True)
     df.drop(['scores_l'],axis='columns',inplace=True)
 
     for col in df.columns:
