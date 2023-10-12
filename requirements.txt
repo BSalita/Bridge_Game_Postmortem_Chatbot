@@ -11,11 +11,13 @@ termcolor
 streamlit-chat
 bs4
 endplay
-#torch
-scikit-learn
 sqlalchemy
 sqlalchemy_utils
 safetensors
+scikit-learn
+torch
+torchvision
+torchaudio
 
 # for streamlitlib
 reportlab
