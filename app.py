@@ -814,7 +814,15 @@ def Predict_Game_Results():
         st.error(f"Oops. {predicted_rankings_model_filename} not found.")
         return None
     with open(predicted_rankings_model_file,'rb') as f:
-        y_name, columns_to_scale, X_scaler, y_scaler, model_state_dict = pickle.load(f)
+        y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f)
+
+    predicted_rankings_model_filename = "predicted_rankings_model.pth"
+    predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
+    if not predicted_rankings_model_file.exists():
+        st.error(f"Oops. {predicted_rankings_model_filename} not found.")
+        return None
+    with open(predicted_rankings_model_file,'rb') as f:
+        model_state_dict = torch.load(f, map_location=torch.device('cpu'))
 
     print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
     print(st.session_state.df.info(verbose=True))
