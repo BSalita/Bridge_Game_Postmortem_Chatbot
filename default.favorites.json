@@ -461,11 +461,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_NS"
+						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Score_NS, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_NS"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_EW"
+						"sql": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_EW, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_EW"
 					}
 				]
 			}
