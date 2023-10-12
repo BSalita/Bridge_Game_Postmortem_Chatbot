@@ -507,11 +507,10 @@ def DDmakesToScores(ddmakes,vuls):
     return scoresl
 
 
+
 def ContractToScores(df):
-    # obsoleted 'NSEW'. renamed to 'declarer'
-    # todo: rename declarer to Declarer for consistancy?
-    assert 'NSEW' not in df and 'declarer' in df
-    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['declarer']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['declarer'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
+    assert 'NSEW' not in df and 'Declarer_Direction' in df
+    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['Declarer_Direction']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['Declarer_Direction'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
     # adjusted score? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
     return scores_l
 

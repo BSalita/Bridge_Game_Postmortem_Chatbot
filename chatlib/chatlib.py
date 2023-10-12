@@ -274,7 +274,7 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
 # obsolete?
 def clean_validate_tournament_df(df):
 
-    # par, hand_record_id, DD, Vul, Hands, board_record_string?, ns_score, ew_score, Final_Stand_NS|EW, MatchPoints_NS, MatchPoints_EW, player_number_[nesw], contract, BidLvl, BidSuit, Dbl, Direction_Declarer
+    # par, hand_record_id, DD, Vul, Hands, board_record_string?, ns_score, ew_score, Final_Stand_NS|EW, MatchPoints_NS, MatchPoints_EW, player_number_[nesw], contract, BidLvl, BidSuit, Dbl, Declarer_Direction
 
     # change clean_validate_club_df to handle these missing columns; par, Pair_Number_NS|EW, table_number, round_number, double_dummy_ns|ew, board_record_string, hand_record_id.
 
@@ -440,6 +440,8 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
 
 def clean_validate_df(df):
 
+    df.rename({'declarer':'Declarer_Direction'},axis='columns',inplace=True)
+
     # Cleanup all sorts of columns. Create new columns where missing.
     df['Board'] = df['Board'].astype('uint8')
     assert df['Board'].ge(1).all()
@@ -476,10 +478,10 @@ def clean_validate_df(df):
     drop_rows = df['Contract'].ne('PASS')&(df['Score_NS'].eq('PASS')&df['Score_EW'].eq('PASS')&df['BidLvl'].isna()|df['BidSuit'].isna()|df['Dbl'].isna())
     print('Invalid contracts: drop_rows:',drop_rows.sum(),df[drop_rows][['Contract','BidLvl','BidSuit','Dbl']])
     df.drop(df[drop_rows].index,inplace=True)
-    drop_rows = ~df['declarer'].isin(list('NSEW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
-    print('Invalid declarers: drop_rows:',drop_rows.sum(),df[drop_rows][['declarer']])
+    drop_rows = ~df['Declarer_Direction'].isin(list('NSEW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
+    print('Invalid declarers: drop_rows:',drop_rows.sum(),df[drop_rows][['Declarer_Direction']])
     df.drop(df[drop_rows].index,inplace=True)
-    df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['declarer']
+    df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['Declarer_Direction']
     df['BidLvl'] = df['BidLvl'].astype('UInt8') # using UInt8 instead of uint8 because of NaNs
     assert (df['Contract'].eq('PASS')|df['BidLvl'].notna()).all()
     assert (df['Contract'].eq('PASS')|df['BidLvl'].between(1,7,inclusive='both')).all()
@@ -512,7 +514,7 @@ def clean_validate_df(df):
     else:
         df['Result'] = df.apply(lambda r: pd.NA if  r['Score_NS'] not in r['scores_l'] else r['scores_l'].index(r['Score_NS'])-(r['BidLvl']+6),axis='columns').astype('Int8') # pd.NA is due to director's adjustment
     if df['Result'].isna().any():
-        print('NaN Results:\n',df[df['Result'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Result','scores_l']])
+        print('NaN Results:\n',df[df['Result'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Result','scores_l']])
     assert df['Result'].map(lambda x: x is pd.NA or -13 <= x <= 13).all()
 
     if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
@@ -521,7 +523,7 @@ def clean_validate_df(df):
     else:
         df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA or r['Result'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
     if df['Tricks'].isna().any():
-        print('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','declarer','Score_NS','Score_EW','Tricks','Result','scores_l']])
+        print('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
     assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
 
@@ -571,10 +573,9 @@ def TuplesToSuits(df,tuples,column,excludes=[]):
 def augment_df(df,sd_cache_d):
 
     # positions
-    df.rename({'declarer':'Direction_Declarer'},axis='columns',inplace=True)
-    df['Pair_Direction_Declarer'] = df['Direction_Declarer'].map(mlBridgeLib.PlayerDirectionToPairDirection)
-    df['Opponent_Pair_Direction'] = df['Pair_Direction_Declarer'].map(mlBridgeLib.PairDirectionToOpponentPairDirection)
-    df['Direction_OnLead'] = df['Direction_Declarer'].map(mlBridgeLib.NextPosition)
+    df['Pair_Declarer_Direction'] = df['Declarer_Direction'].map(mlBridgeLib.PlayerDirectionToPairDirection)
+    df['Opponent_Pair_Direction'] = df['Pair_Declarer_Direction'].map(mlBridgeLib.PairDirectionToOpponentPairDirection)
+    df['Direction_OnLead'] = df['Declarer_Direction'].map(mlBridgeLib.NextPosition)
     df['Direction_Dummy'] = df['Direction_OnLead'].map(mlBridgeLib.NextPosition)
     df['Direction_NotOnLead'] = df['Direction_Dummy'].map(mlBridgeLib.NextPosition)
 
@@ -606,13 +607,18 @@ def augment_df(df,sd_cache_d):
         df[f'SL_{d}_ML_SI'] = df[f'SL_{d}_{so}'].map(lambda l: [n for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least containing indexes
         df[f'SL_{d}_ML_SJ'] = df[f'SL_{d}_ML_S'].map(lambda l:'-'.join([str(v) for v in l])).astype('string') # ordered most-to-least and joined into string
 
+    # Create columns containing column names of the NS,EW longest suit.
+    sl_cols = [('_'.join(['SL_Max',d]),['_'.join(['SL',d,s]) for s in mlBridgeLib.SHDC]) for d in mlBridgeLib.NS_EW]
+    for d in sl_cols:
+        df[d[0]] = df[d[1]].idxmax(axis=1).astype('category') # defaults to object so need string or category
+
     df = mlBridgeLib.append_double_dummy_results(df)
 
     # LoTT
     ddmakes = df.apply(lambda r: tuple([tuple([r['_'.join(['DD',d,s])] for s in 'CDHSN']) for d in 'NESW']),axis='columns')
     LoTT_l = [mlBridgeLib.LoTT_SHDC(t,l) for t,l in zip(ddmakes,sl)] # [mlBridgeLib.LoTT_SHDC(ddmakes[i],sl[i]) for i in range(len(df))]
     df['LoTT_Tricks'] = [t for t,l,v in LoTT_l]
-    df['LoTT_Suit_Length'] = [l for t,l,v in LoTT_l]
+    df['LoTT_Suit_Length'] = [l for t,l,v in LoTT_l] # todo: is this correct? use SL_Max_(NS|EW) instead? verify LoTT_Suit_Length against SL_Max_{declarer_pair_direction}.
     df['LoTT_Variance'] = [v for t,l,v in LoTT_l]
     del LoTT_l
     df = df.astype({'LoTT_Tricks':'uint8','LoTT_Suit_Length':'uint8','LoTT_Variance':'int8'})
@@ -648,21 +654,21 @@ def augment_df(df,sd_cache_d):
     df['JustMade'] = df['Result'].eq(0)
     df['UnderTricks'] = df['Result'].lt(0)
 
-    df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Pair_Direction_Declarer']], axis='columns')
+    df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Pair_Declarer_Direction']], axis='columns')
+    df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Pair_Declarer_Direction']], axis='columns')
+    df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Pair_Declarer_Direction']], axis='columns')
     df['Pair_Number_Defender'] = df.apply(lambda r: r['Pair_Number_'+r['Opponent_Pair_Direction']], axis='columns')
-    df['Number_Declarer'] = df.apply(lambda r: r['Player_Number_'+r['Direction_Declarer']], axis='columns') # todo: keep as lower case?
-    df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Direction_Declarer']], axis='columns')
+    df['Number_Declarer'] = df.apply(lambda r: r['Player_Number_'+r['Declarer_Direction']], axis='columns') # todo: keep as lower case?
+    df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Declarer_Direction']], axis='columns')
     # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
     df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
-    df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Direction_Declarer']], axis='columns')
-    df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Direction_Declarer']], axis='columns')
+    df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Declarer_Direction']], axis='columns')
+    df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Declarer_Direction']], axis='columns')
 
-    df['DDTricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Declarer'],r['BidSuit']])], axis='columns') # invariant
+    df['DDTricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
     df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
-    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['DDTricks']-r['SL_'+r['Pair_Direction_Declarer']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Direction_Declarer']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Direction_Declarer']), r['DDTricks']-r['BidLvl']-6), axis='columns')
+    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['DDTricks']-r['SL_'+r['Pair_Declarer_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Declarer_Direction']), r['DDTricks']-r['BidLvl']-6), axis='columns')
     df['DDScore_EW'] = -df['DDScore_NS']
     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
     df['DDMPs_EW'] = df['Board_Top']-df['DDMPs_NS']
@@ -688,14 +694,23 @@ def augment_df(df,sd_cache_d):
     df['ParScore_MPs_EW'] = df['Board_Top']-df['ParScore_MPs_NS']
     df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
     df['ParScore_Pct_EW'] = 1-df['ParScore_Pct_NS']
-    #df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Pair_Direction_Declarer']], axis='columns')
-    #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Pair_Direction_Declarer']], axis='columns')
-    #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Pair_Direction_Declarer']], axis='columns')
+    #df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Pair_Declarer_Direction']], axis='columns')
+    #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Pair_Declarer_Direction']], axis='columns')
+    #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Pair_Declarer_Direction']], axis='columns')
     #df['ParScore_Diff_Declarer'] = df['Score_Declarer']-df['ParScore_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
     #df['ParScore_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['ParScore_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
     #df['ParScore_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['ParScore_Pct_Declarer']
     #df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks] # adding convenience column to df. Actual Tricks vs DD Tricks
     #df['Score_DD_Diff_Declarer'] = df['Score_Declarer']-df['DD_Score_Declarer'] # adding convenience column to df. Actual Score vs DD Score
+
+    # masterpoints columns
+    for d in mlBridgeLib.NESW:
+        df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
+    # todo: use 'mp_total_*' (downloaded) instead of 'MP_*' (acbl_*_board_results)?
+    df['MP_NS'] = df['mp_total_n']+df['mp_total_s']
+    df['MP_EW'] = df['mp_total_e']+df['mp_total_w']
+    df['NS_Geo_MP'] = df['mp_total_n']*df['mp_total_s']
+    df['EW_Geo_MP'] = df['mp_total_e']*df['mp_total_w']
 
     df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
 
@@ -714,7 +729,7 @@ def augment_df(df,sd_cache_d):
 def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
-    df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Pair_Direction_Declarer'],r['Direction_Declarer'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
+    df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Pair_Declarer_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
     df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
     df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
     df['SDScore_EW'] = -df['SDScore_NS']
@@ -755,7 +770,7 @@ def Create_SD_Scores(r):
         level = r['BidLvl']-1
         suit = r['BidSuit']
         iCDHSN = 'CDHSN'.index(suit)
-        nsew = r['Direction_Declarer']
+        nsew = r['Declarer_Direction']
         iNSEW = 'NSEW'.index(nsew)
         vul = mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],nsew)
         double = len(r['Dbl'])
@@ -773,7 +788,7 @@ def Create_SD_Score(r):
     probs = r['SDProbs']
     scores_l = r['SDScores']
     ps = sum(prob*score for prob,score in zip(probs,scores_l))
-    return ps if r['Direction_Declarer'] in 'NS' else -ps
+    return ps if r['Declarer_Direction'] in 'NS' else -ps
 
 
 # Highest expected score, same suit, any level
@@ -782,7 +797,7 @@ def Create_SD_Score_Max(r):
     if r['Score_Declarer']:
         suit = r['BidSuit']
         iCDHSN = 'CDHSN'.index(suit)
-        nsew = r['Direction_Declarer']
+        nsew = r['Declarer_Direction']
         iNSEW = 'NSEW'.index(nsew)
         vul = mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],nsew)
         double = len(r['Dbl'])

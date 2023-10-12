@@ -6,8 +6,336 @@ import traceback
 import requests
 from bs4 import BeautifulSoup
 import urllib
+from collections import defaultdict
 import time
 import json
+import pathlib
+import sys
+import sqlalchemy
+from sqlalchemy import create_engine, inspect
+import sqlalchemy_utils
+from sqlalchemy_utils.functions import database_exists, create_database
+sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib'))) # removed .parent
+sys.path
+import mlBridgeLib
+
+
+def get_club_results(cns, base_url, acbl_url, acblPath, read_local):
+    htmls = {}
+    total_clubs = len(cns)
+    failed_urls = []
+    #headers={"user-agent":None} # Not sure why this has become necessary
+    headers={"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36"}
+    for ncn,cn in enumerate(sorted(cns)):
+        ncn += 1
+        url = base_url+str(cn)+'/'
+        file = url.replace(acbl_url,'')+str(cn)+'.html'
+        print(f'Processing file ({ncn}/{total_clubs}): {file}')
+        path = acblPath.joinpath(file)
+        if read_local and path.exists() and path.stat().st_size > 200:
+            html = path.read_text(encoding="utf-8")
+            print(f'Reading local {file}: len={len(html)}')
+        else:
+            print(f'Requesting {url}')
+            try:
+                r = requests.get(url,headers=headers)
+            except:
+                print(f'Except: status:{r.status_code} {url}')
+            else:
+                html = r.text
+                print(f'Creating {file}: len={len(html)}')
+            if r.status_code != 200:
+                print(f'Error: status:{r.status_code} {url}')
+                time.sleep(60) # obsolete?
+                failed_urls.append(url)
+                continue
+            # pathlib.Path.mkdir(path.parent, parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(html, encoding="utf-8")
+            time.sleep(1) # need to self-throttle otherwise acbl returns 403 "forbidden". obsolete?
+        htmls[str(cn)] = html
+    print(f'Failed Urls: len:{len(failed_urls)} Urls:{failed_urls}')
+    print(f"Done: Total clubs processed:{total_clubs}: Total url failures:{len(failed_urls)}")
+    return htmls, total_clubs, failed_urls
+
+
+
+def extract_club_games(htmls, acbl_url):
+    dfs = {}
+    ClubInfos = {}
+    total_htmls = len(htmls)
+    for n,(cn,html) in enumerate(htmls.items()):
+        n += 1
+        print(f'Processing club ({n}/{total_htmls}) {cn}')
+        bs = BeautifulSoup(html, "html.parser") # todo: do this only once.
+        html_table = bs.find('table')
+        if html_table is None:
+            print(f'Invalid club-result for {cn}')
+            continue
+        # /html/body/div[2]/div/div[2]/div[1]/div[2]
+        ClubInfo = bs.find('div', 'col-md-8')
+        #print(ClubInfo)
+        ci = {}
+        ci['Name'] = ClubInfo.find('h1').contents[0].strip() # get first text and strip
+        ci['Location'] = ClubInfo.find('h5').contents[0].strip() # get first text and strip
+        if ClubInfo.find('a'):
+            ci['WebSite'] = ClubInfo.find('a')['href'] # get href of first a
+        ClubInfos[cn] = ci
+        print(f'{ci}')
+        # assumes first table is our target
+        d = pd.read_html(str(html_table))
+        assert len(d) == 1
+        df = pd.DataFrame(d[0])
+        df.insert(0,'Club',cn)
+        df.insert(1,'EventID','?')
+        hrefs = [acbl_url+link.get('href')[1:] for link in html_table.find_all('a', href=re.compile("^/club-results/details/\d*$"))]
+        df.drop('Unnamed: 6', axis=1, inplace=True)
+        df['ResultID'] = [result.rsplit('/', 1)[-1] for result in hrefs]
+        df['ResultUrl'] = hrefs
+        dfs[cn] = df
+    print(f"Done: Total clubs processed:{len(dfs)}")
+    return dfs, ClubInfos    
+
+
+def extract_club_result_json(dfs, filtered_clubs, starting_nclub, ending_nclub, total_local_files, acblPath,acbl_url, read_local=True):
+    total_clubs = len(filtered_clubs)
+    failed_urls = []
+    total_urls_processed = 0
+    total_local_files_read = 0
+    #headers={"user-agent":None} # Not sure why this has become necessary. Failed 2021-Sep-02 so using Chrome curl user-agent.
+    headers={"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36"}
+    for ndf,(kdf,df) in enumerate(filtered_clubs.items()):
+        if ndf < starting_nclub or ndf >= ending_nclub:
+            print(f"Skipping club #{ndf} {kdf}") # obsolete when filtered_clubs works
+            continue
+        ndf += 1
+        except_count = 0
+        total_results = len(df['ResultUrl'])
+        for cn, (nurl, url) in zip(df['Club'],enumerate(df['ResultUrl'])):
+            nurl += 1
+            total_urls_processed += 1
+            html_file = url.replace(acbl_url,'').replace('club-results','club-results/'+str(cn))+'.html'
+            json_file = html_file.replace('.html','.data.json')
+            print(f'Processing club ({ndf}/{total_clubs}): result file ({nurl}/{total_results}): {html_file}')
+            #if ndf < 1652:
+            #    continue
+            html_path = acblPath.joinpath(html_file)
+            json_path = acblPath.joinpath(json_file)
+            html = None
+            data_json = None
+            if read_local and json_path.exists():
+                #if html_path.exists():
+                #    print(f'Found local html file: {html_file}')
+                #else:
+                #    print(f'Missing local html file: {html_file}')
+                try:
+                    with open(json_path, 'r') as f:
+                        data_json = json.load(f)
+                except:
+                    print(f'Exception when reading json file: {json_file}. Deleting html and json files.')
+                else:
+                    total_local_files_read += 1
+                    print(f'Reading local ({total_local_files_read}/{total_local_files}) file:{json_path}: len:{json_path.stat().st_size}')
+            else:
+                print(f'Requesting {url}')
+                try:
+                    r = requests.get(url,headers=headers)
+                except Exception as ex:
+                    print(f'Exception: count:{except_count} type:{type(ex).__name__} args:{ex.args}')
+                    if except_count > 5:
+                        print('Except count exceeded')
+                        break # skip url
+                    except_count += 1
+                    time.sleep(1) # just in case the exception is transient
+                    continue # retry url
+                except KeyboardInterrupt as e:
+                    print(f"Error: {type(e).__name__} while processing file:{url}")
+                    print(traceback.format_exc())
+                    canceled = True
+                    break
+                else:
+                    except_count = 0            
+                html = r.text
+                print(f'Creating {html_file}: len={len(html)}')
+                # some clubs return 200 (ok) but with instructions to login (len < 200).
+                # skip clubs returning errors or tiny files. assumes one failed club result will be true for all club's results.
+                if r.status_code != 200 or len(html) < 200:
+                    failed_urls.append(url)
+                    break
+                # pathlib.Path.mkdir(html_path.parent, parents=True, exist_ok=True)
+                html_path.parent.mkdir(parents=True, exist_ok=True)
+                html_path.write_text(html, encoding="utf-8")
+                bs = BeautifulSoup(html, "html.parser")
+                scripts = bs.find_all('script')
+                #print(scripts)
+                for script in scripts:
+                    if script.string: # not defined for all scripts
+                        #print(script.string)
+                        vardata = re.search('var data = (.*);\n', script.string)
+                        if vardata:
+                            data_json = json.loads(vardata.group(1))
+                            #print(json.dumps(data_json, indent=4))
+                            print(f"Writing {json_path}")
+                            with open(json_path, 'w') as f:
+                                json.dump(data_json, f, indent=2)
+                            bbo_tournament_id = data_json["bbo_tournament_id"]
+                            print(f'bbo_tournament_id: {bbo_tournament_id}')
+                #time.sleep(1) # obsolete?
+            # if no data_json file read, must be an error so delete both html and json files.
+            if not data_json:
+                html_path.unlink(missing_ok=True)
+                json_path.unlink(missing_ok=True)
+            #print(f'Files processed ({total_urls_processed}/{total_local_files_read}/{total_urls_to_process})')
+    print(f'Failed Urls: len:{len(failed_urls)} Urls:{failed_urls}')
+    print(f"Done: Totals: clubs:{total_clubs} urls:{total_urls_processed} local files read:{total_local_files_read}: failed urls:{len(failed_urls)}")
+    return total_urls_processed, total_local_files_read, failed_urls
+
+
+def club_results_json_to_sql(urls, starting_nfile=0, ending_nfile=0, initially_delete_all_output_files=False, skip_existing_files=True, event_types=[]):
+    total_files_written = 0
+    if ending_nfile == 0: ending_nfile = len(urls)
+    filtered_urls = urls[starting_nfile:ending_nfile]
+    total_urls = len(filtered_urls)
+    start_time = time.time()
+
+    # delete files first, using filtered list of urls
+    if initially_delete_all_output_files:
+        for nfile,url in enumerate(filtered_urls):
+            sql_file = url.with_suffix('.sql')
+            sql_file.unlink(missing_ok=True)
+
+    for nfile,url in enumerate(filtered_urls):
+        nfile += 1
+        #url = 'https://my.acbl.org/club-results/details/290003' # todo: insert code to extract json from script
+        #r = requests.get(url)
+        json_file = url
+        sql_file = url.with_suffix('.sql')
+        print(f"Processing ({nfile}/{total_urls}): file:{json_file.as_posix()}")
+        if skip_existing_files:
+            if sql_file.exists():
+               print(f"Skipping: File exists:{sql_file.as_posix()}")
+               continue
+        try:
+            data_json = None
+            with open(json_file, 'r') as f:
+                data_json = json.load(f)
+            #print(f"Reading {json_file.as_posix()} dict len:{len(data_json)}")
+            if len(event_types) > 0 and data_json['type'] not in event_types:
+                #print(f"Skipping type:{data_json['type']}: file{json_file.as_posix()}")
+                continue
+            tables = defaultdict(lambda :defaultdict(dict))
+            primary_keys = ['id']
+            mlBridgeLib.json_to_sql_walk(tables,"events","","",data_json,primary_keys) # "events" is the main table.
+            with open(sql_file,'w') as f:
+                mlBridgeLib.CreateSqlFile(tables,f,primary_keys)
+            total_files_written += 1
+        except Exception as e:
+            print(f"Error: {e}: type:{data_json['type']} file:{url.as_posix()}")
+        else:
+            print(f"Writing: type:{data_json['type']} file:{sql_file.as_posix()}")
+
+    print(f"All files processed:{total_urls} files written:{total_files_written} total time:{round(time.time()-start_time,2)}")
+    return total_urls, total_files_written
+
+
+# todo: can acblPath be removed?
+def club_results_create_sql_db(db_file_connection_string, create_tables_sql_file, db_file_path,  acblPath, db_memory_connection_string='sqlite://', starting_nfile=0, ending_nfile=0, write_direct_to_disk=False, create_tables=True, delete_db=False, perform_integrity_checks=False, create_engine_echo=False):
+    if write_direct_to_disk:
+        db_connection_string = db_file_connection_string # disk file based db
+    else:
+        db_connection_string = db_memory_connection_string # memory based db
+
+    if delete_db and sqlalchemy_utils.functions.database_exists(db_file_connection_string):
+        print(f"Deleting db:{db_file_connection_string}")
+        sqlalchemy_utils.functions.drop_database(db_file_connection_string) # warning: can't delete file if in use by another app (restart kernel).
+
+    if not sqlalchemy_utils.functions.database_exists(db_connection_string):
+        print(f"Creating db:{db_connection_string}")
+        sqlalchemy_utils.functions.create_database(db_connection_string)
+        create_tables = True
+        
+    engine = sqlalchemy.create_engine(db_connection_string, echo=create_engine_echo)
+    raw_connection = engine.raw_connection()
+
+    if create_tables:
+        print(f"Creating tables from:{create_tables_sql_file}")
+        with open(create_tables_sql_file, 'r') as f:
+            create_sql = f.read()
+        raw_connection.executescript(create_sql) # create tables
+
+    urls = []
+    for path in acblPath.joinpath('club-results').rglob('*.data.sql'): # fyi: PurePathPosix doesn't support glob/rglob
+        urls.append(path)
+
+    #urls = [acblPath.joinpath(f) for f in ['club-results/108571/details/280270.data.sql']] # use slashes, not backslashes
+    #urls = [acblPath.joinpath(f) for f in ['club-results/275966/details/99197.data.sql']] # use slashes, not backslashes
+    #urls = [acblPath.joinpath(f) for f in ['club-results/275966/details/98557.data.sql']] # use slashes, not backslashes
+    #urls = [acblPath.joinpath(f) for f in ['club-results/104034/details/100661.data.sql','club-results/104034/details/100663.data.sql']] # use slashes, not backslashes
+    #urls = [acblPath.joinpath(f) for f in 100*['club-results/108571/details/191864.data.sql']]
+
+    total_script_execution_time = 0
+    total_scripts_executed = 0
+    canceled = False
+    if ending_nfile == 0: ending_nfile = len(urls)
+    filtered_urls = urls[starting_nfile:ending_nfile]
+    total_filtered_urls = len(filtered_urls)
+    start_time = time.time()
+    for nfile,url in enumerate(filtered_urls):
+        nfile += 1
+        sql_file = url
+        if (nfile % 100) == 0:
+            print(f"Executing SQL script ({nfile}/{total_filtered_urls}): file:{sql_file.as_posix()}")
+        
+        try:
+            sql_script = None
+            with open(sql_file, 'r') as f:
+                sql_script = f.read()
+            start_script_time = time.time()
+            raw_connection.executescript(sql_script)
+        except Exception as e:
+            print(f"Error: {type(e).__name__} while processing file:{url.as_posix()}")
+            print(traceback.format_exc())
+            print(f"Every json field must be an entry in the schema file. Update schema if needed.")
+            print(f"Removing {url.as_posix()}")
+            sql_file.unlink(missing_ok=True) # delete any bad files, fix issues, rerun.
+            continue # todo: log error.
+            #break
+        except KeyboardInterrupt as e:
+            print(f"Error: {type(e).__name__} while processing file:{url.as_posix()}")
+            print(traceback.format_exc())
+            canceled = True
+            break
+        else:
+            script_execution_time = time.time()-start_script_time
+            if (nfile % 100) == 0:
+                print(f"SQL script executed: file:{url.as_posix()}: time:{round(script_execution_time,2)}")
+            total_script_execution_time += script_execution_time
+            total_scripts_executed += 1
+
+    print(f"SQL scripts executed ({total_scripts_executed}/{total_filtered_urls}/{len(urls)}): total changes:{raw_connection.total_changes} total script execution time:{round(time.time()-start_time,2)}: avg script execution time:{round(total_script_execution_time/max(1,total_scripts_executed),2)}")
+    # if using memory db, write memory db to disk file.
+    if not canceled:
+        if perform_integrity_checks:
+            # todo: research how to detect and display failures? Which checks are needed?
+            print(f"Performing quick_check on file")
+            raw_connection.execute("PRAGMA quick_check;") # takes 7m on disk
+            print(f"Performing foreign_key_check on file")
+            raw_connection.execute("PRAGMA foreign_key_check;") # takes 3m on disk
+            print(f"Performing integrity_check on file")
+            raw_connection.execute("PRAGMA integrity_check;") # takes 25m on disk
+        if not write_direct_to_disk:
+            print(f"Writing memory db to file (takes 1+ hours):{db_file_connection_string}")
+            engine_file = sqlalchemy.create_engine(db_file_connection_string)
+            raw_connection_file = engine_file.raw_connection()
+            raw_connection.backup(raw_connection_file.connection) # takes 45m
+            raw_connection_file.close()
+            engine_file.dispose()
+            print(f"Saved {db_file_path}: size:{db_file_path.stat().st_size}")
+
+    raw_connection.close()
+    engine.dispose()
+    print("Done.")
+    return total_scripts_executed # not sure if any return value is needed.
 
 
 def get_club_results_details_data(url):

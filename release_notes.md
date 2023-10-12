@@ -21,6 +21,7 @@
 8. ACBL Teams
 9. Other online bridge services.
 10. Further reduce autosizing of columns. Dataframes doesn't look minimized although reportlab does.
+11. Show predicted ranking for pairs. Requires NN to be trained on ranking. Might be more applicable to 7NT.info historical data.
 13. Implement downloading of chat session or perhaps output as markdown.
 17. Check if ACBL online games are in my DB.
 20. Howell movements.
@@ -33,6 +34,7 @@
 30. Flesh out README.md
 
 ## Prompt Issues
+0. Prominantly show all boards where the scores are impossible given the contract. e.g. 2S for 120.
 1. Check each prompt for missing statistics. Make list of minimum statistics.
 2. Have expert review terminology used in prompts.
 3. Underbid means par or sd score is higher than either a double or pass out.

@@ -50,6 +50,7 @@ import chatlib  # must be placed after sys.path.append. vscode re-format likes t
 
 rootPath = pathlib.Path('.')  # e:/bridge/data')
 acblPath = rootPath.joinpath('data')  # was 'acbl'
+savedModelsPath = rootPath.joinpath('SavedModels')
 
 # pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
@@ -566,6 +567,9 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 [st.session_state.player_number, st.session_state.partner_number])  # boolean
             break
 
+    # make predictions
+    Predict_Game_Results()
+
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
     conn.register('results', df)
@@ -751,6 +755,110 @@ def sd_observations_changed():
         # todo: experimenting with outputing a dataframe of some SD relevant columns
         streamlitlib.ShowDataFrameTable(st.session_state.df[['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']+st.session_state.df.filter(regex=r'^SD').columns.to_list(
         )].sort_values(['Board']).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='sd_observations_changed_sd_df')
+
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from safetensors.torch import load_file, save_file
+import pickle
+
+# Create a Model
+class NeuralNetwork(nn.Module):
+    def __init__(self, input_size, output_size, layers):
+        super(NeuralNetwork, self).__init__()
+        self.fc1 = nn.Linear(input_size, layers) 
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(layers, output_size)
+
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        return out
+
+
+# todo: verify predicted column values agree with df.
+rename_pkl_to_download_column_names = {
+    'Pct':'Pct_NS',
+    'Club':'club_id_number',
+    'Date':'game_date',
+    'ENum':'Player_Number_E',
+    'MP_E':'mp_total_e',
+    'MP_N':'mp_total_n',
+    'MP_S':'mp_total_s',
+    'MP_W':'mp_total_w',
+    'NNum':'Player_Number_N',
+    'Par_Score':'ParScore_NS',
+    'Round':'round_number',
+    'Session':'session_number',
+    'SNum':'Player_Number_S',
+    'WNum':'Player_Number_W',
+}
+
+rename_download_to_pkl_column_names = {v:k for k,v in rename_pkl_to_download_column_names.items()}
+    
+def Predict_Game_Results():
+    # Predict game results using a saved model.
+
+    if st.session_state.df is None:
+        return None
+
+    predicted_rankings_model_filename = "predicted_rankings_model.pkl"
+    predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
+    if not predicted_rankings_model_file.exists():
+        st.error(f"Oops. {predicted_rankings_model_filename} not found.")
+        return None
+    with open(predicted_rankings_model_file,'rb') as f:
+        y_name, columns_to_scale, X_scaler, y_scaler, model_state_dict = pickle.load(f)
+
+    print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
+    print(st.session_state.df.info(verbose=True))
+    print(set(columns_to_scale).difference(set(st.session_state.df.columns)))
+
+    df = st.session_state.df.copy()
+    df['game_date'] = pd.to_datetime(df['game_date']).astype('int64')
+    for d in mlBridgeLib.NESW:
+        df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32') # float32 because could be NaN
+    df['Vul'] = df['Vul'].astype('uint8')
+    df['Dealer'] = df['Dealer'].astype('category')
+
+    df = df.rename(rename_download_to_pkl_column_names,axis='columns')[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
+    X = df.drop(columns=[y_name])
+    y = df[y_name]
+    for col in X.select_dtypes(include='category').columns:
+        X[col] = X[col].cat.codes
+    assert X.select_dtypes(include=['category','string']).empty
+
+    X_scaled = X.copy()
+    X_scaled = X_scaler.transform(X)
+
+    # Initialize the model and load weights
+    model_for_pred = NeuralNetwork(X_scaled.shape[1],1,100) # todo: 100 ok?
+    model_for_pred.load_state_dict(model_state_dict)
+
+    # Make predictions
+    model_for_pred.eval()
+    with torch.no_grad():
+        predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)) # so fast (1ms) that we're good with using the CPU
+
+    predictions = y_scaler.inverse_transform(predictions_scaled.numpy())
+    predictions_s = pd.Series(predictions.flatten())
+
+    # Create a DataFrame for predictions and save or further use
+    y_name_ns = y_name+'_NS'
+    y_name_ew = y_name+'_EW'
+    st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
+    st.session_state.df[y_name_ew+'_Actual'] = 1-st.session_state.df[y_name_ns+'_Actual']
+    st.session_state.df[y_name_ns+'_Pred'] = predictions_s
+    st.session_state.df[y_name_ew+'_Pred'] = 1-st.session_state.df[y_name_ns+'_Pred']
+    st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns]-predictions_s
+    st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ns+'_Pred']-st.session_state.df[y_name_ns+'_Actual']
+    return ([y_name_ns+'_Actual', y_name_ns+'_Pred', y_name_ns+'_Diff'], [y_name_ew+'_Actual', y_name_ew+'_Pred', y_name_ew+'_Diff'])
 
 
 def read_favorites():
@@ -1002,8 +1110,8 @@ def create_tab_bar():
 
     with st.container():
 
-        chat_tab, data, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
-            ['Chat', 'Data', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
+        chat_tab, data, predictions, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
+            ['Chat', 'Data', 'Predictions', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
         streamlitlib.stick_it_good()
 
         with chat_tab:
@@ -1014,6 +1122,19 @@ def create_tab_bar():
                 # AgGrid unreliable in displaying within tab so using st.dataframe instead
                 # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
                 st.dataframe(st.session_state.df)
+
+        with predictions:
+            pass
+        #     new_cols = Predict_Game_Results()
+        #     if new_cols is not None:
+        #             st.write('Predicted Overall Ranking Results - NS')
+        #             st.dataframe(st.session_state.df[['Player_Name_N','Player_Name_S']+new_cols[0]].groupby(['Player_Name_N','Player_Name_S'])[new_cols[0]].agg('mean').reset_index())
+        #             st.write('Predicted Overall Ranking Results - EW')
+        #             st.dataframe(st.session_state.df[['Player_Name_E','Player_Name_W']+new_cols[1]].groupby(['Player_Name_E','Player_Name_W'])[new_cols[1]].agg('mean').reset_index())
+        #             st.write('Predicted Board Results - NS')
+        #             st.dataframe(st.session_state.df[['Player_Name_N','Player_Name_S','Board','Contract']+new_cols[0]])
+        #             st.write('Predicted Board Results - EW')
+        #             st.dataframe(st.session_state.df[['Player_Name_E','Player_Name_W','Board','Contract']+new_cols[1]])
 
         with dtypes:
             # AgGrid unreliable in displaying within tab. Also issue with Series.
