@@ -1118,8 +1118,8 @@ def create_tab_bar():
 
     with st.container():
 
-        chat_tab, data, predictions, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
-            ['Chat', 'Data', 'Predictions', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
+        chat_tab, data, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
+            ['Chat', 'Data', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
         streamlitlib.stick_it_good()
 
         with chat_tab:
@@ -1130,19 +1130,6 @@ def create_tab_bar():
                 # AgGrid unreliable in displaying within tab so using st.dataframe instead
                 # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
                 st.dataframe(st.session_state.df)
-
-        with predictions:
-            pass
-        #     new_cols = Predict_Game_Results()
-        #     if new_cols is not None:
-        #             st.write('Predicted Overall Ranking Results - NS')
-        #             st.dataframe(st.session_state.df[['Player_Name_N','Player_Name_S']+new_cols[0]].groupby(['Player_Name_N','Player_Name_S'])[new_cols[0]].agg('mean').reset_index())
-        #             st.write('Predicted Overall Ranking Results - EW')
-        #             st.dataframe(st.session_state.df[['Player_Name_E','Player_Name_W']+new_cols[1]].groupby(['Player_Name_E','Player_Name_W'])[new_cols[1]].agg('mean').reset_index())
-        #             st.write('Predicted Board Results - NS')
-        #             st.dataframe(st.session_state.df[['Player_Name_N','Player_Name_S','Board','Contract']+new_cols[0]])
-        #             st.write('Predicted Board Results - EW')
-        #             st.dataframe(st.session_state.df[['Player_Name_E','Player_Name_W','Board','Contract']+new_cols[1]])
 
         with dtypes:
             # AgGrid unreliable in displaying within tab. Also issue with Series.
