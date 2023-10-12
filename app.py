@@ -844,7 +844,7 @@ def Predict_Game_Results():
     # Make predictions
     model_for_pred.eval()
     with torch.no_grad():
-        predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)) # so fast (1ms) that we're good with using the CPU
+        predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)).cpu() # so fast (1ms) that we're good with using the CPU
 
     predictions = y_scaler.inverse_transform(predictions_scaled.numpy())
     predictions_s = pd.Series(predictions.flatten())
