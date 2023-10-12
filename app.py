@@ -808,13 +808,14 @@ def Predict_Game_Results():
     if st.session_state.df is None:
         return None
 
+    # couldn't combine pkl and pth because model_state_dict complained about gpu dict was saved but huggingface was cpu only. Solution was to split into pkl and pth.
     predicted_rankings_model_filename = "predicted_rankings_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
         st.error(f"Oops. {predicted_rankings_model_filename} not found.")
         return None
     with open(predicted_rankings_model_file,'rb') as f:
-        y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f)
+        y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f) # on lenovo5-1tb, had to manually copy pickle file from /mnt/e/bridge because git pull seems to have pulled a bad copy.
 
     predicted_rankings_model_filename = "predicted_rankings_model.pth"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)

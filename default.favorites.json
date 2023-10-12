@@ -437,7 +437,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Name_Declarer AS Name, CASE WHEN Direction_Declarer IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg_Pct, COUNT(*) AS Count, Number_Declarer AS Declarer, Direction_Declarer AS Direction FROM results GROUP BY Number_Declarer, Name_Declarer, Direction_Declarer HAVING COUNT(*) >= 4 ORDER BY Avg_Pct DESC"
+						"sql": "SELECT Name_Declarer AS Name, CASE WHEN Declarer_Direction IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg_Pct, COUNT(*) AS Count, Number_Declarer AS Declarer, Declarer_Direction AS Direction FROM results GROUP BY Number_Declarer, Name_Declarer, Declarer_Direction HAVING COUNT(*) >= 4 ORDER BY Avg_Pct DESC"
 					}
 				]
 			},
