@@ -15,7 +15,10 @@ sqlalchemy
 sqlalchemy_utils
 safetensors
 scikit-learn
-torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+torchaudio
+cpuonly
 
 # for streamlitlib
 reportlab
