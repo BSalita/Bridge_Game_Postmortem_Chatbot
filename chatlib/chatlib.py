@@ -238,6 +238,7 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
             'percentage_EW':'Pct_EW',
             'pair_number_NS':'Pair_Number_NS',
             'pair_number_EW':'Pair_Number_EW',
+            'session_number':'Session',
         },axis='columns',inplace=True)
         df_board_results['pair_direction'] = df_board_results['orientation'].map({'N-S':'NS','E-W':'EW'})
         df_board_results['player_number_n'] = df_board_results.apply(lambda r: r['pair_acbl_NS'][0],axis='columns').astype('string')
@@ -248,17 +249,28 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['player_name_s'] = df_board_results.apply(lambda r: r['pair_names_NS'][1],axis='columns')
         df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_EW'][0],axis='columns')
         df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_EW'][1],axis='columns')
+        # todo: get from masterpoint dict
+        df_board_results['Club'] = '12345678'
+        df_board_results['Session'] = '87654321'
+        df_board_results['mp_total_n'] = 300
+        df_board_results['mp_total_e'] = 300
+        df_board_results['mp_total_s'] = 300
+        df_board_results['mp_total_w'] = 300
+        df_board_results['MP_Sum_NS'] = 300
+        df_board_results['MP_Sum_EW'] = 300
+        df_board_results['MP_Geo_NS'] = 300
+        df_board_results['MP_Geo_EW'] = 300
         df_board_results['declarer'] = df_board_results['declarer'].map(lambda x: x[0].upper() if len(x) else None) # None is needed for PASS
         df_board_results['Pct_NS'] = df_board_results['Pct_NS'].div(100)
         df_board_results['Pct_EW'] = df_board_results['Pct_EW'].div(100)
         df_board_results['table_number'] = None
-        df_board_results['round_number'] = None
+        df_board_results['Round'] = None
         df_board_results['dealer'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToDealer)
         df_board_results['Vul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3 # todo: use 'vul' instead for consistency?
         df_board_results['event_id'] = section['session_id'] # for club compatibility
         df_board_results['section_name'] = section['section_label'] # for club compatibility
         df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
-        df_board_results['game_date'] = df_event['start_date'] # for club compatibility
+        df_board_results['Date'] = df_event['start_date'] # for club compatibility
         df_board_results['game_type'] = df_event['game_type'] # for club compatibility
         board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
@@ -411,17 +423,21 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
 
     df.rename({
         'board':'Board',
+        'club_id_number':'Club',
         'contract':'Contract',
+        'game_date':'Date',
         'ns_pair':'Pair_Number_NS',
         'ew_pair':'Pair_Number_EW',
         'ns_match_points':'MatchPoints_NS',
         'ew_match_points':'MatchPoints_EW',
         'ns_score':'Score_NS',
         'ew_score':'Score_EW',
+        'session_number':'Session',
         'tricks_taken':'Tricks',
         'percentage_NS':'Final_Standing_NS',
         'percentage_EW':'Final_Standing_EW',
-        'result':'Result'
+        'result':'Result',
+        'round_number':'Round',
        },axis='columns',inplace=True)
 
     # columns unique to club results
@@ -528,8 +544,8 @@ def clean_validate_df(df):
     assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
 
     # drop invalid round numbers
-    if df['round_number'].notnull().any():
-        drop_rows = df['round_number'].isna()
+    if df['Round'].notnull().any():
+        drop_rows = df['Round'].isna()
         df.drop(df[drop_rows].index,inplace=True)
 
     df.drop(['scores_l'],axis='columns',inplace=True)
@@ -707,10 +723,10 @@ def augment_df(df,sd_cache_d):
     for d in mlBridgeLib.NESW:
         df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
     # todo: use 'mp_total_*' (downloaded) instead of 'MP_*' (acbl_*_board_results)?
-    df['MP_NS'] = df['mp_total_n']+df['mp_total_s']
-    df['MP_EW'] = df['mp_total_e']+df['mp_total_w']
-    df['NS_Geo_MP'] = df['mp_total_n']*df['mp_total_s']
-    df['EW_Geo_MP'] = df['mp_total_e']*df['mp_total_w']
+    df['MP_Sum_NS'] = df['mp_total_n']+df['mp_total_s']
+    df['MP_Sum_EW'] = df['mp_total_e']+df['mp_total_w']
+    df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
+    df['MP_Geo_EW'] = df['mp_total_e']*df['mp_total_w']
 
     df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
 

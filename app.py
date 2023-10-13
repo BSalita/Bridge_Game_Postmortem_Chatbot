@@ -499,11 +499,11 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     st.session_state.matchpoint_ns_d = matchpoint_ns_d
 
     # extract scalers
-    st.session_state.game_date = pd.to_datetime(st.session_state.df['game_date'].iloc[0]).strftime(
+    st.session_state.game_date = pd.to_datetime(st.session_state.df['Date'].iloc[0]).strftime(
         '%Y-%m-%d')
     assert st.session_state.df['event_id'].eq(session_id).all()
     # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
-    # my_table_df['game_date'] = st.session_state.game_date # temp?
+    # my_table_df['Date'] = st.session_state.game_date # temp?
     for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
         rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
             player_number)]
@@ -784,20 +784,16 @@ class NeuralNetwork(nn.Module):
 
 # todo: verify predicted column values agree with df.
 rename_pkl_to_download_column_names = {
-    'Pct':'Pct_NS',
-    'Club':'club_id_number',
-    'Date':'game_date',
-    'ENum':'Player_Number_E',
-    'MP_E':'mp_total_e',
-    'MP_N':'mp_total_n',
-    'MP_S':'mp_total_s',
-    'MP_W':'mp_total_w',
-    'NNum':'Player_Number_N',
-    'Par_Score':'ParScore_NS',
-    'Round':'round_number',
-    'Session':'session_number',
-    'SNum':'Player_Number_S',
-    'WNum':'Player_Number_W',
+    #'Pct':'Pct_NS',
+    #'Club':'club_id_number',
+    #'Date':'game_date',
+    #'MP_Geo_NS':'NS_Sum_MP',
+    #'MP_Geo_EW':'EW_Sum_MP',
+    #'MP_Geo_NS':'NS_Geo_MP',
+    #'MP_Geo_EW':'EW_Geo_MP',
+    #'Par_Score':'ParScore_NS',
+    #'Round':'round_number',
+    #'Session':'session_number',
 }
 
 rename_download_to_pkl_column_names = {v:k for k,v in rename_pkl_to_download_column_names.items()}
@@ -830,7 +826,7 @@ def Predict_Game_Results():
     print(set(columns_to_scale).difference(set(st.session_state.df.columns)))
 
     df = st.session_state.df.copy()
-    df['game_date'] = pd.to_datetime(df['game_date']).astype('int64')
+    df['Date'] = pd.to_datetime(df['Date']).astype('int64')
     for d in mlBridgeLib.NESW:
         df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32') # float32 because could be NaN
     df['Vul'] = df['Vul'].astype('uint8')
@@ -859,8 +855,8 @@ def Predict_Game_Results():
     predictions_s = pd.Series(predictions.flatten())
 
     # Create a DataFrame for predictions and save or further use
-    y_name_ns = y_name+'_NS'
-    y_name_ew = y_name+'_EW'
+    y_name_ns = y_name
+    y_name_ew = y_name.replace('NS','EW')
     st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
     st.session_state.df[y_name_ew+'_Actual'] = 1-st.session_state.df[y_name_ns+'_Actual']
     st.session_state.df[y_name_ns+'_Pred'] = predictions_s
