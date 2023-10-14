@@ -716,11 +716,13 @@ def debug_player_number_names_change():
 
 
 def club_session_id_change():
-    session_id = int(st.session_state.session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
+    st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
+    session_id = int(st.session_state.club_session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
     chat_initialize(st.session_state.player_number, session_id)
 
 
 def tournament_session_id_change():
+    st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
     tournament_session_id = st.session_state.tournament_session_ids_selectbox.split(',')[0] # split selectbox item on commas. only want first split.
     chat_initialize(st.session_state.player_number, tournament_session_id)
 
@@ -762,8 +764,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import TensorDataset, DataLoader
+import sklearn # only needed to get __version__
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+import safetensors # only needed to get __version__
 from safetensors.torch import load_file, save_file
 import pickle
 
@@ -981,7 +985,7 @@ def reset_data():
 def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} pytorch:{torch.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__} Query Params:{st.experimental_get_query_params()}")
 
 
 def create_sidebar():
@@ -991,11 +995,10 @@ def create_sidebar():
     st.sidebar.text_input(
         "ACBL player number", on_change=player_number_change, placeholder=st.session_state.player_number, key='player_number_input')
 
-    st.sidebar.selectbox("Choose a club game.", options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
-    )], on_change=club_session_id_change, key='session_ids_selectbox')  # options are event_id + event description
+    st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
+    )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
 
-    # todo: can use index=None when HF allows streamlit>=1.27.
-    st.sidebar.selectbox("Choose a tournament session.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
+    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
     if st.session_state.session_id is None:
