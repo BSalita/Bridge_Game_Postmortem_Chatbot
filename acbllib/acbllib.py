@@ -354,7 +354,7 @@ def get_club_results_details_data(url):
         return None # todo: handle team events
         data = soup.find('team-result-details')['v-bind:data']
     else:
-        assert False, "Can't find data tag."
+        return None # "Can't find data tag."
     assert data is not None and isinstance(data,str) and len(data), [url, data]
 
     details_data = json.loads(data) # returns dict from json

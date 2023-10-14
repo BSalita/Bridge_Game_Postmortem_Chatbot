@@ -35,7 +35,8 @@
 				"@Boards_We_Underperformed_ParScore",
 				"@Single_Dummy_Our_Boards",
 				"@Single_Dummy_All_Boards",
-				"@Declarer_Rankings"
+				"@Declarer_Rankings",
+				"@Scoring_Errors"
 			]
 		},
 		"Summarize_Briefly": {
@@ -438,6 +439,17 @@
 					{
 						"prompt": "",
 						"sql": "SELECT Name_Declarer AS Name, CASE WHEN Declarer_Direction IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg_Pct, COUNT(*) AS Count, Number_Declarer AS Declarer, Declarer_Direction AS Direction FROM results GROUP BY Number_Declarer, Name_Declarer, Declarer_Direction HAVING COUNT(*) >= 4 ORDER BY Avg_Pct DESC"
+					}
+				]
+			},
+			"Scoring_Errors": {
+				"title": "Showing Possible Scoring Errors or Adjustments",
+				"help": "**Scoring errors or adjustments.**",
+				"prompts": [
+					{
+						"failed prompt": "show board, contract, score_declarer, computed_score_declarer, score_ns, score_ew when score_declarer <> computed_score_declarer or score_ns <> -score_ew sort by board.",
+						"prompt": "",
+						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_Declarer, Computed_Score_Declarer, Score_NS, Score_EW FROM results WHERE Score_Declarer <> Computed_Score_Declarer OR Score_NS <> -Score_EW ORDER BY Board"
 					}
 				]
 			},

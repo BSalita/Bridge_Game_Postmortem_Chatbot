@@ -55,6 +55,8 @@
 19. Create a single dataframe for DD, SD, SD Max, Par, and Actual instead of separate dataframes.
 20. Does low SD Max correlate to bad bidding/contract?
 21. What does low SD but high Pct say about a declarer? 
+22. Show partnership declarer pct when showing declarer rankings.
+23. Show par score pct and sd pcts for boards played by partnership.
 
 ## Column Issues
 1. Rename any column names?

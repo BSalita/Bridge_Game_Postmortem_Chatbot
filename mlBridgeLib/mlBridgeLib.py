@@ -498,7 +498,7 @@ def DDmakesToScores(ddmakes,vuls):
                 highest_make_level = tricks-1-tricks_in_a_book
                 for level in range(max(highest_make_level,0), max_bidding_level):
                     result = highest_make_level-level
-                    s = score(level, strain, result < 0, 0, v, result)
+                    s = score(level, strain, result < 0, 0, v, result) # double all sets
                     strainl.append((s,(level,strain),direction,result))
             # stable sort by contract then score
             sorted_direction = sorted(sorted(strainl,key=lambda k:k[1]),reverse=True,key=lambda k:k[0])
@@ -616,7 +616,7 @@ def FilterBoards(df, cn=None, vul=None, direction=None, suit=None, contractType=
 # adapted (MIT license) from https://github.com/jfklorenz/Bridge-Scoring/blob/master/features/score.js
 # ================================================================
 # Scoring
-def score(level, suit, double, declarer, vulnerability, result):
+def score(level, suit, double, declarer, vulnerability, result, declarer_score=False):
     assert level in range(0, 7), f'ValueError: level {level} is invalid'
     assert suit in range(0, 5), f'ValueError: suit {suit} is invalid' # CDHSN
     assert double in range(0, 3), f'ValueError: double {double} is invalid' # ['','X','XX']
@@ -671,7 +671,7 @@ def score(level, suit, double, declarer, vulnerability, result):
         points = -sum([undertricks[vulnerability][double][min(i, 3)]
                        for i in range(0, -result)])
 
-    return points if declarer < 2 else -points  # negate points if EW
+    return points if declarer_score or declarer < 2 else -points  # negate points if EW
 
 # ================================================================
 

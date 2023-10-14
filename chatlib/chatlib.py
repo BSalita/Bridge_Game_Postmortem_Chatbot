@@ -679,12 +679,16 @@ def augment_df(df,sd_cache_d):
     # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
     df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
     df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Declarer_Direction']], axis='columns')
+    # recompute Score and compare against actual scores to catch scoring errors such as: Board 1 at https://my.acbl.org/club-results/details/878121
+    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
+    if (df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])).any():
+        print('Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Declarer_Direction']], axis='columns')
 
     df['DDTricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
     df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
     # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['DDTricks']-r['SL_'+r['Pair_Declarer_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],r['Declarer_Direction']), r['DDTricks']-r['BidLvl']-6), axis='columns')
+    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
     df['DDScore_EW'] = -df['DDScore_NS']
     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
     df['DDMPs_EW'] = df['Board_Top']-df['DDMPs_NS']
