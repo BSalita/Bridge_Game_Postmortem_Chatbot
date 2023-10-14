@@ -389,7 +389,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             dfs = create_club_dfs(player_number, game_urls[session_id][1])
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
                 st.error(
-                    f"Game {session_id} has missing or invalid game data. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id} has missing or invalid game data. Select a different club game or tournament session from left sidebar.")
                 return False
             print(dfs.keys())
 
@@ -397,29 +397,29 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
             if dfs['pair_summaries']['pair_number'].value_counts().eq(1).all(): # Assuming pair_numbers are all unique for Howell
                 st.error(
-                    f"Game {session_id}. I can only chat about Mitchell movements. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id}. I can only chat about Mitchell movements. Select a different club game or tournament session from left sidebar.")
                 return False
 
             if dfs['event']['type'].iloc[0] != 'PAIRS':
                 st.error(
-                    f"Game {session_id} is {dfs['event']['type'].iloc[0]}. Expecting an ACBL pairs match point game. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id} is {dfs['event']['type'].iloc[0]}. Expecting an ACBL pairs match point game. Select a different club game or tournament session from left sidebar.")
                 return False
 
             if dfs['event']['board_scoring_method'].iloc[0] != 'MATCH_POINTS':
                 st.error(
-                    f"Game {session_id} is {dfs['event']['board_scoring_method'].iloc[0]}. Expecting an ACBL pairs match point game. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id} is {dfs['event']['board_scoring_method'].iloc[0]}. Expecting an ACBL pairs match point game. Select a different club game or tournament session from left sidebar.")
                 return False
 
             if not dfs['sessions']['hand_record_id'].iloc[0][0].isdigit():
                 st.error(
-                    f"Game {session_id} is {dfs['sessions']['hand_record_id'].iloc[0]}. Expecting a valid hand record number. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id} is {dfs['sessions']['hand_record_id'].iloc[0]}. Expecting a valid hand record number. Select a different club game or tournament session from left sidebar.")
                 return False
 
             #with Profiler():
             df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_number) # doesn't use any caching
             if df is None:
                 st.error(
-                    f"Game {session_id} has an invalid game file. Select a different club game or tournament event from left sidebar.")
+                    f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
                 return False
 
     elif session_id in tournament_session_urls:
