@@ -1391,6 +1391,9 @@ def main():
 
     if st.session_state.player_number is None:
         st.sidebar.caption(f"App:{st.session_state.app_datetime}")
+        if st.__version__ < '1.27.0':
+            st.error('Please use http://postmortem.chat')
+            st.stop()
         # temp!
         if False:
             streamlit_chat.message(
