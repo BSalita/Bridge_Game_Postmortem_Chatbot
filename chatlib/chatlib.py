@@ -220,8 +220,9 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
     df_board_results = pd.DataFrame()
     for i,section in df_results_sections.iterrows():
         br = pd.DataFrame(section['board_results'])
-        if all(br['pair_acbl'].map(lambda x: int(acbl_number) not in x)): # if acbl_number is not in this section then skip
-            continue # todo: what to do with sections not containing acbl_number? concat all sections? concat may be correct since they may be included in matchpoint calculations.
+        # todo: what to do with sections not containing acbl_number? concat all sections? concat may be correct since they may be included in matchpoint calculations.
+        if all(br['pair_acbl'].map(lambda x: int(acbl_number) not in x)): # if acbl_number is not in this section then skip.(?)
+            continue
         df_board_results = pd.concat([df_board_results,br],axis='rows')
         ns_df = df_board_results[df_board_results['orientation'].eq('N-S')]
         ew_df = df_board_results[df_board_results['orientation'].eq('E-W')][['board_number','pair_number','pair_names','pair_acbl','score','match_points','percentage']]

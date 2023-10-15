@@ -785,22 +785,6 @@ class NeuralNetwork(nn.Module):
         out = self.fc2(out)
         return out
 
-
-# todo: verify predicted column values agree with df.
-rename_pkl_to_download_column_names = {
-    #'Pct':'Pct_NS',
-    #'Club':'club_id_number',
-    #'Date':'game_date',
-    #'MP_Geo_NS':'NS_Sum_MP',
-    #'MP_Geo_EW':'EW_Sum_MP',
-    #'MP_Geo_NS':'NS_Geo_MP',
-    #'MP_Geo_EW':'EW_Geo_MP',
-    #'Par_Score':'ParScore_NS',
-    #'Round':'round_number',
-    #'Session':'session_number',
-}
-
-rename_download_to_pkl_column_names = {v:k for k,v in rename_pkl_to_download_column_names.items()}
     
 def Predict_Game_Results():
     # Predict game results using a saved model.
@@ -826,17 +810,22 @@ def Predict_Game_Results():
         model_state_dict = torch.load(f, map_location=torch.device('cpu'))
 
     print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
-    print(st.session_state.df.info(verbose=True))
-    print(set(columns_to_scale).difference(set(st.session_state.df.columns)))
+    st.session_state.df.info(verbose=True)
+    assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set()
 
     df = st.session_state.df.copy()
-    df['Date'] = pd.to_datetime(df['Date']).astype('int64')
+    df['Date'] = pd.to_datetime(df['Date']).astype('int64') # only need to do once (all rows have same value) then assign to all rows.
     for d in mlBridgeLib.NESW:
         df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32') # float32 because could be NaN
-    df['Vul'] = df['Vul'].astype('uint8')
+    df['Vul'] = df['Vul'].astype('uint8') # 0-3
     df['Dealer'] = df['Dealer'].astype('category')
 
-    df = df.rename(rename_download_to_pkl_column_names,axis='columns')[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
+    df = df[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
+    if df['Round'].isna().all():
+        df['Round'] = 0 # some sessions don't have round values.
+    filter_and_fill = df.filter(regex='^Player_Number_[NESW]$').columns
+    df[filter_and_fill] = df[filter_and_fill].fillna(0) # player numbers are sometimes missing. fill with 0.
+    assert df.isna().sum().sum() == 0, df[df.isna().sum()]
     X = df.drop(columns=[y_name])
     y = df[y_name]
     for col in X.select_dtypes(include='category').columns:

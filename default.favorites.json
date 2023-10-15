@@ -330,7 +330,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, sd pct diff, contract, score, parscore, pct, parscore pct, sd pct, dd tricks, sd parscore pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
-						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} AS SD_Pct_Diff, Contract, Score_{Pair_Direction} AS Score, ParScore_{Pair_Direction} AS ParScore, Pct_{Pair_Direction} AS Pct, ParScore_Pct_{Pair_Direction} AS ParScore_Pct, Pair_Number_NS, Pair_Number_EW, SDPct_{Pair_Direction} AS SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} AS SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} AS SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
+						"sql": "SELECT Board, SDPct_Diff_{Pair_Direction} AS SD_Pct_Diff, Contract, Score_{Pair_Direction} AS Score, ParScore_{Pair_Direction} AS ParScore, Pct_{Pair_Direction} AS Pct, ParScore_Pct_{Pair_Direction} AS ParScore_Pct, section_name, Pair_Number_NS, Pair_Number_EW, SDPct_{Pair_Direction} AS SD_Pct, DDTricks, SDParScore_Pct_Diff_{Pair_Direction} AS SD_ParScore_Pct_Diff, SDScore_{Pair_Direction} AS SD_Score, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Boards_We_Played = True ORDER BY SDPct_Diff_{Pair_Direction} DESC"
 					}
 				]
 			},
@@ -340,8 +340,8 @@
 				"comment": "SD_ParScore_Pct_Diff, SD_Probs_Taking_ needed to avoid oy.",
 				"prompts": [
 					{
-						"prompt": "Show board, bidsuit, contract, score, pct, pair_number_ns, pair_number_ew, sd score, sd pct diff, sd pct, dd tricks, sd probs taking_* sort by board, bidsuit, sd pct diff descending.",
-						"sql": "SELECT Board, BidSuit, Contract, Score_{pair_direction}, Pct_{pair_direction}, Pair_Number_NS, Pair_Number_EW, SDScore_{pair_direction}, SDPct_Max_Diff_{pair_direction}, SDPct_{pair_direction}, DDTricks, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Pair_Number_{pair_direction} IS NOT NULL ORDER BY Board, BidSuit, SDPct_Max_Diff_{pair_direction} DESC"
+						"prompt": "Show board, bidsuit, contract, score, pct, section_name, pair_number_ns, pair_number_ew, sd score, sd pct diff, sd pct, dd tricks, sd probs taking_* sort by board, bidsuit, sd pct diff descending.",
+						"sql": "SELECT Board, BidSuit, Contract, Score_{pair_direction}, Pct_{pair_direction}, section_name, Pair_Number_NS, Pair_Number_EW, SDScore_{pair_direction}, SDPct_Max_Diff_{pair_direction}, SDPct_{pair_direction}, DDTricks, SDProbs_Taking_0, SDProbs_Taking_1, SDProbs_Taking_2, SDProbs_Taking_3, SDProbs_Taking_4, SDProbs_Taking_5, SDProbs_Taking_6, SDProbs_Taking_7, SDProbs_Taking_8, SDProbs_Taking_9, SDProbs_Taking_10, SDProbs_Taking_11, SDProbs_Taking_12, SDProbs_Taking_13 FROM results WHERE Pair_Number_{pair_direction} IS NOT NULL ORDER BY Board, BidSuit, SDPct_Max_Diff_{pair_direction} DESC"
 					}
 				]
 			},
@@ -381,7 +381,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, Pair_Number_NS, Pair_Number_EW FROM results WHERE Boards_We_Played = True GROUP BY Opponents, Pair_Number_NS, Pair_Number_EW"
+						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Opponents"
 					}
 				]
 			},
@@ -392,7 +392,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board"
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.section_name, y.Pair_Number_NS, y.Pair_Number_EW FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) ORDER BY x.Board"
 					}
 				]
 			},
@@ -403,7 +403,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_I_Played=TRUE ORDER BY x.Board"
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction}, y.section_name, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_I_Played FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_I_Played=TRUE ORDER BY x.Board"
 					}
 				]
 			},
@@ -414,7 +414,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} AS Pct, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
+						"sql": "SELECT x.Board, x.BidSuit, x.ContractType, y.Contract, y.Pct_{Pair_Direction} AS Pct, y.section_name, y.Pair_Number_NS, y.Pair_Number_EW, y.Boards_We_Declared FROM ((SELECT Board, BidSuit, ContractType FROM results GROUP BY Board, BidSuit, ContractType HAVING COUNT(*) = 1) AS x LEFT JOIN (SELECT * FROM results) AS y ON (x.Board, x.BidSuit, x.ContractType) = (y.Board, y.BidSuit, y.ContractType)) WHERE y.Boards_We_Declared=TRUE ORDER BY x.Board"
 					}
 				]
 			},
@@ -424,11 +424,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, COUNT(CASE WHEN Score_NS>=Parscore_NS THEN 1 END) AS Count_GE, AVG(Pct_NS) AS Pct, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_NS < ParScore_NS THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_NS ORDER BY Count_GE DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, COUNT(CASE WHEN Score_NS>=Parscore_NS THEN 1 END) AS Count_GE, AVG(Pct_NS) AS Pct, STRING_AGG(CASE WHEN Score_NS>ParScore_NS THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_NS=ParScore_NS THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_NS < ParScore_NS THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_NS ORDER BY Count_GE DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, COUNT(CASE WHEN Score_EW>=Parscore_EW THEN 1 END) AS Count_GE, AVG(Pct_EW) AS Pct, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_EW < ParScore_EW THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_EW ORDER BY Count_GE DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, COUNT(CASE WHEN Score_EW>=Parscore_EW THEN 1 END) AS Count_GE, AVG(Pct_EW) AS Pct, STRING_AGG(CASE WHEN Score_EW>ParScore_EW THEN Board END, ', ') AS Boards_GT, STRING_AGG(CASE WHEN Score_EW=ParScore_EW THEN Board END, ', ') AS Boards_EQ, STRING_AGG(CASE WHEN Score_EW < ParScore_EW THEN Board END, ', ') AS Boards_LT FROM results GROUP BY Pair_EW ORDER BY Count_GE DESC"
 					}
 				]
 			},
@@ -449,7 +449,7 @@
 					{
 						"failed prompt": "show board, contract, score_declarer, computed_score_declarer, score_ns, score_ew when score_declarer <> computed_score_declarer or score_ns <> -score_ew sort by board.",
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_Declarer, Computed_Score_Declarer, Score_NS, Score_EW FROM results WHERE Score_Declarer <> Computed_Score_Declarer OR Score_NS <> -Score_EW ORDER BY Board"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_Declarer, Computed_Score_Declarer, Score_NS, Score_EW FROM results WHERE Score_Declarer <> Computed_Score_Declarer OR Score_NS <> -Score_EW ORDER BY Board"
 					}
 				]
 			},
@@ -459,11 +459,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT ANY_VALUE(CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S)) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Diff) AS Avg_Pct_NS_Diff, Pair_Number_NS FROM results GROUP BY Pair_Number_NS ORDER BY Avg_Pct_NS_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Diff) AS Avg_Pct_NS_Diff FROM results GROUP BY Pair_NS ORDER BY Avg_Pct_NS_Actual DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT ANY_VALUE(CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W)) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Diff) AS Avg_Pct_EW_Diff, Pair_Number_EW FROM results GROUP BY Pair_Number_EW ORDER BY Avg_Pct_EW_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Diff) AS Avg_Pct_EW_Diff FROM results GROUP BY Pair_EW ORDER BY Avg_Pct_EW_Actual DESC"
 					}
 				]
 			},
@@ -473,11 +473,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Score_NS, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_NS"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Score_NS, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_NS"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_EW, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_Number_EW"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_EW, Board, Contract, Score_EW, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_EW"
 					}
 				]
 			}
