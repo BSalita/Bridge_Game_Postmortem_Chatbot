@@ -480,8 +480,8 @@ def clean_validate_df(df):
     assert df['Pct_EW'].between(0,1).all(), [df[~df['Pct_EW'].between(0,1)][['Board','MatchPoints_EW','Board_Top','Pct_EW']]]
 
     # transpose pair_name (last name, first_name).
-    for d in 'NSEW':
-        df.rename({'player_number_'+d.lower():'Player_Number_'+d for d in 'NSEW'},axis='columns',inplace=True)
+    for d in 'NESW':
+        df.rename({'player_number_'+d.lower():'Player_Number_'+d},axis='columns',inplace=True)
         df['Player_Name_'+d] = df['player_name_'+d.lower()].str.split(',').str[::-1].str.join(' ') # github Copilot wrote this line!
         df.drop(['player_name_'+d.lower()],axis='columns',inplace=True)
 
@@ -495,7 +495,7 @@ def clean_validate_df(df):
     drop_rows = df['Contract'].ne('PASS')&(df['Score_NS'].eq('PASS')&df['Score_EW'].eq('PASS')&df['BidLvl'].isna()|df['BidSuit'].isna()|df['Dbl'].isna())
     print('Invalid contracts: drop_rows:',drop_rows.sum(),df[drop_rows][['Contract','BidLvl','BidSuit','Dbl']])
     df.drop(df[drop_rows].index,inplace=True)
-    drop_rows = ~df['Declarer_Direction'].isin(list('NSEW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
+    drop_rows = ~df['Declarer_Direction'].isin(list('NESW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
     print('Invalid declarers: drop_rows:',drop_rows.sum(),df[drop_rows][['Declarer_Direction']])
     df.drop(df[drop_rows].index,inplace=True)
     df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['Declarer_Direction']
@@ -544,10 +544,7 @@ def clean_validate_df(df):
     df['Tricks'] = df['Tricks'].astype('UInt8')
     assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
 
-    # drop invalid round numbers
-    if df['Round'].notnull().any():
-        drop_rows = df['Round'].isna()
-        df.drop(df[drop_rows].index,inplace=True)
+    df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
 
     df.drop(['scores_l'],axis='columns',inplace=True)
 
@@ -727,7 +724,7 @@ def augment_df(df,sd_cache_d):
     # masterpoints columns
     for d in mlBridgeLib.NESW:
         df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
-    # todo: use 'mp_total_*' (downloaded) instead of 'MP_*' (acbl_*_board_results)?
+        df['mp_total_'+d.lower()].fillna(300,inplace=True) # unknown number of masterpoints. fill with 300.
     df['MP_Sum_NS'] = df['mp_total_n']+df['mp_total_s']
     df['MP_Sum_EW'] = df['mp_total_e']+df['mp_total_w']
     df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
@@ -793,7 +790,7 @@ def Create_SD_Scores(r):
         iCDHSN = 'CDHSN'.index(suit)
         nsew = r['Declarer_Direction']
         iNSEW = 'NSEW'.index(nsew)
-        vul = mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],nsew)
+        vul = r['Vul_Declarer']
         double = len(r['Dbl'])
         scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
         return scores_l
@@ -813,6 +810,7 @@ def Create_SD_Score(r):
 
 
 # Highest expected score, same suit, any level
+# Note: score_max may exceed par score when probability of making/setting contract is high.
 def Create_SD_Score_Max(r):
     score_max = None
     if r['Score_Declarer']:
@@ -820,7 +818,7 @@ def Create_SD_Score_Max(r):
         iCDHSN = 'CDHSN'.index(suit)
         nsew = r['Declarer_Direction']
         iNSEW = 'NSEW'.index(nsew)
-        vul = mlBridgeLib.DirectionSymToVulBool(r['Vul_Declarer'],nsew)
+        vul = r['Vul_Declarer']
         double = len(r['Dbl'])
         probs = r['SDProbs']
         for level in range(7):

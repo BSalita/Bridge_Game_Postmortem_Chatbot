@@ -359,10 +359,9 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(f"Player number {player_number} not found.")
             return False
         if len(game_urls) == 0:
-            st.error(f"Could not find any games for {player_number}.")
-            return False
-        if session_id is None and len(game_urls):
-            session_id = list(game_urls.keys())[0]  # default to most recent event_id
+            st.error(f"Could not find any club games for {player_number}.")
+        elif session_id is None:
+            session_id = list(game_urls.keys())[0]  # default to most recent club game
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_number} ..."):
         tournament_session_urls = get_tournament_sessions_from_acbl_number(player_number, acbl_api_key) # returns [url, url, description, dfs]
@@ -370,12 +369,12 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(f"Player number {player_number} not found.")
             return False
         if len(tournament_session_urls) == 0:
-            st.error(f"Could not find any games for {player_number}.")
-            return False
-        if session_id is None and len(tournament_session_urls):
-            session_id = list(tournament_session_urls.keys())[0]  # default to most recent session
+            st.error(f"Could not find any tournament sessions for {player_number}.")
+        elif session_id is None:
+            session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
 
     if session_id is None:
+        st.error(f"Could not find any club or tournament sessions for {player_number}.")
         return False
     
     reset_data()
@@ -816,16 +815,12 @@ def Predict_Game_Results():
     df = st.session_state.df.copy()
     df['Date'] = pd.to_datetime(df['Date']).astype('int64') # only need to do once (all rows have same value) then assign to all rows.
     for d in mlBridgeLib.NESW:
-        df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32') # float32 because could be NaN
+        df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32').fillna(0) # float32 because could be NaN
     df['Vul'] = df['Vul'].astype('uint8') # 0-3
     df['Dealer'] = df['Dealer'].astype('category')
 
     df = df[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
-    if df['Round'].isna().all():
-        df['Round'] = 0 # some sessions don't have round values.
-    filter_and_fill = df.filter(regex='^Player_Number_[NESW]$').columns
-    df[filter_and_fill] = df[filter_and_fill].fillna(0) # player numbers are sometimes missing. fill with 0.
-    assert df.isna().sum().sum() == 0, df[df.isna().sum()]
+    assert df.isna().sum().sum() == 0, df.columns[df.isna().sum().gt(0)] # todo: must be a better way of showing columns with na.
     X = df.drop(columns=[y_name])
     y = df[y_name]
     for col in X.select_dtypes(include='category').columns:
