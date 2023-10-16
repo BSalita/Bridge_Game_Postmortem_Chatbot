@@ -839,18 +839,18 @@ def Predict_Game_Results():
     with torch.no_grad():
         predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)) # so fast (1ms) that we're good with using the CPU
 
-    predictions = y_scaler.inverse_transform(predictions_scaled.numpy())
-    predictions_s = pd.Series(predictions.flatten())
-
+    predicted_board_result_ns = y_scaler.inverse_transform(predictions_scaled)
+    predicted_board_result_ns_s = pd.Series(predicted_board_result_ns.flatten())
+    predicted_board_result_ns_adjusted_s = predicted_board_result_ns_s*.5/predicted_board_result_ns_s.mean() # scale predictions so NS mean is 50%
     # Create a DataFrame for predictions and save or further use
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
     st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
-    st.session_state.df[y_name_ew+'_Actual'] = 1-st.session_state.df[y_name_ns+'_Actual']
-    st.session_state.df[y_name_ns+'_Pred'] = predictions_s
-    st.session_state.df[y_name_ew+'_Pred'] = 1-st.session_state.df[y_name_ns+'_Pred']
-    st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns]-predictions_s
-    st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ns+'_Pred']-st.session_state.df[y_name_ns+'_Actual']
+    st.session_state.df[y_name_ew+'_Actual'] = st.session_state.df[y_name_ew]
+    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_ns_adjusted_s
+    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_ns_adjusted_s
+    st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns+'_Actual']-st.session_state.df[y_name_ns+'_Pred']
+    st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ew+'_Actual']-st.session_state.df[y_name_ew+'_Pred']
     return ([y_name_ns+'_Actual', y_name_ns+'_Pred', y_name_ns+'_Diff'], [y_name_ew+'_Actual', y_name_ew+'_Pred', y_name_ew+'_Diff'])
 
 
