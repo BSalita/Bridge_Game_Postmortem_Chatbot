@@ -226,30 +226,30 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results = pd.concat([df_board_results,br],axis='rows')
         ns_df = df_board_results[df_board_results['orientation'].eq('N-S')]
         ew_df = df_board_results[df_board_results['orientation'].eq('E-W')][['board_number','pair_number','pair_names','pair_acbl','score','match_points','percentage']]
-        df_board_results = pd.merge(ns_df,ew_df,left_on=['board_number','opponent_pair_number'],right_on=['board_number','pair_number'],suffixes=('_NS','_EW'),how='left')
+        df_board_results = pd.merge(ns_df,ew_df,left_on=['board_number','opponent_pair_number'],right_on=['board_number','pair_number'],suffixes=('_ns','_ew'),how='left')
         df_board_results.drop(['opponent_pair_number','opponent_pair_names'],inplace=True,axis='columns')
         df_board_results.rename({
             'board_number':'Board',
             'contract':'Contract',
-            'score_NS':'Score_NS',
-            'score_EW':'Score_EW',
-            'match_points_NS':'MatchPoints_NS',
-            'match_points_EW':'MatchPoints_EW',
-            'percentage_NS':'Pct_NS',
-            'percentage_EW':'Pct_EW',
-            'pair_number_NS':'Pair_Number_NS',
-            'pair_number_EW':'Pair_Number_EW',
+            'score_ns':'Score_NS',
+            'score_ew':'Score_EW',
+            'match_points_ns':'MatchPoints_NS',
+            'match_points_ew':'MatchPoints_EW',
+            'percentage_ns':'Pct_NS',
+            'percentage_ew':'Pct_EW',
+            'pair_number_ns':'Pair_Number_NS',
+            'pair_number_ew':'Pair_Number_EW',
             'session_number':'Session',
         },axis='columns',inplace=True)
         df_board_results['pair_direction'] = df_board_results['orientation'].map({'N-S':'NS','E-W':'EW'})
-        df_board_results['player_number_n'] = df_board_results.apply(lambda r: r['pair_acbl_NS'][0],axis='columns').astype('string')
-        df_board_results['player_number_s'] = df_board_results.apply(lambda r: r['pair_acbl_NS'][1],axis='columns').astype('string')
-        df_board_results['player_number_e'] = df_board_results.apply(lambda r: r['pair_acbl_EW'][0],axis='columns').astype('string')
-        df_board_results['player_number_w'] = df_board_results.apply(lambda r: r['pair_acbl_EW'][1],axis='columns').astype('string')
-        df_board_results['player_name_n'] = df_board_results.apply(lambda r: r['pair_names_NS'][0],axis='columns')
-        df_board_results['player_name_s'] = df_board_results.apply(lambda r: r['pair_names_NS'][1],axis='columns')
-        df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_EW'][0],axis='columns')
-        df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_EW'][1],axis='columns')
+        df_board_results['player_number_n'] = df_board_results.apply(lambda r: r['pair_acbl_ns'][0],axis='columns').astype('string')
+        df_board_results['player_number_s'] = df_board_results.apply(lambda r: r['pair_acbl_ns'][1],axis='columns').astype('string')
+        df_board_results['player_number_e'] = df_board_results.apply(lambda r: r['pair_acbl_ew'][0],axis='columns').astype('string')
+        df_board_results['player_number_w'] = df_board_results.apply(lambda r: r['pair_acbl_ew'][1],axis='columns').astype('string')
+        df_board_results['player_name_n'] = df_board_results.apply(lambda r: r['pair_names_ns'][0],axis='columns')
+        df_board_results['player_name_s'] = df_board_results.apply(lambda r: r['pair_names_ns'][1],axis='columns')
+        df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_ew'][0],axis='columns')
+        df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_ew'][1],axis='columns')
         # todo: get from masterpoint dict
         df_board_results['Club'] = '12345678'
         df_board_results['Session'] = '87654321'
@@ -275,7 +275,7 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['game_type'] = df_event['game_type'] # for club compatibility
         board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
-        df_board_results.drop(['orientation','pair_acbl_NS', 'pair_acbl_EW', 'pair_names_NS', 'pair_names_EW'],inplace=True,axis='columns')
+        df_board_results.drop(['orientation','pair_acbl_ns', 'pair_acbl_ew', 'pair_names_ns', 'pair_names_ew'],inplace=True,axis='columns')
 
 
     df = clean_validate_df(df_board_results)
@@ -371,30 +371,30 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     # pprint(df_pair_summaries_strat.head(1))
     # assert len(df_pair_summaries_strat.filter(regex=r'_[xy]$').columns) == 0,df_pair_summaries_strat.filter(regex=r'_[xy]$').columns
 
-    df_br_b_pair_summary_ns = df_pair_summaries_strat[df_pair_summaries_strat['direction'].eq('NS')].add_suffix('_NS').rename({'pair_number_NS':'ns_pair','section_id_NS':'section_id'},axis='columns')
+    df_br_b_pair_summary_ns = df_pair_summaries_strat[df_pair_summaries_strat['direction'].eq('NS')].add_suffix('_ns').rename({'pair_number_ns':'ns_pair','section_id_ns':'section_id'},axis='columns')
     assert len(df_br_b_pair_summary_ns.filter(regex=r'_[xy]$').columns) == 0,df_br_b_pair_summary_ns.filter(regex=r'_[xy]$').columns
-    df_br_b_pair_summary_ew = df_pair_summaries_strat[df_pair_summaries_strat['direction'].eq('EW')].add_suffix('_EW').rename({'pair_number_EW':'ew_pair','section_id_EW':'section_id'},axis='columns')
+    df_br_b_pair_summary_ew = df_pair_summaries_strat[df_pair_summaries_strat['direction'].eq('EW')].add_suffix('_ew').rename({'pair_number_ew':'ew_pair','section_id_ew':'section_id'},axis='columns')
     assert len(df_br_b_pair_summary_ew.filter(regex=r'_[xy]$').columns) == 0,df_br_b_pair_summary_ew.filter(regex=r'_[xy]$').columns
 
     df_players = dfs['players'].drop(['id','created_at','updated_at'],axis='columns').rename({'id_number':'player_number','name':'player_name'},axis='columns')
-    player_n = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_n').rename({'pair_summary_id_n':'pair_summary_id_NS'},axis='columns')
-    player_s = df_players.groupby('pair_summary_id').last().reset_index().add_suffix('_s').rename({'pair_summary_id_s':'pair_summary_id_NS'},axis='columns')
-    player_e = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_e').rename({'pair_summary_id_e':'pair_summary_id_EW'},axis='columns')
-    player_w = df_players.groupby('pair_summary_id').last().reset_index().add_suffix('_w').rename({'pair_summary_id_w':'pair_summary_id_EW'},axis='columns')
+    player_n = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_n').rename({'pair_summary_id_n':'pair_summary_id_ns'},axis='columns')
+    player_s = df_players.groupby('pair_summary_id').last().reset_index().add_suffix('_s').rename({'pair_summary_id_s':'pair_summary_id_ns'},axis='columns')
+    player_e = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_e').rename({'pair_summary_id_e':'pair_summary_id_ew'},axis='columns')
+    player_w = df_players.groupby('pair_summary_id').last().reset_index().add_suffix('_w').rename({'pair_summary_id_w':'pair_summary_id_ew'},axis='columns')
 
-    player_ns = pd.merge(player_n,player_s,on='pair_summary_id_NS',how='left')
+    player_ns = pd.merge(player_n,player_s,on='pair_summary_id_ns',how='left')
     pprint(player_ns.head(1))
     assert len(player_ns) == len(player_n)
     assert len(player_ns.filter(regex=r'_[xy]$').columns) == 0,player_ns.filter(regex=r'_[xy]$').columns
-    player_ew = pd.merge(player_e,player_w,on='pair_summary_id_EW',how='left')
+    player_ew = pd.merge(player_e,player_w,on='pair_summary_id_ew',how='left')
     pprint(player_ew.head(1))
     assert len(player_ew) == len(player_e)
     assert len(player_ew.filter(regex=r'_[xy]$').columns) == 0,player_ew.filter(regex=r'_[xy]$').columns
 
     # due to an oddity with merge(), must never merge on a column that has NaNs. This section avoids that but at the cost of added complexity.
-    df_pair_summary_players_ns = pd.merge(df_br_b_pair_summary_ns,player_ns,on='pair_summary_id_NS',how='left')
+    df_pair_summary_players_ns = pd.merge(df_br_b_pair_summary_ns,player_ns,on='pair_summary_id_ns',how='left')
     assert len(df_pair_summary_players_ns) == len(df_br_b_pair_summary_ns)
-    df_pair_summary_players_ew = pd.merge(df_br_b_pair_summary_ew,player_ew,on='pair_summary_id_EW',how='left')
+    df_pair_summary_players_ew = pd.merge(df_br_b_pair_summary_ew,player_ew,on='pair_summary_id_ew',how='left')
     assert len(df_pair_summary_players_ew) == len(df_br_b_pair_summary_ew)
     #df_pair_summary_players = pd.merge(df_pair_summary_players_ns,df_pair_summary_players_ew,how='left') # yes, on is not needed
     #assert len(df_pair_summary_players) == len(df_pair_summary_players_ns) # likely this is an issue on an EW sitout. Need to compare ns,ew lengths and how on the longer one?
@@ -420,7 +420,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     for col in df.columns:
         print(col,df[col].dtype)
 
-    df.drop(['id','created_at','updated_at','board_id','double_dummy_ns','double_dummy_ew','pair_summary_id_NS','pair_summary_id_EW'],axis='columns',inplace=True)
+    df.drop(['id','created_at','updated_at','board_id','double_dummy_ns','double_dummy_ew','pair_summary_id_ns','pair_summary_id_ew'],axis='columns',inplace=True)
 
     df.rename({
         'board':'Board',
@@ -435,8 +435,8 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
         'ew_score':'Score_EW',
         'session_number':'Session',
         'tricks_taken':'Tricks',
-        'percentage_NS':'Final_Standing_NS',
-        'percentage_EW':'Final_Standing_EW',
+        'percentage_ns':'Final_Standing_NS',
+        'percentage_ew':'Final_Standing_EW',
         'result':'Result',
         'round_number':'Round',
        },axis='columns',inplace=True)
@@ -549,7 +549,7 @@ def clean_validate_df(df):
     df.drop(['scores_l'],axis='columns',inplace=True)
 
     for col in df.columns:
-        assert not (col.startswith('ns_') or col.startswith('ew_') or col.startswith('NS_') or col.startswith('EW_') or col.endswith('_ns') or col.endswith('_ew')), col
+        assert not (col.startswith('ns_') or col.startswith('ew_') or col.startswith('NS_') or col.startswith('EW_')), col
 
     assert len(df) > 0
     return df.reset_index(drop=True)

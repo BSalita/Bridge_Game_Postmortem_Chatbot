@@ -441,7 +441,9 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
         with st.spinner(f"Retrieving tournament session {session_id} for player {player_number} from ACBL."):
 
-            dfs_results = get_tournament_session_results(session_id, acbl_api_key)
+            response = get_tournament_session_results(session_id, acbl_api_key)
+            assert response.status_code == 200, response.status_code
+            dfs_results = response.json()
             if dfs_results is None:
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
@@ -715,13 +717,13 @@ def debug_player_number_names_change():
 
 
 def club_session_id_change():
-    st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
+    #st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
     session_id = int(st.session_state.club_session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
     chat_initialize(st.session_state.player_number, session_id)
 
 
 def tournament_session_id_change():
-    st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
+    #st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
     tournament_session_id = st.session_state.tournament_session_ids_selectbox.split(',')[0] # split selectbox item on commas. only want first split.
     chat_initialize(st.session_state.player_number, tournament_session_id)
 
@@ -772,17 +774,28 @@ import pickle
 
 # Create a Model
 class NeuralNetwork(nn.Module):
-    def __init__(self, input_size, output_size, layers):
+    def __init__(self, input_size, output_size, hidden_layer_sizes=[1024]*6):
         super(NeuralNetwork, self).__init__()
-        self.fc1 = nn.Linear(input_size, layers) 
+        
+        # Create a list of sizes representing each layer (input + hidden + output)
+        all_sizes = [input_size] + hidden_layer_sizes + [output_size]
+        
+        # Dynamically create the linear layers
+        self.layers = nn.ModuleList([
+            nn.Linear(all_sizes[i], all_sizes[i+1]) for i, _ in enumerate(all_sizes[:-1])
+        ])
+        
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(layers, output_size)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        out = self.fc1(x)
-        out = self.relu(out)
-        out = self.fc2(out)
-        return out
+        # Process input through each linear layer followed by ReLU, except the last layer
+        for layer in self.layers[:-1]:
+            x = self.relu(layer(x))
+        
+        # Last layer is followed by sigmoid
+        x = self.sigmoid(self.layers[-1](x))
+        return x
 
     
 def Predict_Game_Results():
@@ -791,8 +804,9 @@ def Predict_Game_Results():
     if st.session_state.df is None:
         return None
 
+    club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
     # couldn't combine pkl and pth because model_state_dict complained about gpu dict was saved but huggingface was cpu only. Solution was to split into pkl and pth.
-    predicted_rankings_model_filename = "predicted_rankings_model.pkl"
+    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
         st.error(f"Oops. {predicted_rankings_model_filename} not found.")
@@ -800,7 +814,7 @@ def Predict_Game_Results():
     with open(predicted_rankings_model_file,'rb') as f:
         y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f) # on lenovo5-1tb, had to manually copy pickle file from /mnt/e/bridge because git pull seems to have pulled a bad copy.
 
-    predicted_rankings_model_filename = "predicted_rankings_model.pth"
+    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_model.pth"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
         st.error(f"Oops. {predicted_rankings_model_filename} not found.")
@@ -810,7 +824,7 @@ def Predict_Game_Results():
 
     print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
     st.session_state.df.info(verbose=True)
-    assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set()
+    assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set(), set(columns_to_scale).difference(set(st.session_state.df.columns))
 
     df = st.session_state.df.copy()
     df['Date'] = pd.to_datetime(df['Date']).astype('int64') # only need to do once (all rows have same value) then assign to all rows.
@@ -831,7 +845,7 @@ def Predict_Game_Results():
     X_scaled = X_scaler.transform(X)
 
     # Initialize the model and load weights
-    model_for_pred = NeuralNetwork(X_scaled.shape[1],1,100) # todo: 100 ok?
+    model_for_pred = NeuralNetwork(X_scaled.shape[1],1) # 1 is output_size
     model_for_pred.load_state_dict(model_state_dict)
 
     # Make predictions
@@ -1027,6 +1041,12 @@ def create_sidebar():
     if st.session_state.favorites is not None:
         st.sidebar.write('Favorite Prompts')
 
+        # create dict of vetted prompts
+        st.session_state.vetted_prompt_titles = {
+            vp['title']: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
+        st.session_state.vetted_prompts = {
+            k: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
+
         # favorite buttons
         for k, button in st.session_state.favorites['Buttons'].items():
             if st.sidebar.button(button['title'], help=button['help'], key=k):
@@ -1049,12 +1069,8 @@ def create_sidebar():
                     ask_questions_without_context(ups, st.session_state.ai_api)
 
         # favorite prompts selectboxes
-        st.session_state.vetted_prompt_titles = {
-            vp['title']: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
-        st.session_state.vetted_prompts = {
-            k: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
         if len(st.session_state.vetted_prompts):
-            st.sidebar.selectbox("Vetted Prompts", options=st.session_state.vetted_prompt_titles.keys(),
+            st.sidebar.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
                                     on_change=prompts_selectbox_change, key='prompts_selectbox')
 
     if st.session_state.player_number_favorites is not None:

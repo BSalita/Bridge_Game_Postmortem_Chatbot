@@ -35,3 +35,8 @@ seaborn
 # for acbllib
 
 # for chatlib
+
+# for pytorch lightning
+pytorch-lightning
+sentencepiece
+lightning[extra]
