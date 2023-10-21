@@ -163,7 +163,6 @@ def create_club_dfs(acbl_number,event_url):
     return dfs
 
 
-# ['mp_won', 'mp_color', 'percentage', 'score', 'sanction', 'event_id', 'session_id', 'trax_master_event_code', 'score_tournament_name', 'score_event_name', 'score_session_number', 'score_session_time_description', 'score_event_type', 'score_score_type', 'section', 'results_last_updated', 'session', 'event', 'tournament', 'date']
 def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_number):
 
     print('dfs keys:',dfs.keys())
@@ -251,28 +250,28 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['player_name_e'] = df_board_results.apply(lambda r: r['pair_names_ew'][0],axis='columns')
         df_board_results['player_name_w'] = df_board_results.apply(lambda r: r['pair_names_ew'][1],axis='columns')
         # todo: get from masterpoint dict
-        df_board_results['Club'] = '12345678'
-        df_board_results['Session'] = '87654321'
+        #df_board_results['Club'] = '12345678' # why is this needed?
+        df_board_results['Session'] = section['session_id']
         df_board_results['mp_total_n'] = 300
         df_board_results['mp_total_e'] = 300
         df_board_results['mp_total_s'] = 300
         df_board_results['mp_total_w'] = 300
-        df_board_results['MP_Sum_NS'] = 300
-        df_board_results['MP_Sum_EW'] = 300
-        df_board_results['MP_Geo_NS'] = 300
-        df_board_results['MP_Geo_EW'] = 300
+        df_board_results['MP_Sum_NS'] = 300+300
+        df_board_results['MP_Sum_EW'] = 300+300
+        df_board_results['MP_Geo_NS'] = 300*300
+        df_board_results['MP_Geo_EW'] = 300*300
         df_board_results['declarer'] = df_board_results['declarer'].map(lambda x: x[0].upper() if len(x) else None) # None is needed for PASS
         df_board_results['Pct_NS'] = df_board_results['Pct_NS'].div(100)
         df_board_results['Pct_EW'] = df_board_results['Pct_EW'].div(100)
         df_board_results['table_number'] = None
         df_board_results['Round'] = None
         df_board_results['dealer'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToDealer)
-        df_board_results['Vul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3 # todo: use 'vul' instead for consistency?
+        df_board_results['Vul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3 # todo: use 'vul' instead for consistency?
         df_board_results['event_id'] = section['session_id'] # for club compatibility
         df_board_results['section_name'] = section['section_label'] # for club compatibility
         df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
-        df_board_results['Date'] = df_event['start_date'] # for club compatibility
-        df_board_results['game_type'] = df_event['game_type'] # for club compatibility
+        df_board_results['Date'] = pd.to_datetime(df_event['start_date'][0]) # converting to datetime64[ns] for human readable display purposes but will create 'iDate' (int64) in augment
+        df_board_results['game_type'] = df_event['game_type'][0] # for club compatibility
         board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
         df_board_results.drop(['orientation','pair_acbl_ns', 'pair_acbl_ew', 'pair_names_ns', 'pair_names_ew'],inplace=True,axis='columns')
@@ -427,26 +426,29 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
         'club_id_number':'Club',
         'contract':'Contract',
         'game_date':'Date',
-        'ns_pair':'Pair_Number_NS',
-        'ew_pair':'Pair_Number_EW',
         'ns_match_points':'MatchPoints_NS',
         'ew_match_points':'MatchPoints_EW',
-        'ns_score':'Score_NS',
-        'ew_score':'Score_EW',
-        'session_number':'Session',
-        'tricks_taken':'Tricks',
+        'ns_pair':'Pair_Number_NS',
+        'ew_pair':'Pair_Number_EW',
         'percentage_ns':'Final_Standing_NS',
         'percentage_ew':'Final_Standing_EW',
         'result':'Result',
         'round_number':'Round',
+        'ns_score':'Score_NS',
+        'ew_score':'Score_EW',
+        'session_number':'Session',
+        'tricks_taken':'Tricks',
        },axis='columns',inplace=True)
 
     # columns unique to club results
-    df.astype({
+    df = df.astype({
+        'board_record_string':'string',
+        'Date':'datetime64[ns]', # human-readable date for display. also will create 'iDate' (int64) in augment
         'Final_Standing_NS':'float32',
         'Final_Standing_EW':'float32',
         'hand_record_id':'string',
-        'board_record_string':'string',
+        'Pair_Number_NS':'uint16',
+        'Pair_Number_EW':'uint16',
         })
 
     df = clean_validate_df(df)
@@ -510,7 +512,7 @@ def clean_validate_df(df):
     assert df['table_number'].isna().all() or df['table_number'].ge(1).all() # some events have NaN table_numbers.
  
     # create more useful Vul column
-    df['Vul'] = df['Board'].map(mlBridgeLib.BoardNumberToVul) # 0 to 3
+    df['Vul'] = df['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3
 
     if not pd.api.types.is_numeric_dtype(df['Score_NS']):
         df['Score_NS'] = df['Score_NS'].astype('string') # make sure all elements are a string
@@ -738,9 +740,11 @@ def augment_df(df,sd_cache_d):
     # todo: verify every dtype is correct.
     # todo: rename columns when there's a better name
     df.rename({'dealer':'Dealer'},axis='columns',inplace=True)
-    df['Dealer'] = df['Dealer'].astype('string')
-    df['Vul'] = df['Vul'].astype('string')
-    
+    assert df['Dealer'].isin(list('NESW')).all()
+    df['Dealer'] = df['Dealer'].astype('category') # todo: should this be done earlier?
+    assert df['Vul'].isin([0,1,2,3]).all() # 0 to 3
+    df['Vul'] = df['Vul'].astype('uint8') # todo: should this be done earlier?
+    df['iDate'] = df['Date'].astype('int64')
     return df, sd_cache_d, matchpoint_ns_d
 
 

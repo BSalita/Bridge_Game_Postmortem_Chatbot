@@ -760,44 +760,8 @@ def sd_observations_changed():
         )].sort_values(['Board']).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='sd_observations_changed_sd_df')
 
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import TensorDataset, DataLoader
-import sklearn # only needed to get __version__
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import safetensors # only needed to get __version__
-from safetensors.torch import load_file, save_file
-import pickle
+import mlBridgeAi
 
-# Create a Model
-class NeuralNetwork(nn.Module):
-    def __init__(self, input_size, output_size, hidden_layer_sizes=[1024]*6):
-        super(NeuralNetwork, self).__init__()
-        
-        # Create a list of sizes representing each layer (input + hidden + output)
-        all_sizes = [input_size] + hidden_layer_sizes + [output_size]
-        
-        # Dynamically create the linear layers
-        self.layers = nn.ModuleList([
-            nn.Linear(all_sizes[i], all_sizes[i+1]) for i, _ in enumerate(all_sizes[:-1])
-        ])
-        
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        # Process input through each linear layer followed by ReLU, except the last layer
-        for layer in self.layers[:-1]:
-            x = self.relu(layer(x))
-        
-        # Last layer is followed by sigmoid
-        x = self.sigmoid(self.layers[-1](x))
-        return x
-
-    
 def Predict_Game_Results():
     # Predict game results using a saved model.
 
@@ -805,64 +769,19 @@ def Predict_Game_Results():
         return None
 
     club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
-    # couldn't combine pkl and pth because model_state_dict complained about gpu dict was saved but huggingface was cpu only. Solution was to split into pkl and pth.
-    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_model.pkl"
+    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_fastai_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
-        st.error(f"Oops. {predicted_rankings_model_filename} not found.")
+        st.error(f"Oops. {predicted_rankings_model_file} not found.")
         return None
-    with open(predicted_rankings_model_file,'rb') as f:
-        y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f) # on lenovo5-1tb, had to manually copy pickle file from /mnt/e/bridge because git pull seems to have pulled a bad copy.
-
-    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_model.pth"
-    predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
-    if not predicted_rankings_model_file.exists():
-        st.error(f"Oops. {predicted_rankings_model_filename} not found.")
-        return None
-    with open(predicted_rankings_model_file,'rb') as f:
-        model_state_dict = torch.load(f, map_location=torch.device('cpu'))
-
-    print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
-    st.session_state.df.info(verbose=True)
-    assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set(), set(columns_to_scale).difference(set(st.session_state.df.columns))
-
-    df = st.session_state.df.copy()
-    df['Date'] = pd.to_datetime(df['Date']).astype('int64') # only need to do once (all rows have same value) then assign to all rows.
-    for d in mlBridgeLib.NESW:
-        df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32').fillna(0) # float32 because could be NaN
-    df['Vul'] = df['Vul'].astype('uint8') # 0-3
-    df['Dealer'] = df['Dealer'].astype('category')
-
-    df = df[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
-    assert df.isna().sum().sum() == 0, df.columns[df.isna().sum().gt(0)] # todo: must be a better way of showing columns with na.
-    X = df.drop(columns=[y_name])
-    y = df[y_name]
-    for col in X.select_dtypes(include='category').columns:
-        X[col] = X[col].cat.codes
-    assert X.select_dtypes(include=['category','string']).empty
-
-    X_scaled = X.copy()
-    X_scaled = X_scaler.transform(X)
-
-    # Initialize the model and load weights
-    model_for_pred = NeuralNetwork(X_scaled.shape[1],1) # 1 is output_size
-    model_for_pred.load_state_dict(model_state_dict)
-
-    # Make predictions
-    model_for_pred.eval()
-    with torch.no_grad():
-        predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)) # so fast (1ms) that we're good with using the CPU
-
-    predicted_board_result_ns = y_scaler.inverse_transform(predictions_scaled)
-    predicted_board_result_ns_s = pd.Series(predicted_board_result_ns.flatten())
-    predicted_board_result_ns_adjusted_s = predicted_board_result_ns_s*.5/predicted_board_result_ns_s.mean() # scale predictions so NS mean is 50%
-    # Create a DataFrame for predictions and save or further use
+    y_name = 'Pct_NS'
+    predicted_board_result_pct_ns = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
     st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
     st.session_state.df[y_name_ew+'_Actual'] = st.session_state.df[y_name_ew]
-    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_ns_adjusted_s
-    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_ns_adjusted_s
+    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_pct_ns
+    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_pct_ns
     st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns+'_Actual']-st.session_state.df[y_name_ns+'_Pred']
     st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ew+'_Actual']-st.session_state.df[y_name_ew+'_Pred']
     return ([y_name_ns+'_Actual', y_name_ns+'_Pred', y_name_ns+'_Diff'], [y_name_ew+'_Actual', y_name_ew+'_Pred', y_name_ew+'_Diff'])
@@ -982,8 +901,9 @@ def reset_data():
 
 def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
+    # fastai:{fastai.__version__} pytorch:{fastai.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__}
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} pytorch:{torch.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__} Query Params:{st.experimental_get_query_params()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
 
 
 def create_sidebar():
