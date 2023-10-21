@@ -15,6 +15,7 @@ sqlalchemy
 sqlalchemy_utils
 safetensors
 scikit-learn
+fastai
 torch
 torchvision
 torchaudio
