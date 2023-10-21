@@ -1287,6 +1287,8 @@ def main():
         st.session_state.app_datetime = datetime.fromtimestamp(pathlib.Path(
             __file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
         # in case there's no ai_apis.json file
+        import platform
+        if platform.system() == 'Windows': pathlib.PosixPath = pathlib.WindowsPath
         st.session_state.ai_api = DEFAULT_AI_MODEL
         st.session_state.conn = duckdb.connect()
         st.session_state.show_sql_query = False
