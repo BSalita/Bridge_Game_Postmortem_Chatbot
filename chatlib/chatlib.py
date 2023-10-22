@@ -271,7 +271,11 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['section_name'] = section['section_label'] # for club compatibility
         df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
         df_board_results['Date'] = pd.to_datetime(df_event['start_date'][0]) # converting to datetime64[ns] for human readable display purposes but will create 'iDate' (int64) in augment
-        df_board_results['game_type'] = df_event['game_type'][0] # for club compatibility
+        df_board_results['game_type'] = df_event['game_type'].astype('category') # for club compatibility
+        df_board_results['event_type'] = df_event['event_type'].astype('category') # for club compatibility
+        df_board_results['mp_limit'] = df_event['mp_limit'].astype('category') # for club compatibility
+        df_board_results['mp_color'] = df_event['mp_color'].astype('category') # for club compatibility
+        df_board_results['mp_rating'] = df_event['mp_rating'].astype('category') # for club compatibility
         board_to_brs_d = dict(zip(df_results_handrecord['board_number'],mlBridgeLib.hrs_to_brss(df_results_handrecord)))
         df_board_results['board_record_string'] = df_board_results['Board'].map(board_to_brs_d)
         df_board_results.drop(['orientation','pair_acbl_ns', 'pair_acbl_ew', 'pair_names_ns', 'pair_names_ew'],inplace=True,axis='columns')
@@ -619,10 +623,10 @@ def augment_df(df,sd_cache_d):
     so = mlBridgeLib.CDHS
     for d in mlBridgeLib.NESW:
         df[f'SL_{d}_{so}'] = df.filter(regex=f'^SL_{d}_[{so}]$').values.tolist() # ordered from clubs to spades [CDHS]
-        df[f'SL_{d}_{so}_J'] = df[f'SL_{d}_{so}'].map(lambda l:'-'.join([str(v) for v in l])).astype('string') # joined CDHS into string
+        df[f'SL_{d}_{so}_J'] = df[f'SL_{d}_{so}'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # joined CDHS into category
         df[f'SL_{d}_ML_S'] = df[f'SL_{d}_{so}'].map(lambda l: [v for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least
         df[f'SL_{d}_ML_SI'] = df[f'SL_{d}_{so}'].map(lambda l: [n for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least containing indexes
-        df[f'SL_{d}_ML_SJ'] = df[f'SL_{d}_ML_S'].map(lambda l:'-'.join([str(v) for v in l])).astype('string') # ordered most-to-least and joined into string
+        df[f'SL_{d}_ML_SJ'] = df[f'SL_{d}_ML_S'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # ordered most-to-least and joined into category
 
     # Create columns containing column names of the NS,EW longest suit.
     sl_cols = [('_'.join(['SL_Max',d]),['_'.join(['SL',d,s]) for s in mlBridgeLib.SHDC]) for d in mlBridgeLib.NS_EW]
