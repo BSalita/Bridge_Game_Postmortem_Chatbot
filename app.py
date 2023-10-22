@@ -739,12 +739,13 @@ def ai_api_selectbox_change():
 
 
 def prompts_selectbox_change():
-    title = st.session_state.prompts_selectbox
-    box = st.session_state.vetted_prompt_titles[title]
-    ups = box['prompts']
-    if len(ups):
-        ask_questions_without_context(ups, st.session_state.ai_api)
-    read_favorites()
+    if st.session_state.prompts_selectbox is not None:
+        title = st.session_state.prompts_selectbox
+        box = st.session_state.vetted_prompt_titles[title]
+        ups = box['prompts']
+        if len(ups):
+            ask_questions_without_context(ups, st.session_state.ai_api)
+        read_favorites()
 
 
 def sd_observations_changed():
@@ -1288,7 +1289,7 @@ def main():
             __file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
         # in case there's no ai_apis.json file
         import platform
-        if platform.system() == 'Windows':
+        if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
             pathlib.PosixPath = pathlib.WindowsPath
         else:
             pathlib.WindowsPath = pathlib.PosixPath

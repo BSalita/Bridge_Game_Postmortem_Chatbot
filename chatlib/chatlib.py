@@ -484,6 +484,7 @@ def clean_validate_df(df):
     # transpose pair_name (last name, first_name).
     for d in 'NESW':
         df.rename({'player_number_'+d.lower():'Player_Number_'+d},axis='columns',inplace=True)
+        df['iPlayer_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').fillna(0).astype('int32') # Convert to numeric. Make NaN into 0. Create iPlayer_Number column to match ai model column name. ai likes numerics, hates strings.
         df['Player_Name_'+d] = df['player_name_'+d.lower()].str.split(',').str[::-1].str.join(' ') # github Copilot wrote this line!
         df.drop(['player_name_'+d.lower()],axis='columns',inplace=True)
 
