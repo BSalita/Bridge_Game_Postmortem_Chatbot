@@ -43,7 +43,7 @@ def load_data(df, y_names, cont_names=None, cat_names=None, bs=4096, valid_pct=0
     
     return dls
 
-def train_classification(dls, epochs=100, layers=[1024]*4, monitor='accuracy', min_delta=0.01, patience=3):
+def train_classification(dls, epochs=20, layers=[1024]*4, monitor='accuracy', min_delta=0.001, patience=3):
     """
     Train a tabular model for classification.
     """
@@ -61,7 +61,7 @@ def train_classification(dls, epochs=100, layers=[1024]*4, monitor='accuracy', m
     
     return learn
 
-def train_regression(dls, epochs=100, layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.01, patience=3):
+def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.001, patience=3):
     """
     Train a tabular model for regression.
     """

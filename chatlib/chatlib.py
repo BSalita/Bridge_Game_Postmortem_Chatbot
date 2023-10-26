@@ -531,7 +531,7 @@ def clean_validate_df(df):
     df['Score_EW'] = -df['Score_NS']
 
     # tournaments do not have Tricks or Result columns. Create them.
-    df['scores_l'] = mlBridgeLib.ContractToScores(df)
+    df['scores_l'] = mlBridgeLib.ContractToScores(df) # todo: ValueError: Cannot set a DataFrame with multiple columns to the single column scores_l on
     if 'Result' in df:
         assert df['Result'].notna().all() and df['Result'].notnull().all()
         df['Result'] = df['Result'].map(lambda x: 0 if x in ['=','0',''] else int(x[1:]) if x[0]=='+' else int(x)).astype('int8') # 0 for PASS
