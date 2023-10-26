@@ -602,12 +602,18 @@ def augment_df(df,sd_cache_d):
 
     # hands
     df['hands'] = df['board_record_string'].map(mlBridgeLib.brs_to_hands)
-    # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without '-' and club f-f with '-'? Removing '-' in both so compare works.
     assert df['hands'].map(mlBridgeLib.hands_to_brs).eq(df['board_record_string'].str.replace('-','').str.replace('T','10')).all(), df[df['hands'].map(mlBridgeLib.hands_to_brs).ne(df['board_record_string'])][['Board','board_record_string','hands']]
+    # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without '-' and club f-f with '-'? Removing '-' in both so compare works.
     df['PBN'] = df['hands'].map(mlBridgeLib.HandToPBN)
     assert df['PBN'].map(mlBridgeLib.pbn_to_hands).eq(df['hands']).all(), df[df['PBN'].map(mlBridgeLib.pbn_to_hands).ne(df['hands'])]
     brs = df['PBN'].map(mlBridgeLib.pbn_to_brs)
     assert brs.map(mlBridgeLib.brs_to_pbn).eq(df['PBN']).all(), df[brs.map(mlBridgeLib.brs_to_pbn).ne(df['PBN'])]
+
+    # OHE cards
+    bin_handsl = mlBridgeLib.HandsLToBin(df['hands'])
+    ohe_handsl = mlBridgeLib.BinLToOHE(bin_handsl)
+    ohe_hands_df = mlBridgeLib.OHEToCards(df,ohe_handsl)
+    df = pd.concat([df,ohe_hands_df],axis='columns',join='inner')
 
     # hand evaluation metrics
     # todo: use Augment_Metric_By_Suits or TuplesToSuits?
@@ -647,7 +653,12 @@ def augment_df(df,sd_cache_d):
     # ContractType
     df['ContractType'] = df.apply(lambda r: 'PASS' if r['BidLvl'] is pd.NA else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
     # Create column of contract types by partnership by suit. e.g. CT_NS_C.
-    contract_types_d = mlBridgeLib.CategorifyContractType(ddmakes)
+    contract_types_d = mlBridgeLib.CategorifyContractTypeBySuit(ddmakes)
+    contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
+    assert len(df) == len(contract_types_df)
+    df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
+    del contract_types_df,contract_types_d
+    contract_types_d = mlBridgeLib.CategorifyContractTypeByDirection(df)
     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
     assert len(df) == len(contract_types_df)
     df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')

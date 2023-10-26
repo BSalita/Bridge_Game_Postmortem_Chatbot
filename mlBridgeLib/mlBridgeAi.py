@@ -1,36 +1,81 @@
 
-from fastai.tabular.all import *
+import pandas as pd
+import os
+from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
 
-def sanity_check_data(data, y_name):
-    assert not data.isna().any().any()
-    assert 'bool' not in data.dtypes
-    assert y_name in data, y_name
-
-def load_data(data, y_name):
+def load_data(df, y_names, cont_names=None, cat_names=None, bs=4096, valid_pct=0.2, max_card=1000):
     """
     Load and preprocess data using FastAI.
     """
-    # Define continuous and categorical variables
-    cont, cat = cont_cat_split(data, max_card=20, dep_var=y_name)
-    
     # Determine number of CPU cores and set workers to cores-1
     num_workers = os.cpu_count() - 1
+    print(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
+    if cont_names is not None:
+        print(f"{len(cont_names)=} {cont_names=}")
+    if cat_names is not None:
+        print(f"{len(cat_names)=} {cat_names=}")
+    assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
+    assert not df.isna().any().any()
+    assert y_names in df, y_names
+
+    # Define continuous and categorical variables
+    if cont_names is None and cat_names is None:
+        cont_names, cat_names = cont_cat_split(df, max_card=max_card, dep_var=y_names)
+        if cont_names is not None:
+            print(f"{len(cont_names)=} {cont_names=}")
+        if cat_names is not None:
+            print(f"{len(cat_names)=} {cat_names=}")
+    assert y_names not in [cont_names + cat_names]
+    assert set(cont_names).intersection(cat_names) == set(), set(cont_names).intersection(cat_names)
+    assert set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns) == set(), set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns)
+    assert df[cont_names].select_dtypes(include=['category']).columns.size == 0, df[cont_names].select_dtypes(include=['category']).columns
+
+    # Split the data into training and validation sets
+    splits = RandomSplitter(valid_pct=valid_pct)(range_of(df))
     
     # Load data into FastAI's TabularDataLoaders
-    dls = TabularDataLoaders.from_df(data, y_names=y_name, y_block=RegressionBlock,
-                                     cat_names=cat, cont_names=cont, procs=[Categorify, FillMissing, Normalize],
-                                     valid_idx=list(range(int(0.8*len(data)), len(data))), bs=4096, num_workers=num_workers)
+    # todo: experiment with specifying a dict of Category types for cat_names: ordinal_var_dict = {'size': ['small', 'medium', 'large']}
+    # todo: accept default class of y_block. RegressionBlock for regression, CategoryBlock for classification.
+
+    dls = TabularDataLoaders.from_df(df, y_names=y_names,
+                                     cat_names=cat_names, cont_names=cont_names, procs=[Categorify, FillMissing, Normalize],
+                                     bs=bs, splits=splits, num_workers=num_workers)
     
     return dls
 
-def train_model(dls, y_name, epochs=10):
+def train_classification(dls, epochs=100, layers=[1024]*4, monitor='accuracy', min_delta=0.01, patience=3):
     """
-    Train a tabular model using FastAI.
+    Train a tabular model for classification.
     """
-    learn = tabular_learner(dls, layers=[1024]*6, metrics=rmse)
+    print(f"{epochs=} {layers=} {monitor=} {min_delta=} {patience=}")
+    # todo: check that y_names is category, not numeric.
+
+    learn = tabular_learner(dls, layers=layers, metrics=accuracy)
+
+    # Use mixed precision training. slower and error.
+    # error: Can't get attribute 'AMPMode' on <module 'fastai.callback.fp16'
+    #learn.to_fp16() # to_fp32() or to_bf16()
     
     # Use one cycle policy for training with early stopping
-    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor='valid_loss', min_delta=0.01, patience=5))
+    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # todo: experiment with using lr_max?
+    
+    return learn
+
+def train_regression(dls, epochs=100, layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.01, patience=3):
+    """
+    Train a tabular model for regression.
+    """
+    print(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
+    # todo: check that y_names is numeric, not category.
+
+    learn = tabular_learner(dls, layers=layers, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat.
+
+    # Use mixed precision training. slower and error.
+    # error: Can't get attribute 'AMPMode' on <module 'fastai.callback.fp16'
+    #learn.to_fp16() # to_fp32() or to_bf16()
+    
+    # Use one cycle policy for training with early stopping
+    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # todo: experiment with using lr_max?
     
     return learn
 
@@ -42,21 +87,25 @@ def load_model(f):
 
 def get_predictions(learn, data):
     dl = learn.dls.test_dl(data)
-    preds, _ = learn.get_preds(dl=dl)
-    return preds.squeeze().numpy()
+    probs, actual = learn.get_preds(dl=dl)
+    return probs, actual
 
-def predictions_to_df(data, y_name, preds):
+def predictions_to_df(data, y_names, preds):
     """
     Create a DataFrame with actual and predicted values.
     """
     
     df = pd.DataFrame({
-        f'{y_name}_Actual': data[y_name],
-        f'{y_name}_Pred': preds,
-        f'{y_name}_Diff': data[y_name] - preds
-    })
-    
-    df = pd.concat([df, data.drop(columns=[y_name])], axis='columns')
+        f'{y_names}_Actual': data[y_names],
+        f'{y_names}_Pred': preds,
+     })
+
+    if data[y_names].dtype == 'category':
+        df[f'{y_names}_Match'] = data[y_names] == preds
+    else:
+        df[f'{y_names}_Diff'] = data[y_names] - preds 
+
+    df = pd.concat([df, data.drop(columns=[y_names])], axis='columns')
     
     return df
 
@@ -67,9 +116,7 @@ def make_predictions(f, data):
     learn = load_learner(f)
     data[learn.dls.train.x_names].info(verbose=True)
     data[learn.dls.train.y_names].info(verbose=True)
-    dl = learn.dls.test_dl(data)
-    preds, _ = learn.get_preds(dl=dl)
-    return preds.squeeze().numpy()
+    return get_predictions(learn, data)
 
 # obsolete pytorch stuff for app.py
 # import torch

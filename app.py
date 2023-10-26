@@ -26,8 +26,9 @@ import asyncio
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
-DEFAULT_AI_MODEL = "gpt-3.5-turbo" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
+DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
 DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
+DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
 DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
 # todo: doesn't some variation of import chatlib.chatlib work instead of using sys.path.append such as exporting via __init__.py?
@@ -94,11 +95,13 @@ def prompt_keyword_replacements(s):
     return s
 
 
-def chat_up_user(up, messages, function_calls, model=DEFAULT_AI_MODEL):
+def chat_up_user(up, messages, function_calls, model=None):
     return asyncio.run(async_chat_up_user({'prompt':up}, messages, function_calls, model))
 
-async def async_chat_up_user(prompt_sql, messages, function_calls, model=DEFAULT_AI_MODEL):
+async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
 
+    if model is None:
+        model = st.session_state.ai_api
     up = prompt_sql['prompt']
     # internal commands
     if up == '/about':
@@ -623,7 +626,7 @@ def slash_about():
     return content
 
 
-def ask_questions_without_context(ups, model=DEFAULT_AI_MODEL):
+def ask_questions_without_context(ups, model=None):
     # pandasai doesn't work. context length is limited to 4100 tokens. need 8k?
     # llm = OpenAI(api_token=openai.api_key)
     # df = st.session_state.df
@@ -632,6 +635,8 @@ def ask_questions_without_context(ups, model=DEFAULT_AI_MODEL):
     # qdf = sdf.chat("Show board, contract")
     # print('qdf:', qdf)
 
+    if model is None:
+        model = st.session_state.ai_api
     function_calls = st.session_state.function_calls
     # ups can be a string, list of strings, or list of lists of strings.
     assert isinstance(ups, list), ups
@@ -656,7 +661,9 @@ def ask_questions_without_context(ups, model=DEFAULT_AI_MODEL):
             st.session_state.messages.extend(messages[1:])
 
 
-def ask_a_question_with_context(ups, model=DEFAULT_AI_MODEL):
+def ask_a_question_with_context(ups, model=None):
+    if model is None:
+        model = st.session_state.ai_api
     messages = st.session_state.messages
     if model != DEFAULT_LARGE_AI_MODEL:
         if len(messages) > 12:
@@ -707,25 +714,29 @@ def reset_messages():
 def player_number_change():
     # assign changed textbox value (player_number_input) to player_number
     player_number = st.session_state.player_number_input
-    chat_initialize(player_number, None)
+    if not chat_initialize(player_number, None):
+        pass
 
 
 def debug_player_number_names_change():
     # assign changed selectbox value (debug_player_number_names_selectbox). e.g. ['2663279','Robert Salita']
     player_number_name = st.session_state.debug_player_number_names_selectbox
-    chat_initialize(player_number_name[0], None)  # grab player number
+    if not chat_initialize(player_number_name[0], None):  # grab player number
+        chat_initialize(st.session_state.player_number, None)
 
 
 def club_session_id_change():
     #st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
     session_id = int(st.session_state.club_session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
-    chat_initialize(st.session_state.player_number, session_id)
+    if not chat_initialize(st.session_state.player_number, session_id):
+        chat_initialize(st.session_state.player_number, None)
 
 
 def tournament_session_id_change():
     #st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
     tournament_session_id = st.session_state.tournament_session_ids_selectbox.split(',')[0] # split selectbox item on commas. only want first split.
-    chat_initialize(st.session_state.player_number, tournament_session_id)
+    if not chat_initialize(st.session_state.player_number, tournament_session_id):
+        chat_initialize(st.session_state.player_number, None)
 
 
 def show_sql_query_change():
@@ -770,21 +781,39 @@ def Predict_Game_Results():
         return None
 
     club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
+
+    predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_directions_fastai_model.pkl"
+    predicted_directions_model_file = savedModelsPath.joinpath(predicted_directions_model_filename)
+    if not predicted_directions_model_file.exists():
+        st.error(f"Oops. {predicted_directions_model_file} not found.")
+        return None
+    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
+    learn = mlBridgeAi.load_model(predicted_directions_model_file)
+    predicted_declarer_direction_NESW_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
+    y_name = 'Declarer_Direction'
+    class_labels = learn.dls.vocab
+    predicted_declarer_direction = [class_labels[l.argmax().item()] for l in predicted_declarer_direction_NESW_probs]
+    st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
+    st.session_state.df[y_name+'_Pred'] = predicted_declarer_direction
+    st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
+    st.session_state.df['Declarer_Pair_Direction_Match'] = st.session_state.df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
+
     predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_fastai_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
         st.error(f"Oops. {predicted_rankings_model_file} not found.")
         return None
     y_name = 'Pct_NS'
-    predicted_board_result_pct_ns = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
+    predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
     st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
     st.session_state.df[y_name_ew+'_Actual'] = st.session_state.df[y_name_ew]
-    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_pct_ns
-    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_pct_ns
+    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_pcts_ns
+    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_pcts_ns
     st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns+'_Actual']-st.session_state.df[y_name_ns+'_Pred']
     st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ew+'_Actual']-st.session_state.df[y_name_ew+'_Pred']
+
     return ([y_name_ns+'_Actual', y_name_ns+'_Pred', y_name_ns+'_Diff'], [y_name_ew+'_Actual', y_name_ew+'_Pred', y_name_ew+'_Diff'])
 
 
@@ -894,10 +923,10 @@ def reset_data():
         with open(ai_apis_file, 'r') as f:
             ai_apis = json.load(f)  # dict
             st.session_state.ai_apis = ai_apis['AI_APIs']['Models']
-            assert len(st.session_state.ai_apis) > 0
+            assert len(st.session_state.ai_apis) > 0 and DEFAULT_AI_MODEL in st.session_state.ai_apis, f"Oops. {DEFAULT_AI_MODEL} not in {st.session_state.ai_apis}."
     else:
         st.session_state.ai_apis = [DEFAULT_AI_MODEL]
-    st.session_state.ai_api = st.session_state.ai_apis[0]
+    st.session_state.ai_api = DEFAULT_AI_MODEL
 
 
 def app_info():
@@ -985,7 +1014,7 @@ def create_sidebar():
                     reset_messages()
                     ask_questions_without_context(
                         ups, st.session_state.ai_api)
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     ask_questions_without_context(ups, st.session_state.ai_api)
 
@@ -1027,7 +1056,7 @@ def create_sidebar():
         "Show SQL Queries", on_change=show_sql_query_change, key='sql_query_checkbox')
 
     if len(st.session_state.ai_apis):
-        st.sidebar.selectbox("AI API Model", options=st.session_state.ai_apis,
+        st.sidebar.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
                                 on_change=ai_api_selectbox_change, key='ai_api_selectbox')
 
     # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
@@ -1313,7 +1342,8 @@ def main():
             assert isinstance(player_number_l, list) and len(
                 player_number_l) == 1, player_number_l
             player_number = player_number_l[0]
-            chat_initialize(player_number, None)
+            if not chat_initialize(player_number, None):
+                st.stop()
 
     if st.session_state.player_number is None:
         st.sidebar.caption(f"App:{st.session_state.app_datetime}")

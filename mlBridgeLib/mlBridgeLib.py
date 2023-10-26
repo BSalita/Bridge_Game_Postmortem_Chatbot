@@ -353,6 +353,11 @@ def OHEToHandsL(ohel):
     return [tuple(tuple(([''.join([ranked_suit[denom] for denom in range(13) if hands[hand+suit*13+denom]]) for suit in range(4)])) for hand in range(0,52*4,52)) for hands in ohel]
 
 
+# Convert One Hot Encoded hands to cards.
+def OHEToCards(df, ohel):
+    return pd.DataFrame(ohel,index=df.index,columns=['C_'+nesw+suit+denom for nesw in NESW for suit in SHDC for denom in ranked_suit],dtype='int8')
+
+
 # Create column of binary encoded hands
 wd = {c:1<<n for n,c in enumerate(ranked_suit_rev)}
 def HandsToBin(hands):
@@ -450,7 +455,7 @@ def ContractType(tricks,suit):
     return ct
 
 
-def CategorifyContractType(ddmakes):
+def CategorifyContractTypeBySuit(ddmakes):
     contract_types_d = defaultdict(list)
     for dd in ddmakes:
         for direction,nesw in zip(NS_EW,dd): # todo: using NS_EW instead of NESW for now. switch to NESW?
@@ -458,6 +463,18 @@ def CategorifyContractType(ddmakes):
                 assert tricks is not None
                 ct = ContractType(tricks,suit)
                 contract_types_d['_'.join(['CT',direction,suit])].append(ct) # estimators don't like categorical dtype
+    return contract_types_d
+
+
+# Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
+def CategorifyContractTypeByDirection(df):
+    contract_types_d = {}
+    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
+    for c in cols:
+        for t in contract_types:
+            print(c,t,len((t == df[c]).values))
+            new_c = c+'_'+t
+            contract_types_d[new_c] = (t == df[c]).values
     return contract_types_d
 
 

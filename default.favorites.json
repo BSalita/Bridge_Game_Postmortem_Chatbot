@@ -63,7 +63,10 @@
 			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
 			"prompts": [
 				"@Overall_Rankings_Predictions",
-				"@Board_Results_Predictions"
+				"@Board_Results_Predictions",
+				"@Declarer_Direction_Predictions",
+				"@Declarer_Direction_Predictions_Statistics_By_Board",
+				"@Declarer_Direction_Predictions_Statistics_By_Declarer"
 			]
 		}
 	},
@@ -473,11 +476,41 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Score_NS, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_NS"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, Board, Contract, Score_NS, Pct_NS_Actual, Pct_NS_Pred, Pct_NS_Diff, Declarer_Direction_Pred, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_NS"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_EW, Board, Contract, Score_EW, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_EW"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_EW, Pct_EW_Actual, Pct_EW_Pred, Pct_EW_Diff, Declarer_Direction_Pred, Pair_Number_NS, Pair_Number_EW FROM results ORDER BY Board, Pair_EW"
+					}
+				]
+			},
+			"Declarer_Direction_Predictions": {
+				"title": "Declarer Direction Predictions",
+				"help": "**Predicted direction of declarer by board by result. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Board, Declarer_Direction_Pred AS Pred, Contract, Result, Score_NS, Parscore_NS, Matchpoints_NS, CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW FROM results ORDER BY Board, Matchpoints_NS DESC"
+					}
+				]
+			},
+			"Declarer_Direction_Predictions_Statistics_By_Board": {
+				"title": "Declarer Direction Predictions Statistics By Board",
+				"help": "**Statistics on declarer direction predictions by board number. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Board, ANY_VALUE(Parscore_NS) AS Parscore_NS, ANY_VALUE(Declarer_Direction_Pred) AS Predicted_Declarer, COUNT() AS Board_Plays, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Direction,  Correct_Direction/Board_Plays AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Direction, Correct_Pair_Direction/Board_Plays AS Correct_Pair_Pct FROM results GROUP BY Board ORDER BY Board"
+					}
+				]
+			},
+			"Declarer_Direction_Predictions_Statistics_By_Declarer": {
+				"title": "Declarer Direction Predictions Statistics By Declarer",
+				"help": "**Statistics on declarer direction predictions by declarer. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Number_Declarer, Name_Declarer, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Direction,  COUNT() AS Boards_Declared, Correct_Direction/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Direction, Correct_Pair_Direction/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Number_Declarer, Name_Declarer ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
 					}
 				]
 			}
