@@ -8,6 +8,7 @@
 7. Change of player number is causing error.
 8. Neil's Instant Game errored out without sidebar. Find similar.
 9. Add game percentage to about.
+10. Kerry Feb tournament produced scores_l error.
 
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?

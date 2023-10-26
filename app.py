@@ -752,11 +752,12 @@ def ai_api_selectbox_change():
 def prompts_selectbox_change():
     if st.session_state.prompts_selectbox is not None:
         title = st.session_state.prompts_selectbox
-        box = st.session_state.vetted_prompt_titles[title]
-        ups = box['prompts']
-        if len(ups):
-            ask_questions_without_context(ups, st.session_state.ai_api)
-        read_favorites()
+        if st.session_state.vetted_prompt_titles is not None: # this fixes the situation when an unsupported game event is selected.
+            box = st.session_state.vetted_prompt_titles[title]
+            ups = box['prompts']
+            if len(ups):
+                ask_questions_without_context(ups, st.session_state.ai_api)
+            read_favorites()
 
 
 def sd_observations_changed():
