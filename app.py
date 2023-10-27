@@ -1015,7 +1015,7 @@ def create_sidebar():
                     reset_messages()
                     ask_questions_without_context(
                         ups, st.session_state.ai_api)
-                    st.rerun()
+                    #st.rerun()
                 else:
                     ask_questions_without_context(ups, st.session_state.ai_api)
 

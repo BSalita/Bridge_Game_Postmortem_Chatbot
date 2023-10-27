@@ -9,6 +9,7 @@
 8. Neil's Instant Game errored out without sidebar. Find similar.
 9. Add game percentage to about.
 10. Kerry Feb tournament produced scores_l error.
+11. Missing error message when .streamlit, .streamlit/secrets.toml are missing or toml doesn't contain two secrets.
 
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?
