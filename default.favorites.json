@@ -66,7 +66,8 @@
 				"@Board_Results_Predictions",
 				"@Declarer_Direction_Predictions",
 				"@Declarer_Direction_Predictions_Statistics_By_Board",
-				"@Declarer_Direction_Predictions_Statistics_By_Declarer"
+				"@Declarer_Direction_Predictions_Statistics_By_Declarer",
+				"@Declarer_Probabilities_Statistics"
 			]
 		}
 	},
@@ -511,6 +512,20 @@
 					{
 						"prompt": "",
 						"sql": "SELECT Number_Declarer, Name_Declarer, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Direction,  COUNT() AS Boards_Declared, Correct_Direction/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Direction, Correct_Pair_Direction/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Number_Declarer, Name_Declarer ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
+					}
+				]
+			},
+			"Declarer_Probabilities_Statistics": {
+				"title": "Declarer Statistics and Statistics",
+				"help": "**Declarer Predictions and Statistics. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Number_Declarer AS Declarer_NS, Name_Declarer AS Name, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared FROM results WHERE Pair_Declarer_Direction='NS' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
+					},
+					{
+						"prompt": "",
+						"sql": "SELECT Number_Declarer AS Declarer_EW, Name_Declarer AS Name, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared FROM results WHERE Pair_Declarer_Direction='EW' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
 					}
 				]
 			}
