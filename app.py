@@ -1015,7 +1015,7 @@ def create_sidebar():
                     reset_messages()
                     ask_questions_without_context(
                         ups, st.session_state.ai_api)
-                    #st.rerun()
+                    #st.rerun() # this caused some systems to loop. not sure why.
                 else:
                     ask_questions_without_context(ups, st.session_state.ai_api)
 
