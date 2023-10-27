@@ -11,6 +11,7 @@ termcolor
 streamlit-chat
 bs4
 endplay
+pyparse>=3.0.0
 sqlalchemy
 sqlalchemy_utils
 safetensors
