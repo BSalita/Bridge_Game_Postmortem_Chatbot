@@ -15,35 +15,48 @@ import pandas as pd
 import os
 import pathlib
 from collections import defaultdict
+import re
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from IPython.display import display  # needed for VSCode
 
+# for double and single dummy calculations
+from endplay.dealer import generate_deals
+from endplay.types import Deal
+from endplay.dds import par, calc_all_tables
 
 # declare module read-only variables
 CDHS = 'CDHS' # string ordered by suit rank - low to high
 CDHSN = CDHS+'N' # string ordered by strain
 NSHDC = 'NSHDC' # order by highest score value. useful for idxmax(). coincidentally reverse of CDHSN.
-SHDC = 'SHDC' # string ordered by suit rank - high to low
-NSEW = 'NSEW' # string ordered by partnership direction
-NESW = 'NESW' # string ordered by order of bidding/playing direction
-NWSE = 'NWSE' # string ordered by order of bidding/playing direction but with EW swapped
+SHDC = 'SHDC' # Hands, PBN, board_record_string (brs) ordering
+NSEW = 'NSEW' # double dummy solver ordering
+NESW = 'NESW' # Hands and PBN order
+NWES = 'NWES' # board_record_string (brs) ordering
+SHDCN = 'SHDCN' # ordering used by dds
+NextPosition = {'N':'E','E':'S','S':'W','W':'N'}
 direction_order = NESW
 NS_EW = ['NS','EW'] # list of partnership directions
+major_suits = 'HS'
+minor_suits = 'CD'
 suit_order = CDHS
 ranked_suit = 'AKQJT98765432' # card denominations - high to low
 ranked_suit_rev = reversed(ranked_suit) # card denominations - low to high
 ranked_suit_dict = {c:n for n,c in enumerate(ranked_suit)}
 max_bidding_level = 7
 tricks_in_a_book = 6
+vul_d = {'None':0, 'Both':1, 'N_S':2, 'E_W':3} # dds vul encoding is weird
 vul_syms = ['None','N_S','E_W','Both']
 vul_directions = [[],[0,2],[1,3],[0,1,2,3]]
 contract_types = ['Pass','Partial','Game','SSlam','GSlam']
 dealer_d = {'N':0, 'E':1, 'S':2, 'W':3}
-vul_d = {'None':0, 'Both':1, 'N_S':2, 'E_W':3} # dds vul encoding is weird
+seats = ['N','E','S','W','NS','EW'] # Par score player's direction codes
+PlayerDirectionToPairDirection = {'N':'NS','E':'EW','S':'NS','W':'EW'}
+PairDirectionToOpponentPairDirection = {'NS':'EW','EW':'NS'}
 allContracts = [(0,'Pass')]+[(l+1,s) for l in range(0,7) for s in CDHSN]
 allHigherContracts_d = {c:allContracts[n+1:] for n,c in enumerate(allContracts)}
 suit_names_d = {'S':'Spades','H':'Hearts','D':'Diamonds','C':'Clubs','N':'No-Trump'}
+
 
 def pd_options_display():
     # display options overrides
@@ -59,6 +72,124 @@ def pd_options_display():
     #pd.set_option("display.expand_frame_repr", False)
 
 
+# todo: could save a couple seconds by creating dict of deals
+def calc_double_dummy_deals(deals, batch_size=40):
+    t_t = []
+    tables = []
+    for b in range(0,len(deals),batch_size):
+        batch_tables = calc_all_tables(deals[b:min(b+batch_size,len(deals))])
+        tables.extend(batch_tables)
+        batch_t_t = (tt._data.resTable for tt in batch_tables)
+        t_t.extend(batch_t_t)
+    assert len(t_t) == len(tables)
+    return deals, t_t, tables
+
+
+def append_double_dummy_results(df):
+
+    deals = [Deal(pbn) for pbn in df['PBN']]
+    deals, t_t, tables = calc_double_dummy_deals(deals)
+
+    # create df of pars
+    # ParList attributes: score, default Contract[]
+    # contract attributes: level, denom, declarer, penalty, result, from_auction(a,b), is_passout(), score(0)
+    pars = [par(tt, b, 0) for tt,b in zip(tables,df['Board'])] # middle arg is board (if int) otherwise enum vul.
+    par_scores = [parlist.score for parlist in pars]
+    par_df = pd.DataFrame(par_scores,columns=['ParScore_EndPlay_NS'])
+    par_df['ParScore_EndPlay_EW'] = -par_df['ParScore_EndPlay_NS']
+    par_contracts = [[str(contract.level)+SHDCN[int(contract.denom)]+contract.declarer.abbr+contract.penalty.abbr+' '+str(contract.result) for contract in parlist] for parlist in pars]
+    par_df['ParContracts_EndPlay'] = par_contracts
+
+    rows = []
+    direction_order = [0,2,1,3] # NSEW order
+    suit_order = [3,2,1,0,4] # SHDCN order?
+    for ii,(dd,sd,tt,ps,pc) in enumerate(zip(deals,t_t,tables,par_scores,par_contracts)):
+        # dd.pprint() # display deal
+        # print()
+        # tt.pprint() # display double dummy table
+        # print()
+        # print(ps)
+        # print()
+        # print(pc)
+        nsew_flat_l = [sd[suit][direction] for direction in direction_order for suit in suit_order]
+        rows.append(nsew_flat_l)
+    assert len(rows) == len(df)
+    dd_df = pd.DataFrame(rows,columns=['_'.join(['DD',d,s]) for d in NSEW for s in CDHSN])
+    df = pd.concat([df,dd_df,par_df],axis='columns') # be sure df's index is reset before concat.
+    return df
+
+
+def constraints(deal):
+    return True
+
+
+def generate_single_dummy_deals(predeal_string, produce, env=dict(), max_attempts=1000000, seed=None, show_progress=True, strict=True, swapping=0):
+    
+    predeal = Deal(predeal_string)
+
+    deals_t = generate_deals(
+        constraints,
+        predeal=predeal,
+        swapping=swapping,
+        show_progress=show_progress,
+        produce=produce,
+        seed=seed,
+        max_attempts=max_attempts,
+        env=env,
+        strict=strict
+        )
+
+    deals = tuple(deals_t) # create a tuple before interop memory goes wonky
+    
+    return calc_double_dummy_deals(deals)
+
+
+def calculate_single_dummy_probabilities(deal, produce=100):
+
+    ns_ew_rows = {}
+    for ns_ew in ['NS','EW']:
+        s = deal[2:].split()
+        if ns_ew == 'NS':
+            s[1] = '...'
+            s[3] = '...'
+        else:
+            s[0] = '...'
+            s[2] = '...'
+        predeal_string = 'N:'+' '.join(s)
+        #print(f"predeal:{predeal_string}")
+
+        d_t, t_t, tables = generate_single_dummy_deals(predeal_string, produce, show_progress=False)
+
+        rows = []
+        max_display = 4 # pprint only the first n generated deals
+        direction_order = [0,2,1,3] # NSEW order
+        suit_order = [3,2,1,0,4] # SHDCN order?
+        for ii,(dd,sd,tt) in enumerate(zip(d_t,t_t,tables)):
+            # if ii < max_display:
+                # print(f"Deal:{ii+1} Fixed:{ns_ew} Generated:{ii+1}/{produce}")
+                # dd.pprint()
+                # print()
+                # tt.pprint()
+                # print()
+            nswe_flat_l = [sd[suit][direction] for direction in direction_order for suit in suit_order]
+            rows.append([dd.to_pbn()]+nswe_flat_l)
+
+        dd_df = pd.DataFrame(rows,columns=['Deal']+[d+s for d in NSEW for s in CDHSN])
+        for d in NSEW:
+            for s in SHDCN:
+                ns_ew_rows[(ns_ew,d,s)] = dd_df[d+s].value_counts(normalize=True).reindex(range(14), fill_value=0).tolist() # ['Fixed_Direction','Direction_Declarer','Suit']+['SD_Prob_Take_'+str(n) for n in range(14)]
+    
+    return ns_ew_rows
+
+
+def append_single_dummy_results(pbns,sd_cache_d,produce=100):
+
+    for pbn in pbns:
+        if pbn not in sd_cache_d:
+            sd_cache_d[pbn] = calculate_single_dummy_probabilities(pbn, produce) # all combinations of declarer pair direction, declarer direciton, suit, tricks taken
+    return sd_cache_d
+
+
 def sort_suit(s):
     return '' if s == '' else ''.join(sorted(s,key=lambda c: ranked_suit_dict[c]))
 
@@ -68,21 +199,42 @@ def sort_hand(h):
 
 
 # Create a board_record_string from hand.
-def HandToBoardRecordString(hand):
-    return ''.join([s+c for h in [hand[0],hand[3],hand[1],hand[2]] for s,c in zip('SHDC',h)])
+#def HandToBoardRecordString(hand):
+#    return ''.join([s+c for h in [hand[0],hand[3],hand[1],hand[2]] for s,c in zip('SHDC',h)])
 
 
 # Create a tuple of suit lengths per direction (NESW).
 # todo: assert that every suit has 13 cards
-def SuitLengths(h):
-    return tuple(tuple(len(hhh) for hhh in hh) for hh in h)
+
+def HandsToSuitLengths(hands):
+    t = tuple(HandToSuitLengths(hand) for hand in hands)
+    assert sum(h[0] for h in t) == 52
+    return sum(h[0] for h in t),t
+def HandToSuitLengths(hand):
+    t = tuple(SuitToSuitLengths(suit) for suit in hand)
+    return sum(t),t
+def SuitToSuitLengths(suit):
+    return len(suit)
+
+
+# Calculate distribution points using 3-2-1 system.
+dist_points = [3,2,1]+[0]*11 # using traditional distribution points metric
+assert len(dist_points) == 14 # 14 possible suit lengths
+def HandsToDistributionPoints(hands):
+    t = tuple(HandToDistributionPoints(hand) for hand in hands)
+    return sum(h[0] for h in t),t
+def HandToDistributionPoints(hand):
+    t = tuple(SuitToDistributionPoints(suit) for suit in hand)
+    return sum(t),t
+def SuitToDistributionPoints(suit):
+    return dist_points[len(suit)]
 
 
 # Create a tuple of suit lengths per direction (NESW).
 # todo: assert that every suit has 13 cards
-def CombinedSuitLengths(h):
-    t = SuitLengths(h)
-    return tuple(tuple(sp1+sp2 for sp1,sp2 in zip(h1,h2)) for h1,h2 in [[t[0],t[2]],[t[1],t[3]]])
+# def CombinedSuitLengths(h):
+#     t = SuitLengths(h)
+#     return tuple(tuple(sp1+sp2 for sp1,sp2 in zip(h1,h2)) for h1,h2 in [[t[0],t[2]],[t[1],t[3]]])
 
 
 # Create a tuple of combined suit lengths (NS, EW) sorted by largest to smallest
@@ -91,15 +243,83 @@ def CombinedSuitLengths(h):
 #    return tuple((t[i],i,'SHDC'[i]) for (v, i) in sorted([(v, i) for (i, v) in enumerate(t)],reverse=True))
 
 
+def hrs_to_brss(hrs,void='',ten='10'):
+    cols = [d+'_'+s for d in ['north','west','east','south'] for s in ['spades','hearts','diamonds','clubs']] # remake of hands below, comments says the order needs to be NWES?????
+    return hrs[cols].apply(lambda r: ''.join(['SHDC'[i%4]+c for i,c in enumerate(r.values)]).replace(' ','').replace('-',void).replace('10',ten), axis='columns')
+
+
+# board_record_string (brs) is NWES, SHDC order
+# pbn is NESW, SHDC order
+# hands is NESW, SHDC order
+
+def pbn_to_brs(pbn,void='',ten='10'):
+    r = [r'(.*)\.(.*)\.(.*)\.(.*)']
+    rs = r'^N\:'+' '.join(r*4)+r'$'
+    nesw = [shdc+(hand if len(hand) else void) for shdc,hand in zip(SHDC*4,re.match(rs,pbn).groups())] # both use SHDC order
+    return ''.join([''.join(nesw[i*4:i*4+4]) for i in [0,3,1,2]]).replace('T',ten) # pbn uses NESW order but we want NWES
+
+
+def pbn_to_hands(pbn):
+    r = [r'(.*)\.(.*)\.(.*)\.(.*)']
+    rs = r'^N\:'+' '.join(r*4)+r'$'
+    return tuple([tuple([hand for hand in re.match(rs,pbn).groups()[i*4:i*4+4]]) for i in range(4)]) # both use NESW order
+
+
+def validate_brs(brs):
+    assert '-' not in brs and 'T' not in brs, brs # must not have a '-' or 'T'
+    sorted_brs = '22223333444455556666777788889999AAAACCCCDDDDHHHHJJJJKKKKQQQQSSSSTTTT' # sorted brs must match this string
+    s = brs.replace('10','T')
+    if ''.join(sorted(s)) != sorted_brs:
+        print('validate_brs: Invalid brs:', brs, s)
+        return False
+    for i in range(0,len(sorted_brs),len(sorted_brs)*4):
+        split_shdc = re.split(r'[SHDC]',s[i:i+13+4])
+        if len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13: # not validating sort order. call it correct-ish.
+            print('validate_brs: Invalid len:', i, brs, s[i:i+13+4], split_shdc)
+            return False
+    return True
+
+
+def brs_to_pbn(brs,void='',ten='T'):
+    r = r'S(.*)H(.*)D(.*)C(.*)'
+    rs = r*4
+    suits = [suit for suit in re.match(rs,brs).groups()]
+    return 'N:'+' '.join(['.'.join(suits[i*4:i*4+4]) for i in [0,2,3,1]]).replace('10',ten).replace('-',void) # brs uses NWES order but we want NESW. void may or not contain '-'
+
+
+def brs_to_hands(brs,void='',ten='T'):
+    no_10s = brs.replace('10',ten).replace('-',void) # replace 10 with T and remove unnecessary '-' which signifies a void suit.
+    assert len(no_10s) == (13+len('SHDC'))*4 # (13 cards per suit + 4 suit symbols) * 4
+    nesw = tuple([no_10s[i:i+17] for i in range(0,17*4,17)])
+    assert len(nesw) == 4 and all(len(s) == 17 for s in nesw), [nesw, brs]
+    return tuple([brs_to_hand(nesw[i]) for i in [0,2,3,1]]) # brs uses NWES order but we want NESW
+
+
+def brs_to_hand(brs):
+    assert isinstance(brs,str) and len(brs) == 17, brs
+    split_shdc = re.split(r'[SHDC]',brs) # returns a tuple of 5
+    assert len(split_shdc) == 4+1 and sum(map(len,split_shdc)) == 13, brs
+    return tuple(sort_hand(split_shdc[1:]))
+
+
+def hands_to_brs(hands,void='',ten='10'):
+    brs = ''.join([c+(suit if len(suit) else void) for i in [0,3,1,2] for c,suit in zip(SHDC,hands[i])]).replace('T',ten) # hands uses NESW order but we want NWSE.
+    return brs
+
+
 # convert hand tuple into PBN
 def HandToPBN(hand):
-    return 'N:'+' '.join('.'.join([hh for hh in h]) for h in hand)
+    assert len(hand) == 4 and all([sum(map(len,hand)) == 16 for h in hand]), hand # 4 hands of 4 suits. 13 cards per hand + 3 dots == 16
+    return 'N:'+' '.join('.'.join([suit for suit in hand[i]]) for i in range(4)) # both use NESW order.
+
+
 # create list of PBNs from Hands (list of tuple of tuples)
 def HandsToPBN(hands):
     pbns = []
     for hand in hands:
-        pbns.append(HandToPBN(hand))
+        pbns.append(HandToPBN(hand)) # both use NESW order.
     return pbns
+
 
 # Create tuple of suit lengths per partnership (NS, EW)
 #def CombinedSuitLengthTuples(t):
@@ -110,7 +330,7 @@ hcpd = {c:w for c,w in zip(ranked_suit,[4,3,2,1]+[0]*9)}
 def HandsToHCP(hands):
     t = tuple(HandToHCP(hand) for hand in hands)
     assert sum(h[0] for h in t) == 40
-    return t
+    return sum(h[0] for h in t),t
 def HandToHCP(hand):
     t = tuple(SuitToHCP(suit) for suit in hand)
     return sum(t),t
@@ -131,6 +351,11 @@ def BinLToOHE(binl):
 # Convert One Hot Encoded hands to tupled hands.
 def OHEToHandsL(ohel):
     return [tuple(tuple(([''.join([ranked_suit[denom] for denom in range(13) if hands[hand+suit*13+denom]]) for suit in range(4)])) for hand in range(0,52*4,52)) for hands in ohel]
+
+
+# Convert One Hot Encoded hands to cards.
+def OHEToCards(df, ohel):
+    return pd.DataFrame(ohel,index=df.index,columns=['C_'+nesw+suit+denom for nesw in NESW for suit in SHDC for denom in ranked_suit],dtype='int8')
 
 
 # Create column of binary encoded hands
@@ -178,7 +403,7 @@ def SuitToQT(suit):
 
 
 def BoardNumberToDealer(bn):
-    return 'NESW'[(bn-1) & 3]
+    return NESW[(bn-1) & 3]
 
 
 def BoardNumberToVul(bn):
@@ -186,17 +411,25 @@ def BoardNumberToVul(bn):
     return range(bn//4, bn//4+4)[bn & 3] & 3
 
 
-# create column of LoTT
-def LoTT(ddmakes,lengths):
-    #print(ddmakes,lengths)
+#def HandsToDDMakes(hands):
+#    return tuple([tuple([[df['_'.join(['DD',d,s])] for s in 'SHDC']]) for d in NESW])
+
+
+# create column of LoTT.
+# todo: verify algorithm against actual LoTT.
+# I'm confused about the order of the suits and lengths. What about a tie between max suits. It should use highest ranking suit. 
+# Are all callers really passing dd ordered CDHSN/SHDC, and SL ordered CDHS?
+# Renamed to LoTT_SHDC until verified.
+# Callers should use a dict so LoTT isn't recomputed for every board result. Only cache by board, not by board result.
+def LoTT_SHDC(ddmakes,lengths):
     maxnsl = []
     maxewl = []
-    for nsidx,(nmakes,smakes) in enumerate(zip(ddmakes[0][:4],ddmakes[2][:4])):
+    for nsidx,(nmakes,smakes,nlength,slength) in enumerate(zip(ddmakes[0][:4][::-1],ddmakes[2][:4][::-1],lengths[1][0][1],lengths[1][2][1])): # [::-1] to reverse ddmakes
         nsmax = max(nmakes,smakes)
-        maxnsl.append((lengths[0][3-nsidx],nsmax,nsidx)) # 3- because lengths are SHDC and ddmakes are CDHSN
-    for ewidx,(emakes,wmakes) in enumerate(zip(ddmakes[1][:4],ddmakes[3][:4])):
+        maxnsl.append((nlength+slength,nsmax,nsidx))
+    for ewidx,(emakes,wmakes,elength,wlength) in enumerate(zip(ddmakes[1][:4][::-1],ddmakes[3][:4][::-1],lengths[1][1][1],lengths[1][3][1])): # [::-1] to reverse ddmakes
         ewmax = max(emakes,wmakes)
-        maxewl.append((lengths[1][3-ewidx],ewmax,ewidx)) # 3- because lengths are SHDC and ddmakes are CDHSN
+        maxewl.append((elength+wlength,ewmax,ewidx))
     sorted_maxnsl = sorted(maxnsl,reverse=True)
     sorted_maxewl = sorted(maxewl,reverse=True)
     maxlen = sorted_maxnsl[0][0]+sorted_maxewl[0][0]
@@ -222,7 +455,7 @@ def ContractType(tricks,suit):
     return ct
 
 
-def CategorifyContractType(ddmakes):
+def CategorifyContractTypeBySuit(ddmakes):
     contract_types_d = defaultdict(list)
     for dd in ddmakes:
         for direction,nesw in zip(NS_EW,dd): # todo: using NS_EW instead of NESW for now. switch to NESW?
@@ -233,9 +466,31 @@ def CategorifyContractType(ddmakes):
     return contract_types_d
 
 
+# Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
+def CategorifyContractTypeByDirection(df):
+    contract_types_d = {}
+    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
+    for c in cols:
+        for t in contract_types:
+            print(c,t,len((t == df[c]).values))
+            new_c = c+'_'+t
+            contract_types_d[new_c] = (t == df[c]).values
+    return contract_types_d
+
+
 # convert vul to boolean based on direction
-def DirectionToVul(vul, direction):
-    return direction in vul_directions[vul_syms.index(vul)]
+def DirectionToVul(vul, nesw):
+    return nesw in vul_directions[vul_syms.index(vul)]
+
+
+# convert vul number (0,3) to boolean based on direction
+def DirectionSymToVulBool(vul,nsew):
+    return NESW.index(nsew) in vul_directions[vul]
+
+
+# convert board to vul number (0,3] to boolean based on direction
+def BoardNumberDirectionSymToVulBool(board,nsew):
+    return DirectionSymToVulBool(BoardNumberToVul(board),nsew)
 
 
 def DirectionSymToDealer(direction_symbol):
@@ -260,7 +515,7 @@ def DDmakesToScores(ddmakes,vuls):
                 highest_make_level = tricks-1-tricks_in_a_book
                 for level in range(max(highest_make_level,0), max_bidding_level):
                     result = highest_make_level-level
-                    s = score(level, strain, result < 0, 0, v, result)
+                    s = score(level, strain, result < 0, 0, v, result) # double all sets
                     strainl.append((s,(level,strain),direction,result))
             # stable sort by contract then score
             sorted_direction = sorted(sorted(strainl,key=lambda k:k[1]),reverse=True,key=lambda k:k[0])
@@ -268,6 +523,13 @@ def DDmakesToScores(ddmakes,vuls):
         scoresl.append(directionsl)
     return scoresl
 
+
+
+def ContractToScores(df):
+    assert 'NSEW' not in df and 'Declarer_Direction' in df
+    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['Declarer_Direction']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['Declarer_Direction'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
+    # adjusted score? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
+    return scores_l
 
 # Convert score tuples into Par.
 # todo: rewrite into two defs; looping, core logic
@@ -371,12 +633,12 @@ def FilterBoards(df, cn=None, vul=None, direction=None, suit=None, contractType=
 # adapted (MIT license) from https://github.com/jfklorenz/Bridge-Scoring/blob/master/features/score.js
 # ================================================================
 # Scoring
-def score(level, suit, double, declarer, vulnerability, result):
+def score(level, suit, double, declarer, vulnerability, result, declarer_score=False):
     assert level in range(0, 7), f'ValueError: level {level} is invalid'
-    assert suit in range(0, 5), f'ValueError: suit {suit} is invalid'
-    assert double in range(0, 3), f'ValueError: double {double} is invalid'
+    assert suit in range(0, 5), f'ValueError: suit {suit} is invalid' # CDHSN
+    assert double in range(0, 3), f'ValueError: double {double} is invalid' # ['','X','XX']
     assert declarer in range(
-        0, 4), f'ValueError: declarer {declarer} is invalid'
+        0, 4), f'ValueError: declarer {declarer} is invalid' # NSEW
     assert vulnerability in range(
         0, 2), f'ValueError: vulnerability {vulnerability} is invalid'
     assert result in range(-13, 7), f'ValueError: result {result} is invalid'
@@ -426,7 +688,7 @@ def score(level, suit, double, declarer, vulnerability, result):
         points = -sum([undertricks[vulnerability][double][min(i, 3)]
                        for i in range(0, -result)])
 
-    return points if declarer < 2 else -points  # negate points if EW
+    return points if declarer_score or declarer < 2 else -points  # negate points if EW
 
 # ================================================================
 
@@ -465,6 +727,11 @@ def ScoreDicts():
     # display(makeScoresd)
     assert sum([len(v) != 14 for v in makeScoresd.values()]) == 0
     return scoresd, setScoresd, makeScoresd
+
+
+# returns scoring array(14) where all sets are doubled. For situations where perfect defense is assumed (Par, match point predictions)
+def ScoreDoubledSets(level, suit, vul, double, declarer):
+    return scoresd[(level, suit, vul, 1, declarer)][:level+7]+scoresd[(level, suit, vul, double, declarer)][7+level:]
 
 
 # insert Actual and Predicted as leftmost columns for easier viewing.
@@ -598,15 +865,15 @@ def InsertScoringColumns(df, dep_vars, prefix):
             if s > 0:
                 # Calculate vulnerability
                 if direction == '':
-                    idirection = list('NSEW').index(
+                    idirection = NSEW.index(
                         r[MakeColName(prefix, 'Dir', suit, direction)][0])
                 else:
-                    idirection = list('NSEW').index(direction[0])
+                    idirection = NSEW.index(direction[0])
                 vul = [r['Vul_NS'], r['Vul_NS'],
                        r['Vul_EW'], r['Vul_EW']][idirection]
                 s = score(
                     s-1,
-                    list('CDHSN').index(
+                    CDHSN.index(
                         r[MakeColName(prefix, 'Suit', suit, direction)]),
                     len(r[MakeColName(prefix, 'Double', suit, direction)]),
                     idirection,
@@ -749,6 +1016,36 @@ def ComputeMatchPointResults(results):
     return numOfPairs, scoreToMPs
 
 
+# Add a single score to a match point dict. Returns new dict of tuples (score, beats, ties, matchpoints, pct)
+def MatchPointScoreUpdate(score,mps):
+    sorted_mps = sorted(mps.items(),reverse=True)
+    mps = {}
+    top = 0
+    for k,v in sorted_mps:
+        beats = v[1]+v[2]+1
+        if top == 0: # first time
+            top = beats
+        if score > k: # beats and ties unchanged
+            if score not in mps: # insert new score
+                mps[score] = (score,beats,0,beats,beats/top)  # add low board
+            beats = v[1]
+            ties = v[2]
+        elif score == k: # add a tie
+            beats = v[1]
+            ties = v[2]+1
+        else: # add a beat
+            beats = v[1]+1
+            ties = v[2]
+        beats_ties = beats+ties/2
+        pct = round(beats_ties/top,2)
+        mps[k] = (k,beats,ties,beats_ties,pct)
+    if score not in mps:
+        mps[score] = (score,0,0,0.0,0.0)  # insert new low bord
+# todo: asserts - check sorted order - check key and score - check sum of beats and ties.
+    return mps
+
+
+
 def CreateTCGDictEventBoard(eb, cg, d):
     numOfPairs, scoreToMPs = ComputeMatchPointResults(cg)
     d[eb] = [numOfPairs, scoreToMPs]
@@ -820,3 +1117,172 @@ def GetTcgMpPercent(tcgd, tcgKey):
 
 def GetTcgMPs(tcgd, keyCol):
     return [GetTcgMpPercent(tcgd, tcgKey) for tcgKey in keyCol]
+
+
+# simple function to walk a json file printing keys and values.
+# usage: json_walk_print('main',data_json) where 'main' is becomes the name of the outer table and data_json is a string containing json.
+
+def json_walk_print(key,value):
+    if type(value) is dict:
+        #print('dict:'+key)
+        for k,v in value.items():
+            kk = key+'.'+k
+            json_walk_print(kk,v)
+    elif type(value) is list:
+        #print('list:'+key)
+        for n,v in enumerate(value):
+            kk = key+'['+str(n)+']'
+            json_walk_print(kk,v)
+    else:
+        if type(value) is str:
+            value = '"'+value+'"'
+        print(key+'='+str(value))
+    return
+
+
+# walk a json file building a table suitable for generating SQL statements.
+# usage: json_to_sql_walk(tables,'main',data_json,primary_keys) where 'main' is first table and data_json is a string containing json.
+def sql_create_tables(tables,key,value):
+    #print(tables, key, value)
+    #print(f"{key}={value}")
+    splited = key.split('.')
+    tableName = splited[-3]
+    fieldId = splited[-2]
+    fieldName = splited[-1]
+    #print("ct:", tableName, fieldId, fieldName, type(value))
+    # removed assert as they were json schema specific
+    #assert not tableName[0].isdigit(), [tableName, fieldId, fieldName, type(value)]
+    #assert fieldId[0].isdigit(), [tableName, fieldId, fieldName, type(value)]
+    #assert not fieldName[0].isdigit(), [tableName, fieldId, fieldName, type(value)]
+    if fieldName in tables[tableName][fieldId]:
+        #print(type(tables[tableName][fieldId][fieldName]))
+        #print(tableName,fieldId,fieldName)
+        assert type(tables[tableName][fieldId][fieldName]) is list
+        if type(value) is list:
+            tables[tableName][fieldId][fieldName] += value
+        # set will return unique values from list but all must be same type e.g. str
+        elif value not in tables[tableName][fieldId][fieldName]:
+            tables[tableName][fieldId][fieldName].append(value)
+        # list must consist of only unique values. award pigment issue
+        # careful: set is non-deterministic so values in a list(set(l)) can become reordered!
+        assert len(set(tables[tableName][fieldId][fieldName])) == len(tables[tableName][fieldId][fieldName])
+    else:
+        tables[tableName][fieldId][fieldName] = value
+    return
+
+
+def json_to_sql_walk(tables,key,last_id,uid,value,primary_keys):
+    #print(tables,key,last_id,uid,value)
+    if type(value) is dict:
+        #print('dict:',key,uid)
+        if any([pk in value for pk in primary_keys]):
+            for pk in primary_keys:
+                if pk in value:
+                    last_id = key.split('.')[-1]
+                    uid = [str(value[pk])]
+                    if key.count('.') > 0:
+                        sql_create_tables(tables,key,'-'.join(uid))
+        elif all(not k.isdigit() for k in value.keys()):
+            sql_create_tables(tables,key+'.'+'-'.join(uid)+'.id','-'.join(uid)) # create PRIMARY KEY column of 'id'
+            sql_create_tables(tables,key+'.'+'-'.join(uid)+'.'+last_id,uid[0]) # create parent column using last_id and uid[0] (first id)
+            if key.count('.') > 0:
+                sql_create_tables(tables,key,['-'.join(uid)])
+        for k,v in value.items():
+            if all(kk.isdigit() for kk in value.keys()):
+                json_to_sql_walk(tables,key,last_id,uid+[k],v,primary_keys)
+            else:
+                json_to_sql_walk(tables,key+'.'+'-'.join(uid)+'.'+k,last_id,uid,v,primary_keys)
+    elif type(value) is list:
+        #print('list:',key,uid)
+        if len(value) > 0: # turn empty lists into NULL?
+            #print("empty list:",key)
+            sql_create_tables(tables,key,[])
+        for n,v in enumerate(value):
+            json_to_sql_walk(tables,key,last_id,uid+[str(n)],v,primary_keys)
+    else:
+        sql_create_tables(tables,key,value)
+    return
+
+
+# Create a file of SQL INSERT commands from table
+def CreateSqlFile(tables,f,primary_keys):
+    print("PRAGMA foreign_keys = OFF;", file=f) # is this still necessary????
+    
+    for k,v in tables.items():
+        assert type(v) is defaultdict
+        #print(f"DELETE FROM [{k}];", file=f) # delete all rows
+        for kk,vv in v.items():
+            assert type(vv) is dict
+            s = '\",\"'.join(vvv for vvv in vv.keys()) # backslashes can't be included within format {}
+            print(f"INSERT INTO \"{k}\" (\"{s}\")", file=f)
+            values = []
+            for kkk,vvv in vv.items():
+                #print(kkk,vvv)
+                if type(vvv) is str:
+                    values.append('\''+vvv.replace('\'','\'\'')+'\'') # escape embedded double-quotes with sql's double double-quotes
+                elif vvv is None:
+                    values.append("NULL")
+                elif type(vvv) is list:
+                    #print("list:",kkk,vvv)
+                    # patch - 2023-01-19 - added - added code to quote list items if they're strings
+                    if len(vvv)>0 and isinstance(vvv[0],str):
+                        values.append('\'["'+'","'.join(str(vvvv).replace('\'','\'\'') for vvvv in vvv)+'"]\'') # escape embedded double-quotes with sql's double double-quotes
+                    else:
+                        values.append('\'['+','.join(str(vvvv).replace('\'','\'\'') for vvvv in vvv)+']\'') # escape embedded double-quotes with sql's double double-quotes
+                else:
+                    values.append(vvv)
+            print(f"VALUES({','.join(str(vvvv) for vvvv in values)})", file=f)
+            # DO UPDATE SET updated_at=excluded.updated_at
+            s = ','.join('\"'+vvv+'\"=excluded.\"'+vvv+'\"' for vvv in vv.keys()) # backslashes can't be included within format {}
+            assert any([pk in vv for pk in primary_keys]),[primary_keys,vv]
+            for pk in primary_keys:
+                if pk in vv:
+                    print(f"ON CONFLICT({pk}) DO UPDATE SET {s}", file=f, end='')
+            #print('created_at' in vv.keys(),'updated_at' in vv.keys())
+            assert ('created_at' in vv.keys()) == ('updated_at' in vv.keys())
+            if 'created_at' in vv.keys():
+                print(f"\nWHERE excluded.\"updated_at\" > \"updated_at\" OR (excluded.\"updated_at\" = \"updated_at\" AND excluded.\"created_at\" > \"created_at\")", file=f, end='')
+            print(";\n",file=f)
+    return
+
+
+# Automatically create sql tables file.
+# Will require further editing of most fields: fix PRIMARY KEY, make NOT NULL, change VARTYPE to INT, REAL, remove trailing comma.
+def CreateSqlTablesFile(f,tables,primary_keys):
+    assert type(tables) is defaultdict
+    print(f'PRAGMA journal_mode=WAL;', file=f)
+    print(file=f)
+    for k,v in tables.items():
+        print(f'DROP TABLE IF EXISTS "{k}";', file=f)
+        print(file=f)
+        print(f'CREATE TABLE "{k}" (', file=f)
+        assert type(v) is defaultdict
+        for kk,vv in v.items():
+            #print('uid:','.'.join([k,kk]))
+            assert kk[0].isdigit()
+            assert type(vv) is dict
+            for kkk,vvv in vv.items():
+                #print('3:','.'.join([k,kkk]))
+                assert type(vvv) is not list or type(vvv) is not dict
+                if kkk in primary_keys:
+                    print(f'"{kkk}" INT NOT NULL PRIMARY KEY,', file=f)
+                else:
+                    print(f'"{kkk}" VARCHAR NULL,', file=f) # or NOT
+        for kkk,vvv in vv.items():
+            #print(kkk,tables.keys())
+            if kkk in tables:
+                print(f'-- list of VARCHAR', file=f)
+                print(f'FOREIGN KEY ("{kkk}") REFERENCES "{kkk}"(id) ON DELETE NO ACTION,', file=f)
+        print(');', file=f)
+        print(file=f)
+# only create file if it doesn't exist. Must manually delete file if new version is wanted.
+#create_tables_sql_file = pathlib.Path("acbl_tournament_sessions_schema.sql")
+#if not create_tables_sql_file.exists():
+#    with open(create_tables_sql_file,'w') as f:
+#        CreateSqlTablesFile(f,tables)
+#tables = defaultdict(lambda :defaultdict(dict))
+#json_to_sql_walk(tables,'events',"",[],data_json,primary_keys)
+    
+
+# initializations
+scoresd, setScoresd, makeScoresd = ScoreDicts()
