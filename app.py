@@ -793,8 +793,6 @@ def Predict_Game_Results():
     predicted_declarer_direction_NESW_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
     y_name = 'Declarer_Direction'
     class_labels = learn.dls.vocab
-    for i,l in enumerate(class_labels):
-        st.session_state.df['_'.join([y_name,l,'Pred'])] = predicted_declarer_direction_NESW_probs[:,i]
     predicted_declarer_direction = [class_labels[l.argmax().item()] for l in predicted_declarer_direction_NESW_probs]
     st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
     st.session_state.df[y_name+'_Pred'] = predicted_declarer_direction
