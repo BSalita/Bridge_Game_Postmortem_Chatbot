@@ -599,6 +599,9 @@ def augment_df(df,sd_cache_d):
     df['Direction_OnLead'] = df['Declarer_Direction'].map(mlBridgeLib.NextPosition)
     df['Direction_Dummy'] = df['Direction_OnLead'].map(mlBridgeLib.NextPosition)
     df['Direction_NotOnLead'] = df['Direction_Dummy'].map(mlBridgeLib.NextPosition)
+    df['OnLead'] = df.apply(lambda r: r['Player_Number_'+r['Direction_OnLead']], axis='columns') # todo: keep as lower case?
+    df['Dummy'] = df.apply(lambda r: r['Player_Number_'+r['Direction_Dummy']], axis='columns') # todo: keep as lower case?
+    df['NotOnLead'] = df.apply(lambda r: r['Player_Number_'+r['Direction_NotOnLead']], axis='columns') # todo: keep as lower case?
 
     # hands
     df['hands'] = df['board_record_string'].map(mlBridgeLib.brs_to_hands)
@@ -730,14 +733,20 @@ def augment_df(df,sd_cache_d):
     df['ParScore_MPs_EW'] = df['Board_Top']-df['ParScore_MPs_NS']
     df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
     df['ParScore_Pct_EW'] = 1-df['ParScore_Pct_NS']
-    #df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Pair_Declarer_Direction']], axis='columns')
+    df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Pair_Declarer_Direction']], axis='columns')
     #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Pair_Declarer_Direction']], axis='columns')
     #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Pair_Declarer_Direction']], axis='columns')
     #df['ParScore_Diff_Declarer'] = df['Score_Declarer']-df['ParScore_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
     #df['ParScore_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['ParScore_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
     #df['ParScore_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['ParScore_Pct_Declarer']
-    #df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks] # adding convenience column to df. Actual Tricks vs DD Tricks
+    df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks'] # adding convenience column to df. Actual Tricks vs DD Tricks
     #df['Score_DD_Diff_Declarer'] = df['Score_Declarer']-df['DD_Score_Declarer'] # adding convenience column to df. Actual Score vs DD Score
+
+    df['Declarer_Rating'] = df.groupby('Number_Declarer')['Tricks_DD_Diff_Declarer'].transform('mean').astype('float32')
+    # todo: resolve naming conflict: Defender_ParScore_GE, Defender_OnLead_Rating, Defender_NotOnLead_Rating vs ParScore_GE_Defender, OnLead_Rating_Defender, NotOnLead_Rating_Defender
+    df['Defender_ParScore_GE'] = df['Score_Declarer'].le(df['ParScore_Declarer'])
+    df['Defender_OnLead_Rating'] = df.groupby('OnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
+    df['Defender_NotOnLead_Rating'] = df.groupby('NotOnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
 
     # masterpoints columns
     for d in mlBridgeLib.NESW:

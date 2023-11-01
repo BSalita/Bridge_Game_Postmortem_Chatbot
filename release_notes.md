@@ -10,6 +10,7 @@
 9. Add game percentage to about.
 10. Kerry Feb tournament produced scores_l error.
 11. Missing error message when .streamlit, .streamlit/secrets.toml are missing or toml doesn't contain two secrets.
+12. show timestamps of data files.
 
 ## Prompt Notes
 1. Does chat understand overtricks, justmade, undertricks? Or should result be used?
@@ -27,11 +28,16 @@
 8. ACBL Teams
 9. Other online bridge services.
 10. Further reduce autosizing of columns. Dataframes doesn't look minimized although reportlab does.
-11. Show predicted ranking for pairs. Requires NN to be trained on ranking. Might be more applicable to 7NT.info historical data.
 13. Implement downloading of chat session or perhaps output as markdown.
-17. Check if ACBL online games are in my DB.
+14. Show rankings of declarers by parscore, sd, sd max, dd, dd max, actual.
+15. Show rankings of declarers by number of doubles, pct of hands doubled, pct making, pct beating par score (successful sacrifice).
+16. Show rankings of declarers by bidding of penalty double, success rate.
+17. Show rankings of declarers by bidding of sacrifice, success rate.
+18. Check if ACBL online games are in my DB.
 20. Howell movements.
 21. Write dataframe/SQL to in-memory SQL database? Perform queries on in-memory database instead of dataframe?
+22. What is the interaction between doubling and not doubling?
+23. Show rankings of declarers by successful contracts, unsuccessful contracts, successful doubles, unsuccessful doubles, successful sacrifices, unsuccessful sacrifices.
 25. Show BBO bidding, both ACBL human and BBO robot.
 26. Separate Release Notes from Project Notes?
 27. Speed up single dummy. write to file or sql database?.
