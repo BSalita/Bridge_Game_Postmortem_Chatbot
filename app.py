@@ -790,6 +790,10 @@ def Predict_Game_Results():
         return None
     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_directions_model_file)
+    print(st.session_state.df.isna().sum())
+    #st.session_state.df['Tricks'].fillna(.5,inplace=True)
+    #st.session_state.df['Result'].fillna(.5,inplace=True)
+    st.session_state.df['Declarer_Rating'].fillna(1,inplace=True)
     predicted_declarer_direction_NESW_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
     y_name = 'Declarer_Direction'
     class_labels = learn.dls.vocab

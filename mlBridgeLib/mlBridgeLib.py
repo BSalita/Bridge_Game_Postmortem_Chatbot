@@ -524,12 +524,12 @@ def DDmakesToScores(ddmakes,vuls):
     return scoresl
 
 
-
-def ContractToScores(df):
-    assert 'NSEW' not in df and 'Declarer_Direction' in df
-    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r['Declarer_Direction']) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r['Declarer_Direction'])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
+def ContractToScores(df,direction='Declarer_Direction'):
+    assert 'NSEW' not in df and direction in df
+    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r[direction]) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r[direction])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
     # adjusted score? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
     return scores_l
+
 
 # Convert score tuples into Par.
 # todo: rewrite into two defs; looping, core logic
