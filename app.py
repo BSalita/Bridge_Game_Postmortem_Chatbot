@@ -11,8 +11,8 @@ import pathlib
 import re
 import time
 import streamlit as st
-import openai
-from openai import openai_object  # used to suppress vscode type checking errors
+import openai # but openai 1.1.1 is missing ChatCompletion
+#from openai import openai_object  # used to suppress vscode type checking errors
 import pandas as pd
 import duckdb
 import json
@@ -26,9 +26,11 @@ import asyncio
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
-DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
-DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
+DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
+DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
 DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
+DEFAULT_GPT4_AI_MODEL = "gpt-4-1106-preview"
+#DEFAULT_AI_MODEL = DEFAULT_GPT4_AI_MODEL
 DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
 # todo: doesn't some variation of import chatlib.chatlib work instead of using sys.path.append such as exporting via __init__.py?
@@ -57,8 +59,8 @@ savedModelsPath = rootPath.joinpath('SavedModels')
 
 # todo: obsolete in favor of complete_messages
 
-async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE):
-    return await openai.ChatCompletion.acreate(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature)
+async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE, response_format={"type":"json_object"}):
+    return await openai.ChatCompletion.acreate(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
 
 
 def ask_database(query):
@@ -126,11 +128,14 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         i = len(messages)
 
         # help out AI by enhancing prompt before calling. Replace undesired characters or replace common phrases with actual column names.
-        if 'opponent' in up.lower():  # assumes any prompt containing 'opponent' is a prompt requesting opponent_pair_direction
-            enhanced_prompt = f"Prefer appending {st.session_state.opponent_pair_direction} instead of {st.session_state.pair_direction}. "
+        if up[0] == '"': # escape 'Prefer ...' appending
+            enhanced_prompt = ''
         else:
-            enhanced_prompt = f"Prefer appending {st.session_state.pair_direction} instead of {st.session_state.opponent_pair_direction}. "
-        #enhanced_prompt = f"Try appending _Declarer or "+enhanced_prompt+up.replace("'", "").replace('"', '')
+            if 'opponent' in up.lower():  # assumes any prompt containing 'opponent' is a prompt requesting opponent_pair_direction
+                enhanced_prompt = f"Prefer appending {st.session_state.opponent_pair_direction} instead of {st.session_state.pair_direction}. "
+            else:
+                enhanced_prompt = f"Prefer appending {st.session_state.pair_direction} instead of {st.session_state.opponent_pair_direction}. "
+            #enhanced_prompt = f"Try appending _Declarer or "+enhanced_prompt+up.replace("'", "").replace('"', '')
         enhanced_prompt += up.replace("'", "").replace('"', '')
         # todo: put this into config file.
         replacement_strings = [
@@ -197,16 +202,29 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
             assert first_choice['finish_reason'] == 'stop'
             # ?="} is a lookahead assertion
             # must remove newlines for regex to work
-            match = re.search(r'SELECT .*(?="})?$',
-                            assistant_message['content'].replace('\n', ''))
-            if match is None:
-                messages.append(
-                    {"role": "assistant", "content": assistant_message['content']})
-                # fake message
-                messages.append(
-                    {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
-                return False
-            sql_query = match[0]
+            if assistant_message["message"]['content'][0] == '{':
+                try:
+                    function_call_json = json.loads(
+                        assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
+                except Exception as e:
+                    print(f"Exception: Invalid JSON. Error: {e}")
+                    # fake message
+                    messages.append(
+                        {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
+                    return False
+                assert 'query' in function_call_json
+                sql_query = function_call_json['query']
+            else:
+                match = re.search(r'SELECT .*(?="})?$',
+                                assistant_message['content'].replace('\n', ''))
+                if match is None:
+                    messages.append(
+                        {"role": "assistant", "content": assistant_message['content']})
+                    # fake message
+                    messages.append(
+                        {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
+                    return False
+                sql_query = match[0]
         else:
             if first_choice['finish_reason'] == 'length':
                 # fake message
@@ -232,7 +250,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     print(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
-                        {"role": "assistant", "content": f"valid JSON. Error: {e}"})
+                        {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
                     return False
                 assert 'query' in function_call_json
                 sql_query = function_call_json['query']
@@ -600,7 +618,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                                 SQL should be written using this database schema:
                                 {st.session_state.df_schema_string}
                                 The schema contains table name, column name and column type.
-                                The returned value should be a plain text SQL query, not JSON.
+                                The returned value should be a plain text SQL query embedded in JSON.
                                 """,
                     }
                 },
@@ -793,7 +811,7 @@ def Predict_Game_Results():
     print(st.session_state.df.isna().sum())
     #st.session_state.df['Tricks'].fillna(.5,inplace=True)
     #st.session_state.df['Result'].fillna(.5,inplace=True)
-    st.session_state.df['Declarer_Rating'].fillna(1,inplace=True)
+    st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
     predicted_declarer_direction_NESW_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
     y_name = 'Declarer_Direction'
     class_labels = learn.dls.vocab
@@ -938,7 +956,7 @@ def reset_data():
 
 
 def app_info():
-    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Hosting provided by Huggingface. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
+    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
     # fastai:{fastai.__version__} pytorch:{fastai.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__}
     st.caption(
         f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
@@ -1061,7 +1079,7 @@ def create_sidebar():
                                     on_change=debug_player_number_names_change, key='debug_player_number_names_selectbox')
 
     st.sidebar.checkbox(
-        "Show SQL Queries", on_change=show_sql_query_change, key='sql_query_checkbox')
+        "Ninja Coder Mode (Show SQL Queries)", on_change=show_sql_query_change, key='sql_query_checkbox')
 
     if len(st.session_state.ai_apis):
         st.sidebar.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
@@ -1209,6 +1227,7 @@ def create_main_section():
                         continue
                     match = re.match(
                         r'```sql\n(.*)\n```', message['content'])
+                    print('message content:', message['content'], match)
                     if match is None:
                         # for unknown reasons, the sql query is returned in 'content'.
                         # hoping this is a SQL query
@@ -1225,9 +1244,9 @@ def create_main_section():
                 else:
                     assert False, message['role']
                 if st.session_state.show_sql_query:
-                    streamlit_chat.message(f"Guru: {sql_query}",
+                    streamlit_chat.message(f"Ninja Coder: {sql_query}",
                                         key='main.embedded_sql.'+str(i), logo=st.session_state.guru_logo)
-                    pdf_assets.append(f"Guru: {sql_query}")
+                    pdf_assets.append(f"Ninja Coder: {sql_query}")
                 # use sql query as key. get last dataframe in list.
                 assert len(
                     st.session_state.dataframes[sql_query]) > 0, "No dataframes for sql query."
@@ -1255,9 +1274,8 @@ def create_main_section():
                     f"Morty: {assistant_content}", key='main.dataframe.'+str(i), logo=st.session_state.assistant_logo)
                 pdf_assets.append(f"🥸 Morty: {assistant_content}")
                 df.index.name = 'Row'
-                # if len(df) > 1:  # Issue with AgGrid displaying Series.
                 streamlitlib.ShowDataFrameTable(
-                    df, key='main_messages_df_'+str(i), color_column=df.columns[1])
+                    df, key='main_messages_df_'+str(i), color_column=None if len(df.columns) <= 1 else df.columns[1]) # only colorize if more than one column.
                 pdf_assets.append(df)
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
@@ -1345,6 +1363,7 @@ def main():
         #         # todo: need to parse STREAMLIT_QUERY_STRING instead of hardcoding.
         #         if 'player_number' not in st.experimental_get_query_params():
         #             st.experimental_set_query_params(player_number=2663279)
+        # http://localhost:8501/?player_number=2663279
         if 'player_number' in st.experimental_get_query_params():
             player_number_l = st.experimental_get_query_params()['player_number']
             assert isinstance(player_number_l, list) and len(
