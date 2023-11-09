@@ -26,10 +26,10 @@ import asyncio
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
-DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
-DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
+DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
+DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
 DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
-DEFAULT_GPT4_AI_MODEL = "gpt-4-1106-preview"
+DEFAULT_GPT4_AI_MODEL = "gpt-4-1106-preview" # -1106 until Dec 11th 2023. 
 #DEFAULT_AI_MODEL = DEFAULT_GPT4_AI_MODEL
 DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
@@ -200,9 +200,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
             return False
         if "function_call" not in assistant_message:
             assert first_choice['finish_reason'] == 'stop'
-            # ?="} is a lookahead assertion
-            # must remove newlines for regex to work
-            if assistant_message["message"]['content'][0] == '{':
+            if assistant_message["message"]['content'][0] == '{': # added for 1106 response_format={"type":"json_object"}
                 try:
                     function_call_json = json.loads(
                         assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
@@ -215,6 +213,8 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                 assert 'query' in function_call_json
                 sql_query = function_call_json['query']
             else:
+                # ?="} is a lookahead assertion
+                # must remove newlines for regex to work
                 match = re.search(r'SELECT .*(?="})?$',
                                 assistant_message['content'].replace('\n', ''))
                 if match is None:
@@ -404,7 +404,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     st.session_state.tournament_session_urls = tournament_session_urls
 
     if session_id in game_urls:
-        with st.spinner(f"Creating data table of club game {session_id} for player {player_number}. Might take a minute ..."):
+        with st.spinner(f"Collecting data for club game {session_id} and player {player_number}. Might take a minute ..."):
             # game_urls[session_id][1] is detail_url
             dfs = create_club_dfs(player_number, game_urls[session_id][1])
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
@@ -460,7 +460,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 f"Session {session_id} is {dfs['score_score_type']}. Expecting an ACBL pairs match point session. Choose another session.")
             return False
 
-        with st.spinner(f"Retrieving tournament session {session_id} for player {player_number} from ACBL."):
+        with st.spinner(f"Collecting data for tournament session {session_id} and player {player_number} from ACBL."):
 
             response = get_tournament_session_results(session_id, acbl_api_key)
             assert response.status_code == 200, response.status_code
@@ -509,93 +509,94 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     # game appears valid. Save it.
     st.session_state.session_id = session_id
 
-    results = ask_database(st.session_state.commands_sql)
-    assert isinstance(results, duckdb.DuckDBPyConnection), results
-    df = results.df()  # update df with results of SQL query.
-    assert df is not None
-    move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS',
-                        'Pct_NS', 'ParScore_NS']  # arbitrary list of columns to show first
-    df = df[move_to_front + (df.columns.drop(move_to_front).tolist())]
-    df.index.name = 'Row'
-    st.session_state.df = df
-    st.session_state.matchpoint_ns_d = matchpoint_ns_d
+    with st.spinner(f"Creating everything data table."):
+        results = ask_database(st.session_state.commands_sql)
+        assert isinstance(results, duckdb.DuckDBPyConnection), results
+        df = results.df()  # update df with results of SQL query.
+        assert df is not None
+        move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS',
+                            'Pct_NS', 'ParScore_NS']  # arbitrary list of columns to show first
+        df = df[move_to_front + (df.columns.drop(move_to_front).tolist())]
+        df.index.name = 'Row'
+        st.session_state.df = df
+        st.session_state.matchpoint_ns_d = matchpoint_ns_d
 
-    # extract scalers
-    st.session_state.game_date = pd.to_datetime(st.session_state.df['Date'].iloc[0]).strftime(
-        '%Y-%m-%d')
-    assert st.session_state.df['event_id'].eq(session_id).all()
-    # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
-    # my_table_df['Date'] = st.session_state.game_date # temp?
-    for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
-        rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
-            player_number)]
-        if len(rows) > 0:
-            st.session_state.player_number = player_number
-            st.session_state.player_direction = player_direction
-            st.session_state.pair_direction = pair_direction
-            st.session_state.partner_direction = partner_direction
-            st.session_state.opponent_pair_direction = opponent_pair_direction
-            section_ids = rows['section_id']
-            assert section_ids.nunique() == 1, f"Oops. section_id non-unique."
-            st.session_state.section_id = section_ids.iloc[0]
-            section_names = rows['section_name']
-            assert section_names.nunique() == 1, f"Oops. section_name non-unique."
-            st.session_state.section_name = section_names.iloc[0]
-            player_names = rows[f"Player_Name_{player_direction[0]}"]
-            assert player_names.nunique() == 1, f"Oops. player_names non-unique."
-            st.session_state.player_name = player_names.iloc[0]
-            pair_numbers = rows[f"Pair_Number_{pair_direction}"]
-            assert pair_numbers.nunique() == 1,  f"Oops. pair_numbers non-unique."
-            st.session_state.pair_number = pair_numbers.iloc[0]
-            partner_numbers = rows[f"Player_Number_{partner_direction}"]
-            assert partner_numbers.nunique() == 1, f"Oops. partner_numbers non-unique."
-            st.session_state.partner_number = partner_numbers.iloc[0]
-            partner_names = rows[f"Player_Name_{partner_direction}"]
-            assert partner_names.nunique() == 1, f"Oops. partner_names non-unique."
-            st.session_state.partner_name = partner_names.iloc[0]
+        # extract scalers
+        st.session_state.game_date = pd.to_datetime(st.session_state.df['Date'].iloc[0]).strftime(
+            '%Y-%m-%d')
+        assert st.session_state.df['event_id'].eq(session_id).all()
+        # my_table_df = pd.DataFrame(pd.concat([dfs['event'],dfs['club']],axis='columns')) # single row of invariant data
+        # my_table_df['Date'] = st.session_state.game_date # temp?
+        for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
+            rows = df[df[f"Player_Number_{player_direction[0]}"].str.contains(
+                player_number)]
+            if len(rows) > 0:
+                st.session_state.player_number = player_number
+                st.session_state.player_direction = player_direction
+                st.session_state.pair_direction = pair_direction
+                st.session_state.partner_direction = partner_direction
+                st.session_state.opponent_pair_direction = opponent_pair_direction
+                section_ids = rows['section_id']
+                assert section_ids.nunique() == 1, f"Oops. section_id non-unique."
+                st.session_state.section_id = section_ids.iloc[0]
+                section_names = rows['section_name']
+                assert section_names.nunique() == 1, f"Oops. section_name non-unique."
+                st.session_state.section_name = section_names.iloc[0]
+                player_names = rows[f"Player_Name_{player_direction[0]}"]
+                assert player_names.nunique() == 1, f"Oops. player_names non-unique."
+                st.session_state.player_name = player_names.iloc[0]
+                pair_numbers = rows[f"Pair_Number_{pair_direction}"]
+                assert pair_numbers.nunique() == 1,  f"Oops. pair_numbers non-unique."
+                st.session_state.pair_number = pair_numbers.iloc[0]
+                partner_numbers = rows[f"Player_Number_{partner_direction}"]
+                assert partner_numbers.nunique() == 1, f"Oops. partner_numbers non-unique."
+                st.session_state.partner_number = partner_numbers.iloc[0]
+                partner_names = rows[f"Player_Name_{partner_direction}"]
+                assert partner_names.nunique() == 1, f"Oops. partner_names non-unique."
+                st.session_state.partner_name = partner_names.iloc[0]
 
-            # hack: this dopey hack works really well! chatgpt gets much less confused.
-            # create columns for these scalers just to make it easier to use them in SQL queries.
-            #df['My_Player_Number'] = st.session_state.player_number
-            #df['My_Player_Name'] = st.session_state.player_name
-            #df['My_Player_Direction'] = st.session_state.player_direction
-            #df['My_Pair_Direction'] = st.session_state.pair_direction
-            #df['My_Pair_Number'] = st.session_state.pair_number
-            #df['My_Partner_Number'] = st.session_state.partner_number
-            #df['My_Partner_Name'] = st.session_state.partner_name
-            #df['My_Partner_Direction'] = st.session_state.partner_direction
-            df['Opponent_Pair_Direction'] = st.session_state.opponent_pair_direction
-            df['My_Section'] = df['section_name'].eq(
-                st.session_state.section_name)
-            df['Our_Section'] = df['section_name'].eq(
-                st.session_state.section_name)
-            #df['Players'] = df.apply(lambda r: [r[f"Player_Number_{d}"] for d in 'NESW'],axis='columns')
-            df['My_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
-                st.session_state.pair_number)  # boolean
-            df['Our_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
-                st.session_state.pair_number)  # boolean # obsolete?
-            df['Boards_I_Played'] = df['My_Pair']  # boolean # obsolete?
-            df['Boards_We_Played'] = df['My_Pair']  # boolean
-            df['Our_Boards'] = df['My_Pair']  # boolean # obsolete?
-            df['Boards_I_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                st.session_state.player_number)  # boolean
-            df['Boards_We_Declared'] = df['My_Pair'] & df['Number_Declarer'].isin(
-                [st.session_state.player_number, st.session_state.partner_number])  # boolean
-            df['Boards_Partner_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                st.session_state.partner_number)  # boolean
-            df['Partners_Boards'] = df['My_Pair'] & df['Number_Declarer'].eq(
-                st.session_state.partner_number)  # boolean
-            df['Boards_Opponent_Declared'] = df['My_Pair'] & ~df['Number_Declarer'].isin(
-                [st.session_state.player_number, st.session_state.partner_number])  # boolean
-            break
+                # hack: this dopey hack works really well! chatgpt gets much less confused.
+                # create columns for these scalers just to make it easier to use them in SQL queries.
+                #df['My_Player_Number'] = st.session_state.player_number
+                #df['My_Player_Name'] = st.session_state.player_name
+                #df['My_Player_Direction'] = st.session_state.player_direction
+                #df['My_Pair_Direction'] = st.session_state.pair_direction
+                #df['My_Pair_Number'] = st.session_state.pair_number
+                #df['My_Partner_Number'] = st.session_state.partner_number
+                #df['My_Partner_Name'] = st.session_state.partner_name
+                #df['My_Partner_Direction'] = st.session_state.partner_direction
+                df['Opponent_Pair_Direction'] = st.session_state.opponent_pair_direction
+                df['My_Section'] = df['section_name'].eq(
+                    st.session_state.section_name)
+                df['Our_Section'] = df['section_name'].eq(
+                    st.session_state.section_name)
+                #df['Players'] = df.apply(lambda r: [r[f"Player_Number_{d}"] for d in 'NESW'],axis='columns')
+                df['My_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
+                    st.session_state.pair_number)  # boolean
+                df['Our_Pair'] = df['My_Section'] & df[f"Pair_Number_{st.session_state.pair_direction}"].eq(
+                    st.session_state.pair_number)  # boolean # obsolete?
+                df['Boards_I_Played'] = df['My_Pair']  # boolean # obsolete?
+                df['Boards_We_Played'] = df['My_Pair']  # boolean
+                df['Our_Boards'] = df['My_Pair']  # boolean # obsolete?
+                df['Boards_I_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                    st.session_state.player_number)  # boolean
+                df['Boards_We_Declared'] = df['My_Pair'] & df['Number_Declarer'].isin(
+                    [st.session_state.player_number, st.session_state.partner_number])  # boolean
+                df['Boards_Partner_Declared'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                    st.session_state.partner_number)  # boolean
+                df['Partners_Boards'] = df['My_Pair'] & df['Number_Declarer'].eq(
+                    st.session_state.partner_number)  # boolean
+                df['Boards_Opponent_Declared'] = df['My_Pair'] & ~df['Number_Declarer'].isin(
+                    [st.session_state.player_number, st.session_state.partner_number])  # boolean
+                break
 
-    # make predictions
-    Predict_Game_Results()
+        # make predictions
+        Predict_Game_Results()
 
-    # Create a DuckDB table from the DataFrame
-    # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
-    conn.register('results', df)
-    #conn.register('my_table', df)
+        # Create a DuckDB table from the DataFrame
+        # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
+        conn.register('results', df)
+        #conn.register('my_table', df)
 
     st.session_state.df_schema_string = create_schema_string(df, conn)
     # temp
