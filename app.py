@@ -163,15 +163,15 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         # request chat completion of user message
         chat_response = await create_chat_completion( # chat_completion_request(
             messages, model, function_calls)  # chat's response from user input
-        print('chat_response status:', chat_response)
+        print('chat_response status:', type(chat_response), chat_response)
+        chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
+        print('chat_response_json:', type(chat_response_json), chat_response_json)
+        print('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
+        print('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
 
         # restore original user prompt
         messages[-1] = {"role": "user", "content": up}
 
-        # convert chat's response's content to json
-        #chat_response_json = chat_response.json()
-        chat_response_json = chat_response # create_chat_completion returns json directly
-        print('chat_response_json:', chat_response_json)
         if "choices" not in chat_response_json or not isinstance(chat_response_json['choices'], list) or len(chat_response_json['choices']) == 0:
             # fake message
             if 'error' in chat_response_json and 'message' in chat_response_json['error']:
@@ -179,7 +179,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     {"role": "assistant", "content": chat_response_json['error']['message']})
             else:
                 messages.append(
-                    {"role": "assistant", "content": f"Unexpected response from {model}GPT (missing choices or zero length choices). Try again later."})
+                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices or zero length choices). Try again later."})
             return False
         # chat's first and best response message.
         first_choice = chat_response_json["choices"][0]
