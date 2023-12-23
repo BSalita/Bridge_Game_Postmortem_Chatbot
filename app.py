@@ -11,7 +11,8 @@ import pathlib
 import re
 import time
 import streamlit as st
-import openai # but openai 1.1.1 is missing ChatCompletion
+import openai
+from openai import AsyncOpenAI
 #from openai import openai_object  # used to suppress vscode type checking errors
 import pandas as pd
 import duckdb
@@ -25,7 +26,8 @@ import asyncio
 
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_async_client = AsyncOpenAI(api_key=openai_api_key)
 DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
 DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
 DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
@@ -60,7 +62,7 @@ savedModelsPath = rootPath.joinpath('SavedModels')
 # todo: obsolete in favor of complete_messages
 
 async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE, response_format={"type":"json_object"}):
-    return await openai.ChatCompletion.acreate(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
+    return await openai_async_client.chat.completions.create(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
 
 
 def ask_database(query):

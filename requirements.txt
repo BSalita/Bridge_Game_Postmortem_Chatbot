@@ -1,5 +1,5 @@
 # for app.py
-streamlit>=1.27
+streamlit
 openai
 pandas < 2.1.0
 duckdb
