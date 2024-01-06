@@ -824,6 +824,7 @@ def Predict_Game_Results():
     predicted_declarer_direction = [class_labels[l.argmax().item()] for l in predicted_declarer_direction_NESW_probs]
     st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
     st.session_state.df[y_name+'_Pred'] = predicted_declarer_direction
+    st.session_state.df['Declarer_Number_Pred'] = st.session_state.df.apply(lambda r: r['Player_Number_'+r[y_name+'_Actual']],axis='columns')
     st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
     st.session_state.df['Declarer_Pair_Direction_Match'] = st.session_state.df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
 

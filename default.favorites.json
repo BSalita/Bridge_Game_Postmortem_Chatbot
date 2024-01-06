@@ -67,7 +67,8 @@
 				"@Board_Results_Predictions",
 				"@Declarer_Direction_Predictions",
 				"@Declarer_Direction_Predictions_Statistics_By_Board",
-				"@Declarer_Direction_Predictions_Statistics_By_Declarer",
+				"@Declarer_Direction_Predictions_Statistics_By_Actual_Declarer",
+				"@Declarer_Direction_Predictions_Statistics_By_Predicted_Declarer",
 				"@Declarer_Probabilities_Statistics"
 			]
 		}
@@ -526,23 +527,34 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Board, ANY_VALUE(Parscore_NS) AS Parscore_NS, ANY_VALUE(Declarer_Direction_Pred) AS Predicted_Declarer, COUNT() AS Board_Plays, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds,  Correct_Preds/Board_Plays AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Board_Plays AS Correct_Pair_Pct FROM results GROUP BY Board ORDER BY Board"
+						"sql": "SELECT Board, ANY_VALUE(Parscore_NS) AS Parscore_NS, ANY_VALUE(Declarer_Direction_Pred) AS Predicted_Declarer, COUNT() AS Board_Plays, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, Correct_Preds/Board_Plays AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Board_Plays AS Correct_Pair_Pct FROM results GROUP BY Board ORDER BY Board"
 					}
 				]
 			},
-			"Declarer_Direction_Predictions_Statistics_By_Declarer": {
-				"title": "Declarer Direction Predictions Statistics Per Declarer",
-				"help": "**Statistics on declarer direction predictions per declarer. Predictions made before game starts.**",
+			"Declarer_Direction_Predictions_Statistics_By_Actual_Declarer": {
+				"title": "Declarer Direction Predictions Statistics Per Actual Declarer",
+				"help": "**Statistics on declarer direction predictions per actual declarer. Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Number_Declarer, ' - ', Name_Declarer, ' - ', Declarer_Direction) AS Player_Direction, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds,  COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Declared_Not_Predicted, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Number_Declarer, Name_Declarer, Declarer_Direction ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
+						"sql": "SELECT CONCAT(Number_Declarer, ' - ', Name_Declarer, ' - ', Declarer_Direction) AS Player, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Declared_Not_Predicted, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Number_Declarer, Name_Declarer, Declarer_Direction ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
+					}
+				]
+			},
+			"Declarer_Direction_Predictions_Statistics_By_Predicted_Declarer": {
+				"title": "Declarer Direction Statistics Per Predicted Predicted Declarer",
+				"help": "**Statistics on declarer direction predictions per predicted declarer. Predictions made before game starts.**",
+				"comment": "Only difference between this and above is Declared_Not_Predicted vs Predicted_Not_Declared. Learn how to combine.",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT CONCAT(Declarer_Number_Pred, ' - ', Name_Declarer, ' - ', Declarer_Direction_Pred) AS Player, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Predicted_Not_Declared, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Declarer_Number_Pred, Name_Declarer, Declarer_Direction_Pred ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
 					}
 				]
 			},
 			"Declarer_Probabilities_Statistics": {
-				"title": "Declarer Statistics and Statistics",
-				"help": "**Declarer Predictions and Statistics. Predictions made before game starts.**",
+				"title": "Declarer Performance Predictions and Statistics",
+				"help": "**Declarer Performance Predictions and Statistics. Predictions made before game starts.**",
 				"comment": "Need to scale Pct_NS_Pred and Pct_EW_Pred to 50%.",
 				"prompts": [
 					{
