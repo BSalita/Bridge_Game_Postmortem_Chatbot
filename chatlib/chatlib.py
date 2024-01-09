@@ -272,7 +272,7 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
         df_board_results['Date'] = pd.to_datetime(df_event['start_date'][0]) # converting to datetime64[ns] for human readable display purposes but will create 'iDate' (int64) in augment
         df_board_results['game_type'] = df_event['game_type'].astype('category') # for club compatibility
-        df_board_results['event_type'] = df_event['event_type'].astype('category') # for club compatibility
+        #df_board_results['event_type'] = df_event['event_type'].astype('category') # for club compatibility
         df_board_results['mp_limit'] = df_event['mp_limit'].astype('category') # for club compatibility
         df_board_results['mp_color'] = df_event['mp_color'].astype('category') # for club compatibility
         df_board_results['mp_rating'] = df_event['mp_rating'].astype('category') # for club compatibility
