@@ -86,6 +86,9 @@ def load_model(f):
     return load_learner(f)
 
 def get_predictions(learn, data):
+    data[learn.dls.train.x_names].info(verbose=True)
+    data[learn.dls.train.y_names].info(verbose=True)
+    assert set(learn.dls.train.x_names).difference(data.columns) == set(), f"df is missing column names which are in the model's training set:{set(learn.dls.train.x_names).difference(data.columns)}"
     dl = learn.dls.test_dl(data)
     probs, actual = learn.get_preds(dl=dl)
     return probs, actual
@@ -114,8 +117,6 @@ def make_predictions(f, data):
     Make predictions using a trained tabular model.
     """
     learn = load_learner(f)
-    data[learn.dls.train.x_names].info(verbose=True)
-    data[learn.dls.train.y_names].info(verbose=True)
     return get_predictions(learn, data)
 
 # obsolete pytorch stuff for app.py
