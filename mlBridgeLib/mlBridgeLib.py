@@ -63,7 +63,7 @@ def pd_options_display():
     pd.options.display.max_columns = 0
     pd.options.display.max_colwidth = 100
     pd.options.display.min_rows = 500
-    pd.options.display.max_rows = 50 # 0
+    pd.options.display.max_rows = 10 # 0 is unlimited. 10 will use head(10/2) and tail(10/2).
     pd.options.display.precision = 2
     pd.options.display.float_format = '{:.2f}'.format
 
