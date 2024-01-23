@@ -18,7 +18,7 @@ import pandas as pd
 import duckdb
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone 
 from dotenv import load_dotenv
 import streamlit_chat
 import asyncio
@@ -26,7 +26,9 @@ import asyncio
 
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
+assert acbl_api_key is not None, "ACBL_API_KEY environment variable not set. See README.md for instructions."
 openai_api_key = os.getenv("OPENAI_API_KEY")
+assert openai_api_key is not None, "OPENAI_API_KEY environment variable not set. See README.md for instructions."
 openai_async_client = AsyncOpenAI(api_key=openai_api_key)
 DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
 DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
@@ -804,6 +806,31 @@ def Predict_Game_Results():
 
     club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
 
+    st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
+
+    # create columns from model's predictions.
+    predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contracts_fastai_model.pkl"
+    predicted_contracts_model_file = savedModelsPath.joinpath(predicted_contracts_model_filename)
+    if not predicted_contracts_model_file.exists():
+        st.error(f"Oops. {predicted_contracts_model_filename} not found.")
+        return None
+    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
+    learn = mlBridgeAi.load_model(predicted_contracts_model_file)
+    print(st.session_state.df.isna().sum())
+    #st.session_state.df['Contract'] = st.session_state.df['Contract'].str.replace(' ','').str.upper() # todo: should not be needed if cleaned
+    # not needed here: st.session_state.df['Contract'] = st.session_state.df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else r['Contract'].replace('NT','N')+r['Declarer_Direction'],axis='columns')
+    # todo: assert that Contract equals BidLvl + BidSuit + Dbl + Declarer_Direction
+    assert st.session_state.df['Contract'].isin(mlBridgeLib.contract_classes).all(), st.session_state.df['Contract'][~st.session_state.df['Contract'].isin(mlBridgeLib.contract_classes)]
+    predicted_contract_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
+    y_name = 'Contract' # todo: get this from learn ynames
+    st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
+    st.session_state.df[y_name+'_Code_Actual'] = learn.dls.vocab.map_objs(st.session_state.df[y_name])
+    st.session_state.df[y_name+'_Code_Pred'] = [prob.argmax().item() for prob in predicted_contract_probs]
+    st.session_state.df[y_name+'_Pred'] = learn.dls.vocab.map_ids(st.session_state.df[y_name+'_Code_Pred'])
+    st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
+    st.session_state.df[y_name+'_Code_Match'] = st.session_state.df[y_name+'_Code_Actual'] == st.session_state.df[y_name+'_Code_Pred']
+
+    # create columns from model's predictions.
     predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_directions_fastai_model.pkl"
     predicted_directions_model_file = savedModelsPath.joinpath(predicted_directions_model_filename)
     if not predicted_directions_model_file.exists():
@@ -828,6 +855,7 @@ def Predict_Game_Results():
     st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
     st.session_state.df['Declarer_Pair_Direction_Match'] = st.session_state.df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
 
+    # create columns from model's predictions.
     predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_fastai_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
     if not predicted_rankings_model_file.exists():
@@ -963,7 +991,7 @@ def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
     # fastai:{fastai.__version__} pytorch:{fastai.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__}
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.experimental_get_query_params()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.query_params}")
 
 
 def create_sidebar():
@@ -1365,11 +1393,11 @@ def main():
         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
         #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:
         #         # todo: need to parse STREAMLIT_QUERY_STRING instead of hardcoding.
-        #         if 'player_number' not in st.experimental_get_query_params():
-        #             st.experimental_set_query_params(player_number=2663279)
+        #         if 'player_number' not in st.query_params:
+        #             obsolete? st.experimental_set_query_params(player_number=2663279)
         # http://localhost:8501/?player_number=2663279
-        if 'player_number' in st.experimental_get_query_params():
-            player_number_l = st.experimental_get_query_params()['player_number']
+        if 'player_number' in st.query_params:
+            player_number_l = st.query_params['player_number']
             assert isinstance(player_number_l, list) and len(
                 player_number_l) == 1, player_number_l
             player_number = player_number_l[0]

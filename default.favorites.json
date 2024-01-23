@@ -69,6 +69,8 @@
 				"@Declarer_Direction_Predictions_Statistics_By_Board",
 				"@Declarer_Direction_Predictions_Statistics_By_Actual_Declarer",
 				"@Declarer_Direction_Predictions_Statistics_By_Predicted_Declarer",
+				"@Contract_Predictions_Statistics_By_Board",
+				"@Contract_Predictions_Statistics_By_Board_By_Contract",
 				"@Declarer_Probabilities_Statistics"
 			]
 		}
@@ -549,6 +551,26 @@
 					{
 						"prompt": "",
 						"sql": "SELECT CONCAT(Declarer_Number_Pred, ' - ', Name_Declarer, ' - ', Declarer_Direction_Pred) AS Player, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Predicted_Not_Declared, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM results GROUP BY Declarer_Number_Pred, Name_Declarer, Declarer_Direction_Pred ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
+					}
+				]
+			},
+			"Contract_Predictions_Statistics_By_Board": {
+				"title": "Contract Predictions Statistics Per Table",
+				"help": "**Statistics on contract predictions per board number. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Board, CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' vs ', section_name, Pair_Number_EW, ' - ', Player_Name_E) AS NS_vs_EW, Contract, Contract_Pred FROM results ORDER BY Board, CONCAT(section_name, Pair_Number_NS)"
+					}
+				]
+			},
+			"Contract_Predictions_Statistics_By_Board_By_Contract": {
+				"title": "Contract Predictions Statistics Per Grouped Contract",
+				"help": "**Statistics on contract predictions per board number grouped by contract. Predictions made before game starts.**",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Board, Contract, Contract_Pred, COUNT() AS Board_Plays, SUM(CASE WHEN Contract = Contract_Pred THEN 1 ELSE 0 END) AS Correct_Preds, Correct_Preds/Board_Plays AS Correct_Contract_Pct FROM results GROUP BY Board, Contract, Contract_Pred ORDER BY Board"
 					}
 				]
 			},

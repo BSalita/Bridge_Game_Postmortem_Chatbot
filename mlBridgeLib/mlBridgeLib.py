@@ -56,6 +56,8 @@ PairDirectionToOpponentPairDirection = {'NS':'EW','EW':'NS'}
 allContracts = [(0,'Pass')]+[(l+1,s) for l in range(0,7) for s in CDHSN]
 allHigherContracts_d = {c:allContracts[n+1:] for n,c in enumerate(allContracts)}
 suit_names_d = {'S':'Spades','H':'Hearts','D':'Diamonds','C':'Clubs','N':'No-Trump'}
+contract_classes = ['PASS'] + [level+suit+dbl+decl for level in '1234567' for suit in 'CDHSN' for dbl in ['','X','XX'] for decl in 'NESW']
+contract_classes_dtype = pd.CategoricalDtype(contract_classes, ordered=False)
 
 
 def pd_options_display():

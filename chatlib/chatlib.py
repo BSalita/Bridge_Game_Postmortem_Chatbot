@@ -505,7 +505,7 @@ def clean_validate_df(df):
     drop_rows = ~df['Declarer_Direction'].isin(list('NESW')) # keep N,S,E,W. Drop EW, NS, w, ... < 500 cases.
     print('Invalid declarers: drop_rows:',drop_rows.sum(),df[drop_rows][['Declarer_Direction']])
     df.drop(df[drop_rows].index,inplace=True)
-    df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+' '+df['Declarer_Direction']
+    df.loc[df['Contract'].ne('PASS'),'Contract'] = df['BidLvl']+df['BidSuit']+df['Dbl']+df['Declarer_Direction']
     df['BidLvl'] = df['BidLvl'].astype('UInt8') # using UInt8 instead of uint8 because of NaNs
     assert (df['Contract'].eq('PASS')|df['BidLvl'].notna()).all()
     assert (df['Contract'].eq('PASS')|df['BidLvl'].between(1,7,inclusive='both')).all()

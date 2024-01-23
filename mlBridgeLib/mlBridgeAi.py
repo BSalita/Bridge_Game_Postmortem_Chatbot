@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
 
-def load_data(df, y_names, cont_names=None, cat_names=None, bs=4096, valid_pct=0.2, max_card=1000):
+def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_block=None, bs=None, valid_pct=None, max_card=None, device='cpu'):
     """
     Load and preprocess data using FastAI.
     """
@@ -38,8 +38,8 @@ def load_data(df, y_names, cont_names=None, cat_names=None, bs=4096, valid_pct=0
     # todo: accept default class of y_block. RegressionBlock for regression, CategoryBlock for classification.
 
     dls = TabularDataLoaders.from_df(df, y_names=y_names,
-                                     cat_names=cat_names, cont_names=cont_names, procs=[Categorify, FillMissing, Normalize],
-                                     bs=bs, splits=splits, num_workers=num_workers)
+                                     cat_names=cat_names, cont_names=cont_names, procs=procs, y_block=y_block,
+                                     bs=bs, splits=splits, num_workers=num_workers, device=device)
     
     return dls
 
@@ -85,11 +85,11 @@ def save_model(learn, f):
 def load_model(f):
     return load_learner(f)
 
-def get_predictions(learn, data):
+def get_predictions(learn, data, device='cpu'):
     data[learn.dls.train.x_names].info(verbose=True)
     data[learn.dls.train.y_names].info(verbose=True)
     assert set(learn.dls.train.x_names).difference(data.columns) == set(), f"df is missing column names which are in the model's training set:{set(learn.dls.train.x_names).difference(data.columns)}"
-    dl = learn.dls.test_dl(data)
+    dl = learn.dls.test_dl(data, device=device)
     probs, actual = learn.get_preds(dl=dl)
     return probs, actual
 
