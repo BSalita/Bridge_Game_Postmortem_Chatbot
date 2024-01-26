@@ -33,7 +33,7 @@ openai_async_client = AsyncOpenAI(api_key=openai_api_key)
 DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
 DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
 DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
-DEFAULT_GPT4_AI_MODEL = "gpt-4-1106-preview" # -1106 until Dec 11th 2023. 
+DEFAULT_GPT4_AI_MODEL = "gpt-4-turbo-preview" # preview is always newest
 #DEFAULT_AI_MODEL = DEFAULT_GPT4_AI_MODEL
 DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
@@ -1099,7 +1099,7 @@ def create_sidebar():
                         ups.append(up)
                 ask_questions_without_context(ups, st.session_state.ai_api)
 
-    with st.sidebar.expander('Advanced Settings', False):
+    with st.sidebar.expander('Developer Settings', False):
 
         if st.session_state.debug_favorites is not None:
             # favorite prompts selectboxes
