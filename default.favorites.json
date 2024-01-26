@@ -63,6 +63,7 @@
 			"help": "Show AI Predictions",
 			"comment": "@ in prompt means prompt is a key into ['SelectBoxes']['Vetted_Prompts'] list.",
 			"prompts": [
+				"@About",
 				"@Overall_Rankings_Predictions",
 				"@Board_Results_Predictions",
 				"@Declarer_Direction_Predictions",

@@ -663,7 +663,7 @@ def ask_questions_without_context(ups, model=None):
     function_calls = st.session_state.function_calls
     # ups can be a string, list of strings, or list of lists of strings.
     assert isinstance(ups, list), ups
-    with st.spinner(f"Waiting for {len(ups)} responses from {model}."):
+    with st.spinner(f"Waiting for responses."): # {len(ups)} responses from {model}."):
         tasks = []
         list_of_new_messages = []
         for i, up in enumerate(ups):
@@ -1211,16 +1211,21 @@ def create_tab_bar():
 def create_main_section():
 
     # using streamlit's st.chat_input because it stays put at bottom, chat.openai.com style. # was chat_input
-    if user_content := st.chat_input("Type your prompt here.", key='user_prompt_input'):
-        ask_a_question_with_context(user_content) # don't think DEFAULT_LARGE_AI_MODEL is needed?
+    if st.session_state.show_sql_query:
+        if user_content := st.chat_input("Type your prompt here.", key='user_prompt_input'):
+            ask_a_question_with_context(user_content) # don't think DEFAULT_LARGE_AI_MODEL is needed?
     # output all messages except the initial system message.
     # only system message
     if len(st.session_state.messages) == 1:
         # todo: put this message into config file.
         content = slash_about()
         streamlit_chat.message(f"Morty: {content}", key='create_main_section_about_message', logo=st.session_state.assistant_logo)
-        streamlit_chat.message(
-            f"Morty: Press the **Summarize** button in the left sidebar or ask me questions using the **prompt box below**. Queries take about 10 seconds to complete.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
+        if st.session_state.show_sql_query:
+            streamlit_chat.message(
+                f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar or ask me questions using the **prompt box below**. Queries take about 10 seconds to complete.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
+        else:
+            streamlit_chat.message(
+                f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
     else:
         with st.container():
 
@@ -1233,9 +1238,10 @@ def create_main_section():
                     assert i == 0, "First message should be system message."
                     continue
                 if message["role"] == "user":
-                    streamlit_chat.message(
-                        f"You: {message['content']}", is_user=True, key='chat_messages_user_'+str(i))
-                    pdf_assets.append(f"You: {message['content']}")
+                    if st.session_state.show_sql_query:
+                        streamlit_chat.message(
+                            f"You: {message['content']}", is_user=True, key='chat_messages_user_'+str(i))
+                        pdf_assets.append(f"You: {message['content']}")
                     user_prompt_help = ''
                     for k, prompt_sqls in st.session_state.vetted_prompts.items():
                         for prompt_sql in prompt_sqls['prompts']:
