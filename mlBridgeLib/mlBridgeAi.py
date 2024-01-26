@@ -1,12 +1,34 @@
 
 import pandas as pd
 import os
-from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
+from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, TabularPandas, CategoryBlock, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
 
-def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_block=None, bs=None, valid_pct=None, max_card=None, device='cpu'):
+def train_classifier(df, y_names, cat_names, cont_names, procs=None, valid_pct=0.2, seed=42, bs=1024*5, layers=[512,512,512], epochs=3, device='cuda'):
+    splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
+    to = TabularPandas(df, procs=procs,
+                    cat_names=cat_names,
+                    cont_names=cont_names,
+                    y_names=y_names,
+                    splits=splits_ilocs,
+                    #num_workers=10,
+                    y_block=CategoryBlock())
+    
+    # Create a DataLoader
+    dls = to.dataloaders(bs=bs, layers=layers, device=device) # cpu or cuda
+
+    # Create a tabular learner
+    learn = tabular_learner(dls, metrics=accuracy)
+
+    # Train the model
+    learn.fit_one_cycle(epochs) # 1 or 2 epochs is enough to get a good accuracy for large datasets
+    return to, dls, learn
+
+def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_block=None, bs=None, layers=[1024]*4, valid_pct=None, seed=42, max_card=None, device='cuda'):
     """
     Load and preprocess data using FastAI.
     """
+
+    print(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
     # Determine number of CPU cores and set workers to cores-1
     num_workers = os.cpu_count() - 1
     print(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
@@ -14,7 +36,7 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
         print(f"{len(cont_names)=} {cont_names=}")
     if cat_names is not None:
         print(f"{len(cat_names)=} {cat_names=}")
-    assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
+    # doesn't work for Contract. assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
     assert not df.isna().any().any()
     assert y_names in df, y_names
 
@@ -31,37 +53,42 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
     assert df[cont_names].select_dtypes(include=['category']).columns.size == 0, df[cont_names].select_dtypes(include=['category']).columns
 
     # Split the data into training and validation sets
-    splits = RandomSplitter(valid_pct=valid_pct)(range_of(df))
+    splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
+    #display(df.iloc[splits_ilocs[0]])
+    #display(df.iloc[splits_ilocs[1]])
     
     # Load data into FastAI's TabularDataLoaders
     # todo: experiment with specifying a dict of Category types for cat_names: ordinal_var_dict = {'size': ['small', 'medium', 'large']}
     # todo: accept default class of y_block. RegressionBlock for regression, CategoryBlock for classification.
 
-    dls = TabularDataLoaders.from_df(df, y_names=y_names,
-                                     cat_names=cat_names, cont_names=cont_names, procs=procs, y_block=y_block,
-                                     bs=bs, splits=splits, num_workers=num_workers, device=device)
+    to = TabularPandas(df, procs=procs,
+                    cat_names=cat_names,
+                    cont_names=cont_names,
+                    y_names=y_names,
+                    splits=splits_ilocs,
+                    #num_workers=10,
+                    y_block=y_block,
+                    )
     
-    return dls
+    dls = to.dataloaders(bs=bs, layers=layers, device=device) # cpu or cuda
 
-def train_classification(dls, epochs=20, layers=[1024]*4, monitor='accuracy', min_delta=0.001, patience=3):
+    return dls # return to?
+
+def train_classification(dls, epochs=3, monitor='accuracy', min_delta=0.001, patience=3):
     """
     Train a tabular model for classification.
     """
-    print(f"{epochs=} {layers=} {monitor=} {min_delta=} {patience=}")
-    # todo: check that y_names is category, not numeric.
+    print(f"{epochs=} {monitor=} {min_delta=} {patience=}")
 
-    learn = tabular_learner(dls, layers=layers, metrics=accuracy)
+    # Create a tabular learner
+    learn = tabular_learner(dls, metrics=accuracy)
 
-    # Use mixed precision training. slower and error.
-    # error: Can't get attribute 'AMPMode' on <module 'fastai.callback.fp16'
-    #learn.to_fp16() # to_fp32() or to_bf16()
-    
-    # Use one cycle policy for training with early stopping
-    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # todo: experiment with using lr_max?
+    # Train the model
+    learn.fit_one_cycle(epochs) #, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # sometimes only a couple epochs is optimal
     
     return learn
 
-def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.001, patience=3):
+def train_regression(dls, epochs=20,  layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.001, patience=3):
     """
     Train a tabular model for regression.
     """

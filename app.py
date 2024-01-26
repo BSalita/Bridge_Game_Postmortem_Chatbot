@@ -991,7 +991,7 @@ def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
     # fastai:{fastai.__version__} pytorch:{fastai.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__}
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.query_params}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.query_params.to_dict()}")
 
 
 def create_sidebar():
@@ -1099,27 +1099,26 @@ def create_sidebar():
                         ups.append(up)
                 ask_questions_without_context(ups, st.session_state.ai_api)
 
-    st.sidebar.divider()
-    st.sidebar.write('Advanced Settings')
+    with st.sidebar.expander('Advanced Settings', False):
 
-    if st.session_state.debug_favorites is not None:
-        # favorite prompts selectboxes
-        st.session_state.debug_player_number_names = st.session_state.debug_favorites[
-            'SelectBoxes']['Player_Numbers']['options']
-        if len(st.session_state.debug_player_number_names):
-            st.sidebar.selectbox("Debug Player List", options=st.session_state.debug_player_number_names, placeholder=st.session_state.debug_favorites['SelectBoxes']['Player_Numbers']['placeholder'],
-                                    on_change=debug_player_number_names_change, key='debug_player_number_names_selectbox')
+        if st.session_state.debug_favorites is not None:
+            # favorite prompts selectboxes
+            st.session_state.debug_player_number_names = st.session_state.debug_favorites[
+                'SelectBoxes']['Player_Numbers']['options']
+            if len(st.session_state.debug_player_number_names):
+                st.selectbox("Debug Player List", options=st.session_state.debug_player_number_names, placeholder=st.session_state.debug_favorites['SelectBoxes']['Player_Numbers']['placeholder'],
+                                        on_change=debug_player_number_names_change, key='debug_player_number_names_selectbox')
 
-    st.sidebar.checkbox(
-        "Ninja Coder Mode (Show SQL Queries)", on_change=show_sql_query_change, key='sql_query_checkbox')
+        st.checkbox(
+            "Ninja Coder Mode (Show SQL Queries)", on_change=show_sql_query_change, key='sql_query_checkbox')
 
-    if len(st.session_state.ai_apis):
-        st.sidebar.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
-                                on_change=ai_api_selectbox_change, key='ai_api_selectbox')
+        if len(st.session_state.ai_apis):
+            st.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
+                                    on_change=ai_api_selectbox_change, key='ai_api_selectbox')
 
-    # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
-    st.sidebar.number_input("Single Dummy Random Trials", min_value=1, max_value=100,
-                            value=st.session_state.sd_observations, on_change=sd_observations_changed, key='sd_observations_number_input')
+        # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
+        st.number_input("Single Dummy Random Trials", min_value=1, max_value=100,
+                                value=st.session_state.sd_observations, on_change=sd_observations_changed, key='sd_observations_number_input')
 
 
 def create_tab_bar():
@@ -1397,10 +1396,12 @@ def main():
         #             obsolete? st.experimental_set_query_params(player_number=2663279)
         # http://localhost:8501/?player_number=2663279
         if 'player_number' in st.query_params:
-            player_number_l = st.query_params['player_number']
-            assert isinstance(player_number_l, list) and len(
-                player_number_l) == 1, player_number_l
-            player_number = player_number_l[0]
+            player_number = st.query_params['player_number']
+            if not isinstance(player_number, str):
+                st.stop()
+            #assert isinstance(player_number_l, list) and len(
+            #    player_number_l) == 1, player_number_l
+            #player_number = player_number_l[0]
             if not chat_initialize(player_number, None):
                 st.stop()
 
