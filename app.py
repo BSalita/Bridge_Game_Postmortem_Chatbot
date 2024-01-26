@@ -637,9 +637,10 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     #content = slash_about()
     #streamlit_chat.message(f"Morty: {content}", logo=st.session_state.assistant_logo)
 
-    streamlit_chat.message(
-        f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
-    streamlitlib.ShowDataFrameTable(df, key='clear_conversation_game_data_df')
+    if st.session_state.show_sql_query:
+        streamlit_chat.message(
+            f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
+        streamlitlib.ShowDataFrameTable(df, key='clear_conversation_game_data_df')
 
     return True
 
