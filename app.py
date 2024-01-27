@@ -5,6 +5,11 @@
 
 #!pip install openai python-dotenv pandas --quiet
 
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def print_to_log(*args):
+    logging.info(' '.join(str(arg) for arg in args))
+
 import sys
 from collections import defaultdict
 import pathlib
@@ -68,14 +73,14 @@ async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=Non
 
 
 def ask_database(query):
-    print('ask_database query:', query)
+    print_to_log('ask_database query:', query)
     conn = st.session_state.conn
     #"""Function to query duckdb database with a provided SQL query."""
     try:
         results = conn.execute(query)
     except Exception as e:
         results = f"query failed with error: {e}"
-    print('ask_database: results:', results)
+    print_to_log('ask_database: results:', results)
     return results
 
 
@@ -158,18 +163,18 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         for original, new in replacement_strings:
             enhanced_prompt = re.sub(original, new, enhanced_prompt.replace(
                 '  ', ' '), flags=re.IGNORECASE)
-        print('enhanced_prompt:', enhanced_prompt)
+        print_to_log('enhanced_prompt:', enhanced_prompt)
         # add enhanced prompt to messages
         messages.append({"role": "user", "content": enhanced_prompt})
 
         # request chat completion of user message
         chat_response = await create_chat_completion( # chat_completion_request(
             messages, model, function_calls)  # chat's response from user input
-        print('chat_response status:', type(chat_response), chat_response)
+        print_to_log('chat_response status:', type(chat_response), chat_response)
         chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
-        print('chat_response_json:', type(chat_response_json), chat_response_json)
-        print('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
-        print('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
+        print_to_log('chat_response_json:', type(chat_response_json), chat_response_json)
+        print_to_log('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
+        print_to_log('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
 
         # restore original user prompt
         messages[-1] = {"role": "user", "content": up}
@@ -191,7 +196,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                 {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
             return False
         assistant_message = first_choice['message']
-        print('assistant_message:', assistant_message)
+        print_to_log('assistant_message:', assistant_message)
         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
             # fake message
             messages.append(
@@ -209,7 +214,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     function_call_json = json.loads(
                         assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
                 except Exception as e:
-                    print(f"Exception: Invalid JSON. Error: {e}")
+                    print_to_log(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
@@ -251,7 +256,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     function_call_json = json.loads(
                         assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
                 except Exception as e:
-                    print(f"Exception: Invalid JSON. Error: {e}")
+                    print_to_log(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
@@ -264,7 +269,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
 
     # todo: execute via function call, not explicitly
     ask_database_results = ask_database(sql_query)
-    print('ask_database_results:', ask_database_results)
+    print_to_log('ask_database_results:', ask_database_results)
     if not isinstance(ask_database_results, duckdb.DuckDBPyConnection):
         # fake message
         messages.append(
@@ -281,7 +286,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         messages.append({"role": "assistant", "content": sql_query})
     
     prompt_sql['sql'] = sql_query # will always return same sql for same query from now on. Is this what we want?
-    print('prompt_sql:', prompt_sql)
+    print_to_log('prompt_sql:', prompt_sql)
 
     return True
 
@@ -335,7 +340,7 @@ def create_schema_string(df, conn):
             df_dtypes_d[col] = dtype_name
             dtypes_d[dtype_name].append(col)
         for obj in complex_objects:
-            print(obj, df[obj].iloc[0])
+            print_to_log(str(obj), df[obj].iloc[0])
         df.drop(columns=complex_objects, inplace=True)
 
         # warning: fake sql CREATE TABLE because types are dtypes not sql types.
@@ -374,7 +379,7 @@ def create_schema_string(df, conn):
 
 def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
-    print(f"Retrieving latest results for {player_number}")
+    print_to_log(f"Retrieving latest results for {player_number}")
 
     conn = st.session_state.conn
 
@@ -415,7 +420,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 st.error(
                     f"Game {session_id} has missing or invalid game data. Select a different club game or tournament session from left sidebar.")
                 return False
-            print(dfs.keys())
+            print_to_log(dfs.keys())
 
             # todo: probably need to check if keys exist to control error processing -- pair_summaries, event, sessions, ...
 
@@ -452,7 +457,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(
                 f"Session {session_id} has missing or invalid session data. Choose another session.")
             return False
-        print(dfs.keys())
+        print_to_log(dfs.keys())
 
         if dfs['event']['game_type'] != 'Pairs':
             st.error(
@@ -473,7 +478,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
                 return False
-            print(dfs_results.keys())
+            print_to_log(dfs_results.keys())
 
             if len(dfs_results['sections']) == 0:
                 st.error(
@@ -657,7 +662,7 @@ def ask_questions_without_context(ups, model=None):
     # sdf = SmartDataframe(df, config={"llm": llm})
     # #sdf = SmartDataframe(df)
     # qdf = sdf.chat("Show board, contract")
-    # print('qdf:', qdf)
+    # print_to_log('qdf:', qdf)
 
     if model is None:
         model = st.session_state.ai_api
@@ -677,7 +682,7 @@ def ask_questions_without_context(ups, model=None):
         try:
             results = loop.run_until_complete(asyncio.gather(*tasks))
             #for result in results:
-            #    print(result)
+            #    print_to_log(result)
         finally:
             loop.close()
         for messages in list_of_new_messages:
@@ -817,7 +822,7 @@ def Predict_Game_Results():
         return None
     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
-    print(st.session_state.df.isna().sum())
+    print_to_log(st.session_state.df.isna().sum())
     #st.session_state.df['Contract'] = st.session_state.df['Contract'].str.replace(' ','').str.upper() # todo: should not be needed if cleaned
     # not needed here: st.session_state.df['Contract'] = st.session_state.df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else r['Contract'].replace('NT','N')+r['Declarer_Direction'],axis='columns')
     # todo: assert that Contract equals BidLvl + BidSuit + Dbl + Declarer_Direction
@@ -839,7 +844,7 @@ def Predict_Game_Results():
         return None
     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_directions_model_file)
-    print(st.session_state.df.isna().sum())
+    print_to_log(st.session_state.df.isna().sum())
     #st.session_state.df['Tricks'].fillna(.5,inplace=True)
     #st.session_state.df['Result'].fillna(.5,inplace=True)
     st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
@@ -955,7 +960,7 @@ def reset_data():
     st.session_state.section_name = None
 
     for k, v in st.session_state.items():
-        print(k)
+        print_to_log(k)
         if k.startswith('main_messages_df_'):
             # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
             #st.session_state[k].clear() # error: no such attribute as clear
@@ -1265,7 +1270,7 @@ def create_main_section():
                         continue
                     match = re.match(
                         r'```sql\n(.*)\n```', message['content'])
-                    print('message content:', message['content'], match)
+                    print_to_log('message content:', message['content'], match)
                     if match is None:
                         # for unknown reasons, the sql query is returned in 'content'.
                         # hoping this is a SQL query

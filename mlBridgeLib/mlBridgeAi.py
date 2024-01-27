@@ -1,4 +1,9 @@
 
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def print_to_log(*args):
+    logging.info(' '.join(str(arg) for arg in args))
+
 import pandas as pd
 import os
 from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, TabularPandas, CategoryBlock, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
@@ -28,14 +33,14 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
     Load and preprocess data using FastAI.
     """
 
-    print(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
+    print_to_log(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
     # Determine number of CPU cores and set workers to cores-1
     num_workers = os.cpu_count() - 1
-    print(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
+    print_to_log(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
     if cont_names is not None:
-        print(f"{len(cont_names)=} {cont_names=}")
+        print_to_log(f"{len(cont_names)=} {cont_names=}")
     if cat_names is not None:
-        print(f"{len(cat_names)=} {cat_names=}")
+        print_to_log(f"{len(cat_names)=} {cat_names=}")
     # doesn't work for Contract. assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
     assert not df.isna().any().any()
     assert y_names in df, y_names
@@ -44,9 +49,9 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
     if cont_names is None and cat_names is None:
         cont_names, cat_names = cont_cat_split(df, max_card=max_card, dep_var=y_names)
         if cont_names is not None:
-            print(f"{len(cont_names)=} {cont_names=}")
+            print_to_log(f"{len(cont_names)=} {cont_names=}")
         if cat_names is not None:
-            print(f"{len(cat_names)=} {cat_names=}")
+            print_to_log(f"{len(cat_names)=} {cat_names=}")
     assert y_names not in [cont_names + cat_names]
     assert set(cont_names).intersection(cat_names) == set(), set(cont_names).intersection(cat_names)
     assert set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns) == set(), set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns)
@@ -78,7 +83,7 @@ def train_classification(dls, epochs=3, monitor='accuracy', min_delta=0.001, pat
     """
     Train a tabular model for classification.
     """
-    print(f"{epochs=} {monitor=} {min_delta=} {patience=}")
+    print_to_log(f"{epochs=} {monitor=} {min_delta=} {patience=}")
 
     # Create a tabular learner
     learn = tabular_learner(dls, metrics=accuracy)
@@ -96,7 +101,7 @@ def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='va
     """
     Train a tabular model for regression.
     """
-    print(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
+    print_to_log(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
     # todo: check that y_names is numeric, not category.
 
     learn = tabular_learner(dls, layers=layers, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat.
@@ -199,7 +204,7 @@ def make_predictions(f, data):
     # with open(predicted_rankings_model_file,'rb') as f:
     #     model_state_dict = torch.load(f, map_location=torch.device('cpu'))
 
-    # print('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
+    # print_to_log('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
     # st.session_state.df.info(verbose=True)
     # assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set(), set(columns_to_scale).difference(set(st.session_state.df.columns))
 
