@@ -70,6 +70,7 @@
 				"@Declarer_Direction_Predictions_Statistics_By_Board",
 				"@Declarer_Direction_Predictions_Statistics_By_Actual_Declarer",
 				"@Declarer_Direction_Predictions_Statistics_By_Predicted_Declarer",
+				"@Contract_Predictions_Statistics_By_Boards_We_Played",
 				"@Contract_Predictions_Statistics_By_Board",
 				"@Contract_Predictions_Statistics_By_Board_By_Contract",
 				"@Declarer_Probabilities_Statistics"
@@ -213,7 +214,7 @@
 			},
 			"Rankings_Without_Gifts": {
 				"title": "Rank after removing gifted boards",
-				"help": "**Showing rankings of pairs after removing any gifted boards.**",
+				"help": "**Showing rankings of pairs after removing any gifted boards (NS, EW).**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -478,7 +479,7 @@
 			},
 			"Overall_Rankings_Predictions": {
 				"title": "Overall Rankings Predictions",
-				"help": "**Predicted final overall rankings. Predictions made before game starts.**",
+				"help": "**Predicted final overall rankings (NS, EW). Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -492,7 +493,7 @@
 			},
 			"Board_Results_Predictions": {
 				"title": "Board Results Predictions",
-				"help": "**Predicted board results percentages. Predictions made before game starts.**",
+				"help": "**Predicted board results percentages (NS, EW). Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -555,9 +556,20 @@
 					}
 				]
 			},
+			"Contract_Predictions_Statistics_By_Boards_We_Played": {
+				"title": "Contract Predictions Statistics for Boards We Played",
+				"help": "**Statistics on contract predictions for boards we played. Experimental. Predictions made before game starts.**",
+				"comment": "Need to implement par score, actual contract dd score, predicted contract dd score. Maybe SD scores too.",
+				"prompts": [
+					{
+						"prompt": "",
+						"sql": "SELECT Board, CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' vs ', section_name, Pair_Number_EW, ' - ', Player_Name_E) AS NS_vs_EW, Contract, Contract_Pred FROM results WHERE Boards_We_Played = True ORDER BY Board, CONCAT(section_name, Pair_Number_NS)"
+					}
+				]
+			},
 			"Contract_Predictions_Statistics_By_Board": {
 				"title": "Contract Predictions Statistics Per Table",
-				"help": "**Statistics on contract predictions per board number. Predictions made before game starts.**",
+				"help": "**Statistics on contract predictions per board number. Experimental. Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -567,7 +579,7 @@
 			},
 			"Contract_Predictions_Statistics_By_Board_By_Contract": {
 				"title": "Contract Predictions Statistics Per Grouped Contract",
-				"help": "**Statistics on contract predictions per board number grouped by contract. Predictions made before game starts.**",
+				"help": "**Statistics on contract predictions per board number grouped by contract. Experimental. Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -577,16 +589,16 @@
 			},
 			"Declarer_Probabilities_Statistics": {
 				"title": "Declarer Performance Predictions and Statistics",
-				"help": "**Declarer Performance Predictions and Statistics. Predictions made before game starts.**",
+				"help": "**Declarer Performance Predictions and Statistics (NS, EW). Predictions made before game starts.**",
 				"comment": "Need to scale Pct_NS_Pred and Pct_EW_Pred to 50%.",
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_NS, Name_Declarer AS Name, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM results WHERE Pair_Declarer_Direction='NS' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Number_Declarer AS Declarer_NS, Name_Declarer AS Name_NS, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM results WHERE Pair_Declarer_Direction='NS' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_EW, Name_Declarer AS Name, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM results WHERE Pair_Declarer_Direction='EW' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Number_Declarer AS Declarer_EW, Name_Declarer AS Name_EW, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM results WHERE Pair_Declarer_Direction='EW' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
 					}
 				]
 			}

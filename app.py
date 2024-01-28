@@ -1142,7 +1142,8 @@ def create_tab_bar():
             if st.session_state.df is not None:
                 # AgGrid unreliable in displaying within tab so using st.dataframe instead
                 # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
-                st.dataframe(st.session_state.df)
+                streamlitlib.ShowDataFrameTable(st.session_state.df, key='data_tab_df')
+                #st.dataframe(st.session_state.df)
 
         with dtypes:
             # AgGrid unreliable in displaying within tab. Also issue with Series.

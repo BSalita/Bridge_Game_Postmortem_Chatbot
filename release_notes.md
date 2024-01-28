@@ -44,6 +44,7 @@
 28. Highlight columns used in ORDER BY? Requires parsing of SQL statement.
 29. Experiment with charts. Use ChartAI?
 30. Flesh out README.md
+31. In default.favorites.json file, implement ability to specify a "help" for each "prompt" instead of just top one. Useful for NS, EW prompts.
 
 ## Prompt Issues
 0. Show unlikely scores because out of range for contract. e.g. 3N wrong direction.
