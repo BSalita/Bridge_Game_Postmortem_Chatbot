@@ -6,9 +6,15 @@
 #!pip install openai python-dotenv pandas --quiet
 
 import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # or DEBUG
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-def print_to_log(*args):
-    logging.info(' '.join(str(arg) for arg in args))
+def print_to_log_info(*args):
+    print_to_log(logging.INFO, *args)
+def print_to_log_debug(*args):
+    print_to_log(logging.DEBUG, *args)
+def print_to_log(level, *args):
+    logging.log(level, ' '.join(str(arg) for arg in args))
 
 import sys
 from collections import defaultdict
@@ -73,14 +79,14 @@ async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=Non
 
 
 def ask_database(query):
-    print_to_log('ask_database query:', query)
+    print_to_log_info('ask_database query:', query)
     conn = st.session_state.conn
     #"""Function to query duckdb database with a provided SQL query."""
     try:
         results = conn.execute(query)
     except Exception as e:
         results = f"query failed with error: {e}"
-    print_to_log('ask_database: results:', results)
+    print_to_log_info('ask_database: results:', results)
     return results
 
 
@@ -163,18 +169,18 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         for original, new in replacement_strings:
             enhanced_prompt = re.sub(original, new, enhanced_prompt.replace(
                 '  ', ' '), flags=re.IGNORECASE)
-        print_to_log('enhanced_prompt:', enhanced_prompt)
+        print_to_log_info('enhanced_prompt:', enhanced_prompt)
         # add enhanced prompt to messages
         messages.append({"role": "user", "content": enhanced_prompt})
 
         # request chat completion of user message
         chat_response = await create_chat_completion( # chat_completion_request(
             messages, model, function_calls)  # chat's response from user input
-        print_to_log('chat_response status:', type(chat_response), chat_response)
+        print_to_log_info('chat_response status:', type(chat_response), chat_response)
         chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
-        print_to_log('chat_response_json:', type(chat_response_json), chat_response_json)
-        print_to_log('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
-        print_to_log('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
+        print_to_log_info('chat_response_json:', type(chat_response_json), chat_response_json)
+        print_to_log_info('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
+        print_to_log_info('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
 
         # restore original user prompt
         messages[-1] = {"role": "user", "content": up}
@@ -196,7 +202,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                 {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
             return False
         assistant_message = first_choice['message']
-        print_to_log('assistant_message:', assistant_message)
+        print_to_log_info('assistant_message:', assistant_message)
         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
             # fake message
             messages.append(
@@ -214,7 +220,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     function_call_json = json.loads(
                         assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
                 except Exception as e:
-                    print_to_log(f"Exception: Invalid JSON. Error: {e}")
+                    print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
@@ -256,7 +262,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
                     function_call_json = json.loads(
                         assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
                 except Exception as e:
-                    print_to_log(f"Exception: Invalid JSON. Error: {e}")
+                    print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
                     # fake message
                     messages.append(
                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
@@ -269,7 +275,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
 
     # todo: execute via function call, not explicitly
     ask_database_results = ask_database(sql_query)
-    print_to_log('ask_database_results:', ask_database_results)
+    print_to_log_info('ask_database_results:', ask_database_results)
     if not isinstance(ask_database_results, duckdb.DuckDBPyConnection):
         # fake message
         messages.append(
@@ -286,7 +292,7 @@ async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
         messages.append({"role": "assistant", "content": sql_query})
     
     prompt_sql['sql'] = sql_query # will always return same sql for same query from now on. Is this what we want?
-    print_to_log('prompt_sql:', prompt_sql)
+    print_to_log_info('prompt_sql:', prompt_sql)
 
     return True
 
@@ -340,7 +346,7 @@ def create_schema_string(df, conn):
             df_dtypes_d[col] = dtype_name
             dtypes_d[dtype_name].append(col)
         for obj in complex_objects:
-            print_to_log(str(obj), df[obj].iloc[0])
+            print_to_log_debug(str(obj), df[obj].iloc[0])
         df.drop(columns=complex_objects, inplace=True)
 
         # warning: fake sql CREATE TABLE because types are dtypes not sql types.
@@ -379,11 +385,12 @@ def create_schema_string(df, conn):
 
 def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
-    print_to_log(f"Retrieving latest results for {player_number}")
+    print_to_log_info(f"Retrieving latest results for {player_number}")
 
     conn = st.session_state.conn
 
     with st.spinner(f"Retrieving a list of games for {player_number} ..."):
+        t = time.time()
         game_urls = get_club_results_from_acbl_number(player_number)
         if game_urls is None:
             st.error(f"Player number {player_number} not found.")
@@ -392,8 +399,10 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(f"Could not find any club games for {player_number}.")
         elif session_id is None:
             session_id = list(game_urls.keys())[0]  # default to most recent club game
+        print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_number} ..."):
+        t = time.time()
         tournament_session_urls = get_tournament_sessions_from_acbl_number(player_number, acbl_api_key) # returns [url, url, description, dfs]
         if tournament_session_urls is None:
             st.error(f"Player number {player_number} not found.")
@@ -402,6 +411,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(f"Could not find any tournament sessions for {player_number}.")
         elif session_id is None:
             session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
+        print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
 
     if session_id is None:
         st.error(f"Could not find any club or tournament sessions for {player_number}.")
@@ -414,13 +424,14 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
 
     if session_id in game_urls:
         with st.spinner(f"Collecting data for club game {session_id} and player {player_number}. Might take a minute ..."):
+            t = time.time()
             # game_urls[session_id][1] is detail_url
             dfs = create_club_dfs(player_number, game_urls[session_id][1])
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
                 st.error(
                     f"Game {session_id} has missing or invalid game data. Select a different club game or tournament session from left sidebar.")
                 return False
-            print_to_log(dfs.keys())
+            print_to_log_info('dfs:',dfs.keys())
 
             # todo: probably need to check if keys exist to control error processing -- pair_summaries, event, sessions, ...
 
@@ -443,13 +454,16 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 st.error(
                     f"Game {session_id} is {dfs['sessions']['hand_record_id'].iloc[0]}. Expecting a valid hand record number. Select a different club game or tournament session from left sidebar.")
                 return False
+            print_to_log_info('create_club_dfs time:', time.time()-t) # takes 3s
 
-            #with Profiler():
+        with st.spinner(f"Processing data for club game: {session_id} and player {player_number}. Takes 30 seconds ..."):
+            t = time.time()
             df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_number) # doesn't use any caching
             if df is None:
                 st.error(
                     f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
                 return False
+            print_to_log_info('merge_clean_augment_club_dfs time:', time.time()-t) # takes 30s
 
     elif session_id in tournament_session_urls:
         dfs = tournament_session_urls[session_id][3]
@@ -457,7 +471,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             st.error(
                 f"Session {session_id} has missing or invalid session data. Choose another session.")
             return False
-        print_to_log(dfs.keys())
+        print_to_log_info(dfs.keys())
 
         if dfs['event']['game_type'] != 'Pairs':
             st.error(
@@ -470,6 +484,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
             return False
 
         with st.spinner(f"Collecting data for tournament session {session_id} and player {player_number} from ACBL."):
+            t = time.time()
 
             response = get_tournament_session_results(session_id, acbl_api_key)
             assert response.status_code == 200, response.status_code
@@ -478,7 +493,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
                 return False
-            print_to_log(dfs_results.keys())
+            print_to_log_info('dfs_results:',dfs_results.keys())
 
             if len(dfs_results['sections']) == 0:
                 st.error(
@@ -501,8 +516,10 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                     st.error(
                         f"Session {session_id} section {section['section_label']} is {section['movement_type']}. I can only chat about Mitchell movements. Choose another session.")
                     return False
+            print_to_log_info('get_tournament_session_results time:', time.time()-t)
 
         with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}. Might take a minute ..."):
+            t = time.time()
             #with Profiler():
 
             df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], dfs_results, acbl_api_key, player_number) # doesn't use any caching
@@ -510,6 +527,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
                 return False
+            print_to_log_info('merge_clean_augment_tournament_dfs time:', time.time()-t)
 
         st.session_state.dfs_results = dfs_results
     else:
@@ -519,6 +537,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     st.session_state.session_id = session_id
 
     with st.spinner(f"Creating everything data table."):
+        t = time.time()
         results = ask_database(st.session_state.commands_sql)
         assert isinstance(results, duckdb.DuckDBPyConnection), results
         df = results.df()  # update df with results of SQL query.
@@ -598,14 +617,18 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                 df['Boards_Opponent_Declared'] = df['My_Pair'] & ~df['Number_Declarer'].isin(
                     [st.session_state.player_number, st.session_state.partner_number])  # boolean
                 break
+        print_to_log_info('create everything data table time:', time.time()-t)
 
-        # make predictions
+    # make predictions
+    with st.spinner(f"Making AI Predictions."):
+        t = time.time()
         Predict_Game_Results()
+        print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
-        # Create a DuckDB table from the DataFrame
-        # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
-        conn.register('results', df)
-        #conn.register('my_table', df)
+    # Create a DuckDB table from the DataFrame
+    # register df as a table named 'results' for duckdb discovery. SQL queries will reference this df/table.
+    conn.register('results', df)
+    #conn.register('my_table', df)
 
     st.session_state.df_schema_string = create_schema_string(df, conn)
     # temp
@@ -643,9 +666,11 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     #streamlit_chat.message(f"Morty: {content}", logo=st.session_state.assistant_logo)
 
     if st.session_state.show_sql_query:
+        t = time.time()
         streamlit_chat.message(
             f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
         streamlitlib.ShowDataFrameTable(df, key='clear_conversation_game_data_df')
+        print_to_log_info('ShowDataFrameTable time:', time.time()-t)
 
     return True
 
@@ -691,6 +716,7 @@ def ask_questions_without_context(ups, model=None):
 
 
 def ask_a_question_with_context(ups, model=None):
+    t = time.time()
     if model is None:
         model = st.session_state.ai_api
     messages = st.session_state.messages
@@ -706,6 +732,7 @@ def ask_a_question_with_context(ups, model=None):
         with st.spinner(f"Waiting for response from {model}."):
             chat_up_user(ups, messages, function_calls, model)
     st.session_state.messages = messages
+    print_to_log_info('ask_a_question_with_context time:', time.time()-t)
 
 
 def reset_messages():
@@ -822,7 +849,7 @@ def Predict_Game_Results():
         return None
     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
-    print_to_log(st.session_state.df.isna().sum())
+    print_to_log_debug('isna:',st.session_state.df.isna().sum())
     #st.session_state.df['Contract'] = st.session_state.df['Contract'].str.replace(' ','').str.upper() # todo: should not be needed if cleaned
     # not needed here: st.session_state.df['Contract'] = st.session_state.df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else r['Contract'].replace('NT','N')+r['Declarer_Direction'],axis='columns')
     # todo: assert that Contract equals BidLvl + BidSuit + Dbl + Declarer_Direction
@@ -844,7 +871,7 @@ def Predict_Game_Results():
         return None
     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_directions_model_file)
-    print_to_log(st.session_state.df.isna().sum())
+    print_to_log_debug('isna:',st.session_state.df.isna().sum())
     #st.session_state.df['Tricks'].fillna(.5,inplace=True)
     #st.session_state.df['Result'].fillna(.5,inplace=True)
     st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
@@ -868,7 +895,9 @@ def Predict_Game_Results():
         st.error(f"Oops. {predicted_rankings_model_file} not found.")
         return None
     y_name = 'Pct_NS'
-    predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
+    #predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
+    learn = mlBridgeAi.load_model(predicted_rankings_model_file)
+    predicted_board_result_pcts_ns, _ = mlBridgeAi.get_predictions(learn, st.session_state.df)
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
     st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
@@ -902,6 +931,8 @@ def read_favorites():
 def reset_data():
     # resets all data. used initially and when player number changes.
     # todo: put all session state into st.session_state.data so that clearing data clears all session states.
+
+    print_to_log_info('reset_data()')
 
     # app
     #st.session_state.app_datetime = None
@@ -960,7 +991,7 @@ def reset_data():
     st.session_state.section_name = None
 
     for k, v in st.session_state.items():
-        print_to_log(k)
+        print_to_log_info('session_state:',k)
         if k.startswith('main_messages_df_'):
             # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
             #st.session_state[k].clear() # error: no such attribute as clear
@@ -1002,6 +1033,8 @@ def app_info():
 
 def create_sidebar():
     
+    t = time.time()
+
     st.sidebar.caption(st.session_state.app_datetime)
 
     st.sidebar.text_input(
@@ -1126,9 +1159,11 @@ def create_sidebar():
         st.number_input("Single Dummy Random Trials", min_value=1, max_value=100,
                                 value=st.session_state.sd_observations, on_change=sd_observations_changed, key='sd_observations_number_input')
 
+    print_to_log_info('create_sidebar time:', time.time()-t)
 
 def create_tab_bar():
 
+    t = time.time()
     with st.container():
 
         chat_tab, data, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
@@ -1214,6 +1249,7 @@ def create_tab_bar():
             st.header('Debug')
             st.write('Not yet implemented.')
 
+    print_to_log_info('create_tab_bar time:', time.time()-t)
 
 def create_main_section():
 
@@ -1223,6 +1259,7 @@ def create_main_section():
             ask_a_question_with_context(user_content) # don't think DEFAULT_LARGE_AI_MODEL is needed?
     # output all messages except the initial system message.
     # only system message
+    t = time.time()
     if len(st.session_state.messages) == 1:
         # todo: put this message into config file.
         content = slash_about()
@@ -1271,7 +1308,7 @@ def create_main_section():
                         continue
                     match = re.match(
                         r'```sql\n(.*)\n```', message['content'])
-                    print_to_log('message content:', message['content'], match)
+                    print_to_log_info('message content:', message['content'], match)
                     if match is None:
                         # for unknown reasons, the sql query is returned in 'content'.
                         # hoping this is a SQL query
@@ -1344,6 +1381,7 @@ def create_main_section():
     # st.components.v1.html(js)
 
     streamlitlib.move_focus()
+    print_to_log_info('create_main_section time:', time.time()-t)
 
 
 def main():

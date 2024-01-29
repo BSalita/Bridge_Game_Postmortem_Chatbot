@@ -11,9 +11,15 @@
 
 
 import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # or DEBUG
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-def print_to_log(*args):
-    logging.info(' '.join(str(arg) for arg in args))
+def print_to_log_info(*args):
+    print_to_log(logging.INFO, *args)
+def print_to_log_debug(*args):
+    print_to_log(logging.DEBUG, *args)
+def print_to_log(level, *args):
+    logging.log(level, ' '.join(str(arg) for arg in args))
 
 import numpy as np
 import pandas as pd
@@ -277,12 +283,12 @@ def validate_brs(brs):
     sorted_brs = '22223333444455556666777788889999AAAACCCCDDDDHHHHJJJJKKKKQQQQSSSSTTTT' # sorted brs must match this string
     s = brs.replace('10','T')
     if ''.join(sorted(s)) != sorted_brs:
-        print_to_log('validate_brs: Invalid brs:', brs, s)
+        print_to_log_info('validate_brs: Invalid brs:', brs, s)
         return False
     for i in range(0,len(sorted_brs),len(sorted_brs)*4):
         split_shdc = re.split(r'[SHDC]',s[i:i+13+4])
         if len(split_shdc) != 4+1 or sum(map(len,split_shdc)) != 13: # not validating sort order. call it correct-ish.
-            print_to_log('validate_brs: Invalid len:', i, brs, s[i:i+13+4], split_shdc)
+            print_to_log_info('validate_brs: Invalid len:', i, brs, s[i:i+13+4], split_shdc)
             return False
     return True
 
@@ -479,7 +485,7 @@ def CategorifyContractTypeByDirection(df):
     cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
     for c in cols:
         for t in contract_types:
-            print_to_log(c,t,len((t == df[c]).values))
+            print_to_log_debug('CT:',c,t,len((t == df[c]).values))
             new_c = c+'_'+t
             contract_types_d[new_c] = (t == df[c]).values
     return contract_types_d
@@ -621,7 +627,7 @@ def FilterBoards(df, cn=None, vul=None, direction=None, suit=None, contractType=
         elif vul == 'Both':
             df = df[df['Vul_NS'] & df['Vul_NS']]  # only Both
         else:
-            print_to_log(f'FilterBoards: Error: Invalid vul:{vul}')
+            print_to_log_info(f'FilterBoards: Error: Invalid vul:{vul}')
     if not direction is None:
         # either 'NS','EW' # Single direction is problematic so using NS, EW
         df = df[df['Par_Dir'] == direction]
@@ -942,7 +948,7 @@ def ListOfClubsToProcess(clubNumbers, inputFiles, outputFiles, clubsPath, forceR
         clubDir = clubsPath.joinpath(clubNumber.name)
         # all input files must exist
         if sum([not clubDir.joinpath(inputFileToProcess).exists() for inputFileToProcess in inputFiles]) != 0:
-            print_to_log(
+            print_to_log_info(
                 f'ListOfClubsToProcess: Club {clubNumber.name} has some missing input files: {inputFiles}: skipping.')
             continue
         # creating list of input file sizes, first file only, for later sorting.
@@ -1143,7 +1149,7 @@ def json_walk_print(key,value):
     else:
         if type(value) is str:
             value = '"'+value+'"'
-        print_to_log(key+'='+str(value))
+        print_to_log_debug(key+'='+str(value))
     return
 
 

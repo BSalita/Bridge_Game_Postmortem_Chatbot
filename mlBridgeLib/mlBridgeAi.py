@@ -1,14 +1,22 @@
 
 import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # or DEBUG
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-def print_to_log(*args):
-    logging.info(' '.join(str(arg) for arg in args))
+def print_to_log_info(*args):
+    print_to_log(logging.INFO, *args)
+def print_to_log_debug(*args):
+    print_to_log(logging.DEBUG, *args)
+def print_to_log(level, *args):
+    logging.log(level, ' '.join(str(arg) for arg in args))
 
 import pandas as pd
 import os
 from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, TabularPandas, CategoryBlock, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
+import time
 
 def train_classifier(df, y_names, cat_names, cont_names, procs=None, valid_pct=0.2, seed=42, bs=1024*5, layers=[512,512,512], epochs=3, device='cuda'):
+    t = time.time()
     splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
     to = TabularPandas(df, procs=procs,
                     cat_names=cat_names,
@@ -26,21 +34,23 @@ def train_classifier(df, y_names, cat_names, cont_names, procs=None, valid_pct=0
 
     # Train the model
     learn.fit_one_cycle(epochs) # 1 or 2 epochs is enough to get a good accuracy for large datasets
+    print_to_log_info('train_classifier time:', time.time()-t)
     return to, dls, learn
 
+# obsolete?
 def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_block=None, bs=None, layers=[1024]*4, valid_pct=None, seed=42, max_card=None, device='cuda'):
     """
     Load and preprocess data using FastAI.
     """
 
-    print_to_log(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
+    print_to_log_info(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
     # Determine number of CPU cores and set workers to cores-1
     num_workers = os.cpu_count() - 1
-    print_to_log(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
+    print_to_log_info(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
     if cont_names is not None:
-        print_to_log(f"{len(cont_names)=} {cont_names=}")
+        print_to_log_info(f"{len(cont_names)=} {cont_names=}")
     if cat_names is not None:
-        print_to_log(f"{len(cat_names)=} {cat_names=}")
+        print_to_log_info(f"{len(cat_names)=} {cat_names=}")
     # doesn't work for Contract. assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
     assert not df.isna().any().any()
     assert y_names in df, y_names
@@ -49,9 +59,9 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
     if cont_names is None and cat_names is None:
         cont_names, cat_names = cont_cat_split(df, max_card=max_card, dep_var=y_names)
         if cont_names is not None:
-            print_to_log(f"{len(cont_names)=} {cont_names=}")
+            print_to_log_info(f"{len(cont_names)=} {cont_names=}")
         if cat_names is not None:
-            print_to_log(f"{len(cat_names)=} {cat_names=}")
+            print_to_log_info(f"{len(cat_names)=} {cat_names=}")
     assert y_names not in [cont_names + cat_names]
     assert set(cont_names).intersection(cat_names) == set(), set(cont_names).intersection(cat_names)
     assert set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns) == set(), set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns)
@@ -79,11 +89,12 @@ def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_b
 
     return dls # return to?
 
+# obsolete?
 def train_classification(dls, epochs=3, monitor='accuracy', min_delta=0.001, patience=3):
     """
     Train a tabular model for classification.
     """
-    print_to_log(f"{epochs=} {monitor=} {min_delta=} {patience=}")
+    print_to_log_info(f"{epochs=} {monitor=} {min_delta=} {patience=}")
 
     # Create a tabular learner
     learn = tabular_learner(dls, metrics=accuracy)
@@ -101,7 +112,7 @@ def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='va
     """
     Train a tabular model for regression.
     """
-    print_to_log(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
+    print_to_log_info(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
     # todo: check that y_names is numeric, not category.
 
     learn = tabular_learner(dls, layers=layers, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat.
@@ -116,17 +127,25 @@ def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='va
     return learn
 
 def save_model(learn, f):
+    t = time.time()
     learn.export(f)
+    print_to_log_info('save_model time:', time.time()-t)
 
 def load_model(f):
-    return load_learner(f)
+    t = time.time()
+    learn = load_learner(f)
+    print_to_log_info('load_model time:', time.time()-t)
+    return learn
 
 def get_predictions(learn, data, device='cpu'):
-    data[learn.dls.train.x_names].info(verbose=True)
-    data[learn.dls.train.y_names].info(verbose=True)
+    t = time.time()
+    if logger.isEnabledFor(logging.DEBUG):
+        data[learn.dls.train.x_names].info(verbose=True)
+        data[learn.dls.train.y_names].info(verbose=True)
     assert set(learn.dls.train.x_names).difference(data.columns) == set(), f"df is missing column names which are in the model's training set:{set(learn.dls.train.x_names).difference(data.columns)}"
     dl = learn.dls.test_dl(data, device=device)
     probs, actual = learn.get_preds(dl=dl)
+    print_to_log_info('get_predictions time:', time.time()-t)
     return probs, actual
 
 def predictions_to_df(data, y_names, preds):
@@ -205,7 +224,8 @@ def make_predictions(f, data):
     #     model_state_dict = torch.load(f, map_location=torch.device('cpu'))
 
     # print_to_log('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
-    # st.session_state.df.info(verbose=True)
+    # if logging.isEnabledFor(logging.DEBUG):
+    #     st.session_state.df.info(verbose=True)
     # assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set(), set(columns_to_scale).difference(set(st.session_state.df.columns))
 
     # df = st.session_state.df.copy()
