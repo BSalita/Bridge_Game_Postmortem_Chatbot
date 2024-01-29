@@ -569,7 +569,7 @@
 			},
 			"Contract_Predictions_Statistics_By_Board": {
 				"title": "Contract Predictions Statistics Per Table",
-				"help": "**Statistics on contract predictions per board number. Experimental. Predictions made before game starts.**",
+				"help": "**Statistics on contract predictions per board played. Experimental. Predictions made before game starts.**",
 				"prompts": [
 					{
 						"prompt": "",
