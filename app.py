@@ -423,7 +423,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     st.session_state.tournament_session_urls = tournament_session_urls
 
     if session_id in game_urls:
-        with st.spinner(f"Collecting data for club game {session_id} and player {player_number}. Might take a minute ..."):
+        with st.spinner(f"Collecting data for club game {session_id} and player {player_number}."):
             t = time.time()
             # game_urls[session_id][1] is detail_url
             dfs = create_club_dfs(player_number, game_urls[session_id][1])
@@ -518,7 +518,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
                     return False
             print_to_log_info('get_tournament_session_results time:', time.time()-t)
 
-        with st.spinner(f"Creating data table of tournament session {session_id} for player {player_number}. Might take a minute ..."):
+        with st.spinner(f"Processing data for tournament session {session_id} for player {player_number}. Takes 30 seconds ..."):
             t = time.time()
             #with Profiler():
 
@@ -620,7 +620,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
         print_to_log_info('create everything data table time:', time.time()-t)
 
     # make predictions
-    with st.spinner(f"Making AI Predictions."):
+    with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
         t = time.time()
         Predict_Game_Results()
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
@@ -694,7 +694,7 @@ def ask_questions_without_context(ups, model=None):
     function_calls = st.session_state.function_calls
     # ups can be a string, list of strings, or list of lists of strings.
     assert isinstance(ups, list), ups
-    with st.spinner(f"Waiting for responses."): # {len(ups)} responses from {model}."):
+    with st.spinner(f"Morty is thinking ..."): # {len(ups)} responses from {model}."):
         tasks = []
         list_of_new_messages = []
         for i, up in enumerate(ups):
@@ -720,9 +720,10 @@ def ask_a_question_with_context(ups, model=None):
     if model is None:
         model = st.session_state.ai_api
     messages = st.session_state.messages
-    if model != DEFAULT_LARGE_AI_MODEL:
-        if len(messages) > 12:
-            messages = messages[:1+3]+messages[1+3-10:]
+    # removed because no longer an issue?
+    #if model != DEFAULT_LARGE_AI_MODEL:
+    #    if len(messages) > 12:
+    #        messages = messages[:1+3]+messages[1+3-10:]
     function_calls = st.session_state.function_calls
     if isinstance(ups, list):
         for i, up in enumerate(ups):
@@ -990,12 +991,14 @@ def reset_data():
     st.session_state.section_id = None
     st.session_state.section_name = None
 
+    main_message_df_count = 0
     for k, v in st.session_state.items():
         print_to_log_info('session_state:',k)
         if k.startswith('main_messages_df_'):
             # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
-            #st.session_state[k].clear() # error: no such attribute as clear
-            pass
+            #del st.session_state[k] # delete the key. This is a hack. It's not clear why the key is not being deleted when the container is destroyed.
+            main_message_df_count += 1
+    print_to_log_info('main_message_df_: count:',main_message_df_count,st.session_state.df_unique_id)
 
     # These files are repeatedly reloaded for development purposes. Only takes a second.
 
@@ -1277,6 +1280,7 @@ def create_main_section():
             pdf_assets.append(f"# Bridge Game Postmortem Report Personalized for {st.session_state.player_number}")
             pdf_assets.append(f"### Created by http://postmortem.chat")
             pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.session_id}")
+            print_to_log_info('messages: len:', len(st.session_state.messages))
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "system":
                     assert i == 0, "First message should be system message."
@@ -1355,8 +1359,9 @@ def create_main_section():
                     f"Morty: {assistant_content}", key='main.dataframe.'+str(i), logo=st.session_state.assistant_logo)
                 pdf_assets.append(f"🥸 Morty: {assistant_content}")
                 df.index.name = 'Row'
+                st.session_state.df_unique_id += 1 # only needed because message dataframes aren't being released for some unknown reason.
                 streamlitlib.ShowDataFrameTable(
-                    df, key='main_messages_df_'+str(i), color_column=None if len(df.columns) <= 1 else df.columns[1]) # only colorize if more than one column.
+                    df, key='main_messages_df_'+str(st.session_state.df_unique_id), color_column=None if len(df.columns) <= 1 else df.columns[1]) # only colorize if more than one column.
                 pdf_assets.append(df)
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))
@@ -1365,7 +1370,7 @@ def create_main_section():
                     data=streamlitlib.create_pdf(pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_number}"),
                     file_name = f"{st.session_state.session_id}-{st.session_state.player_number}-morty.pdf",
                     mime='application/octet-stream'):
-                st.warning('download triggered') # todo: this never works. why?
+                st.warning('Personalized report downloaded.')
             #pdf_base64_encoded = streamlitlib.create_pdf(pdf_assets)
             #download_pdf_html = f'<a href="data:application/octet-stream;base64,{pdf_base64_encoded.decode()}" download="{st.session_state.session_id}-{st.session_state.player_number}-morty.pdf">Download Personalized Report</a>'
             #st.session_state.pdf_link.markdown(download_pdf_html, unsafe_allow_html=True) # pdf_link is really a previously created st.sidebar.empty().
@@ -1437,6 +1442,7 @@ def main():
         st.session_state.session_id = None
         st.session_state_tournament_session_id = None
         st.session_state.sd_observations = 10
+        st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
         st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
         st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
         # causes streamlit connection error
@@ -1474,11 +1480,13 @@ def main():
         streamlit_chat.message(
             "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
         streamlit_chat.message(
-            "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_2', logo=st.session_state.assistant_logo)
+            "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
         streamlit_chat.message(
-            "Enter any ACBL player number in the left sidebar.", key='intro_message_3', logo=st.session_state.assistant_logo)
+            "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
         streamlit_chat.message(
-            "I'm just a Proof of Concept so don't double me.", key='intro_message_4', logo=st.session_state.assistant_logo)
+            "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
+        streamlit_chat.message(
+            "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
         app_info()
 
     else:
