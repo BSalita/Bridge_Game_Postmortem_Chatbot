@@ -28,6 +28,7 @@
 8. ACBL Teams
 9. Other online bridge services.
 10. Further reduce autosizing of columns. Dataframes doesn't look minimized although reportlab does.
+11. Show max SD contract NS, EW. If contract went down, is it a better expected value than letting opponents have bid?
 13. Implement downloading of chat session or perhaps output as markdown.
 14. Show rankings of declarers by parscore, sd, sd max, dd, dd max, actual.
 15. Show rankings of declarers by number of doubles, pct of hands doubled, pct making, pct beating par score (successful sacrifice).
