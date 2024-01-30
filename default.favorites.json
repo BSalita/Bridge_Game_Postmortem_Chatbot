@@ -51,10 +51,9 @@
 				"@Our_Worst_Boards",
 				"@Boards_I_Declared",
 				"@Boards_Partner_Declared",
-				"@Actual_Score_Pcts",
-				"@Frequency_of_Contracts",
 				"@We_Got_Gifts",
 				"@Our_Mistakes",
+				"@ParScore_Rankings",
 				"@Percentage_Per_Round"
 			]
 		},
