@@ -694,7 +694,7 @@ def ask_questions_without_context(ups, model=None):
     function_calls = st.session_state.function_calls
     # ups can be a string, list of strings, or list of lists of strings.
     assert isinstance(ups, list), ups
-    with st.spinner(f"Morty is thinking ..."): # {len(ups)} responses from {model}."):
+    with st.spinner(f"Morty is judging you ..."): # {len(ups)} responses from {model}."):
         tasks = []
         list_of_new_messages = []
         for i, up in enumerate(ups):
@@ -885,7 +885,8 @@ def Predict_Game_Results():
     predicted_declarer_direction = [class_labels[l.argmax().item()] for l in predicted_declarer_direction_NESW_probs]
     st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
     st.session_state.df[y_name+'_Pred'] = predicted_declarer_direction
-    st.session_state.df['Declarer_Number_Pred'] = st.session_state.df.apply(lambda r: r['Player_Number_'+r[y_name+'_Actual']],axis='columns')
+    st.session_state.df['Declarer_Number_Pred'] = st.session_state.df.apply(lambda r: r['Player_Number_'+r[y_name+'_Pred']],axis='columns')
+    st.session_state.df['Declarer_Name_Pred'] = st.session_state.df.apply(lambda r: r['Player_Name_'+r[y_name+'_Pred']],axis='columns')
     st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
     st.session_state.df['Declarer_Pair_Direction_Match'] = st.session_state.df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
 
