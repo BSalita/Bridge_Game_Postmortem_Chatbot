@@ -404,7 +404,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents , AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Opponents"
+						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board, ', ') AS Boards, STRING_AGG(Pct_{Pair_Direction}, ', ') AS Pcts_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Opponents"
 					}
 				]
 			},
