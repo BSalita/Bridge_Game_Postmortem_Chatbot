@@ -374,7 +374,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{Pair_Direction}) AS SDScore_{Pair_Direction}, ANY_VALUE(SDPct_Max_Diff_{Pair_Direction}) AS SDPct_Max_Diff_{Pair_Direction}, ANY_VALUE(SDPct_{Pair_Direction}) AS SDPct_{Pair_Direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract"
+						"sql": "SELECT Board, COUNT(Contract) AS Freq_Contract, Contract, ANY_VALUE(ParScore_{Pair_Direction}) AS ParScore_{Pair_Direction}, ANY_VALUE(ParScore_Pct_{Pair_Direction}) AS ParScore_Pct_{Pair_Direction}, ANY_VALUE(SDScore_{Pair_Direction}) AS SDScore_{Pair_Direction}, ANY_VALUE(SDPct_Max_Diff_{Pair_Direction}) AS SDPct_Max_Diff_{Pair_Direction}, ANY_VALUE(SDPct_{Pair_Direction}) AS SDPct_{Pair_Direction}, ANY_VALUE(DDTricks) AS DDTricks, ANY_VALUE(SDProbs_Taking_0) AS SDProbs_Taking_0, ANY_VALUE(SDProbs_Taking_1) AS SDProbs_Taking_1, ANY_VALUE(SDProbs_Taking_2) AS SDProbs_Taking_2, ANY_VALUE(SDProbs_Taking_3) AS SDProbs_Taking_3, ANY_VALUE(SDProbs_Taking_4) AS SDProbs_Taking_4, ANY_VALUE(SDProbs_Taking_5) AS SDProbs_Taking_5, ANY_VALUE(SDProbs_Taking_6) AS SDProbs_Taking_6, ANY_VALUE(SDProbs_Taking_7) AS SDProbs_Taking_7, ANY_VALUE(SDProbs_Taking_8) AS SDProbs_Taking_8, ANY_VALUE(SDProbs_Taking_9) AS SDProbs_Taking_9, ANY_VALUE(SDProbs_Taking_10) AS SDProbs_Taking_10, ANY_VALUE(SDProbs_Taking_11) AS SDProbs_Taking_11, ANY_VALUE(SDProbs_Taking_12) AS SDProbs_Taking_12, ANY_VALUE(SDProbs_Taking_13) AS SDProbs_Taking_13 FROM results GROUP BY Board, Contract ORDER BY Board, Contract"
 					}
 				]
 			},
@@ -404,7 +404,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board, ', ') AS Boards, STRING_AGG(Pct_{Pair_Direction}, ', ') AS Pcts_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Opponents"
+						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board, ', ') AS Boards, STRING_AGG(ROUND(Pct_{Pair_Direction},2), ', ') AS Pcts_{Pair_Direction} FROM results WHERE Boards_We_Played = True GROUP BY Opponents"
 					}
 				]
 			},

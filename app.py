@@ -778,8 +778,9 @@ def player_number_change():
 def debug_player_number_names_change():
     # assign changed selectbox value (debug_player_number_names_selectbox). e.g. ['2663279','Robert Salita']
     player_number_name = st.session_state.debug_player_number_names_selectbox
-    if not chat_initialize(player_number_name[0], None):  # grab player number
-        chat_initialize(st.session_state.player_number, None)
+    #if not chat_initialize(player_number_name[0], None):  # grab player number
+    #    chat_initialize(st.session_state.player_number, None)
+    chat_initialize(player_number_name[0], None)
 
 
 def club_session_id_change():
@@ -1149,7 +1150,8 @@ def create_sidebar():
             st.session_state.debug_player_number_names = st.session_state.debug_favorites[
                 'SelectBoxes']['Player_Numbers']['options']
             if len(st.session_state.debug_player_number_names):
-                st.selectbox("Debug Player List", options=st.session_state.debug_player_number_names, placeholder=st.session_state.debug_favorites['SelectBoxes']['Player_Numbers']['placeholder'],
+                # changed placeholder to player_number because when selectbox gets reset, possibly due to expander auto-collapsing, we don't want an unexpected value.
+                st.selectbox("Debug Player List", options=st.session_state.debug_player_number_names, placeholder=st.session_state.player_number, #.debug_favorites['SelectBoxes']['Player_Numbers']['placeholder'],
                                         on_change=debug_player_number_names_change, key='debug_player_number_names_selectbox')
 
         st.checkbox(
