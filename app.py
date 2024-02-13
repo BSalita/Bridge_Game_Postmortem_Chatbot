@@ -1151,6 +1151,7 @@ def create_sidebar():
                 'SelectBoxes']['Player_Numbers']['options']
             if len(st.session_state.debug_player_number_names):
                 # changed placeholder to player_number because when selectbox gets reset, possibly due to expander auto-collapsing, we don't want an unexpected value.
+                # test player_number is not None else use debug_favorites['SelectBoxes']['Player_Numbers']['placeholder']?
                 st.selectbox("Debug Player List", options=st.session_state.debug_player_number_names, placeholder=st.session_state.player_number, #.debug_favorites['SelectBoxes']['Player_Numbers']['placeholder'],
                                         on_change=debug_player_number_names_change, key='debug_player_number_names_selectbox')
 

@@ -477,6 +477,7 @@ def clean_validate_df(df):
     df.rename({'declarer':'Declarer_Direction'},axis='columns',inplace=True)
 
     # Cleanup all sorts of columns. Create new columns where missing.
+    df.drop(df[df['Board'].isna()].index,inplace=True) # https://my.acbl.org/club-results/details/952514
     df['Board'] = df['Board'].astype('uint8')
     assert df['Board'].ge(1).all()
 
@@ -571,7 +572,7 @@ def clean_validate_df(df):
     if df['Tricks'].isna().any():
         print_to_log_info('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    assert df['Tricks'].map(lambda x: x is pd.NA or 0 <= x <= 13).all()
+    assert df['Tricks'].map(lambda x: (x != x) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? x is None and x is pd.NA does not work.
 
     df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
 
