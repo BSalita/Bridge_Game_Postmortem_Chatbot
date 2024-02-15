@@ -331,7 +331,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     assert len(df_br_b.filter(regex=r'_[xy]$').columns) == 0,df_br_b.filter(regex=r'_[xy]$').columns
 
 
-    df_sections = dfs['sections'].rename({'id':'section_id','name':'section_name'},axis='columns').drop(['created_at','updated_at','pair_summaries','boards'],axis='columns') # ['pair_summaries','boards'] are unwanted dicts
+    df_sections = dfs['sections'].rename({'id':'section_id','name':'section_name'},axis='columns').drop(['created_at','updated_at','transaction_date','pair_summaries','boards'],axis='columns') # ['pair_summaries','boards'] are unwanted dicts
     print_to_log_info(df_sections.head(1))
 
 
@@ -341,7 +341,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     assert len(df_br_b_sections.filter(regex=r'_[xy]$').columns) == 0,df_br_b_sections.filter(regex=r'_[xy]$').columns
 
 
-    df_sessions = dfs['sessions'].rename({'id':'session_id','number':'session_number'},axis='columns').drop(['created_at','updated_at','hand_records','sections'],axis='columns') # ['hand_records','sections'] are unwanted dicts
+    df_sessions = dfs['sessions'].rename({'id':'session_id','number':'session_number'},axis='columns').drop(['created_at','updated_at','transaction_date','hand_records','sections'],axis='columns') # ['hand_records','sections'] are unwanted dicts
     # can't convert to int64 because SHUFFLE is a valid hand_record_id. Need to treat as string.
     # df_sessions['hand_record_id'] = df_sessions['hand_record_id'].astype('int64') # change now for merge
     print_to_log_info(df_sessions.head(1))
@@ -350,10 +350,10 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     df_br_b_sections_sessions = pd.merge(df_br_b_sections,df_sessions,on='session_id',how='left')
     print_to_log_info(df_br_b_sections_sessions.head(1))
     assert len(df_br_b_sections_sessions) == len(df_br_b_sections)
-    assert len(df_br_b_sections_sessions.filter(regex=r'_[xy]$').columns) == 0,df_br_b_sections_sessions.filter(regex=r'_[xy]$').columns
+    assert len(df_br_b_sections_sessions.filter(regex=r'_[xy]$').columns) == 0,df_br_b_sections_sessions.filter(regex=r'_[xy]$').columns # to fix, drop duplicated column names
 
 
-    df_clubs = dfs['club'].rename({'id':'event_id','name':'club_name','type':'club_type'},axis='columns').drop(['created_at','updated_at'],axis='columns') # name and type are renamed to avoid conflict with df_events
+    df_clubs = dfs['club'].rename({'id':'event_id','name':'club_name','type':'club_type'},axis='columns').drop(['created_at','updated_at','transaction_date'],axis='columns') # name and type are renamed to avoid conflict with df_events
     print_to_log_info(df_clubs.head(1))
 
 
@@ -363,7 +363,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     assert len(df_sections.filter(regex=r'_[xy]$').columns) == 0,df_sections.filter(regex=r'_[xy]$').columns
 
         
-    df_events = dfs['event'].rename({'id':'event_id','club_name':'event_club_name','type':'event_type'},axis='columns').drop(['created_at','updated_at','deleted_at'],axis='columns')
+    df_events = dfs['event'].rename({'id':'event_id','club_name':'event_club_name','type':'event_type'},axis='columns').drop(['created_at','updated_at','transaction_date','deleted_at'],axis='columns')
     print_to_log_info(df_events.head(1))
 
 
@@ -373,12 +373,12 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     assert len(df_br_b_sections_sessions_events.filter(regex=r'_[xy]$').columns) == 0,df_br_b_sections_sessions_events.filter(regex=r'_[xy]$').columns
 
 
-    df_pair_summaries = dfs['pair_summaries'].rename({'id':'pair_summary_id'},axis='columns').drop(['created_at','updated_at'],axis='columns')
+    df_pair_summaries = dfs['pair_summaries'].rename({'id':'pair_summary_id'},axis='columns').drop(['created_at','updated_at','transaction_date'],axis='columns')
     print_to_log_info(df_pair_summaries.head(1))
 
     # todo: merge df_pair_summaries with strat_place. issue is that strat_place has multiple rows per pair_summary_id
     df_pair_summaries_strat = df_pair_summaries
-    # df_strat_place = dfs['strat_place'].rename({'rank':'strat_rank','type':'strat_type'},axis='columns').drop(['id','created_at','updated_at'],axis='columns')
+    # df_strat_place = dfs['strat_place'].rename({'rank':'strat_rank','type':'strat_type'},axis='columns').drop(['id','created_at','updated_at','transaction_date'],axis='columns')
     # print_to_log(df_strat_place.head(1))
 
     # df_pair_summaries_strat = pd.merge(df_pair_summaries,df_strat_place,on='pair_summary_id',how='left')
@@ -390,7 +390,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     df_br_b_pair_summary_ew = df_pair_summaries_strat[df_pair_summaries_strat['direction'].eq('EW')].add_suffix('_ew').rename({'pair_number_ew':'ew_pair','section_id_ew':'section_id'},axis='columns')
     assert len(df_br_b_pair_summary_ew.filter(regex=r'_[xy]$').columns) == 0,df_br_b_pair_summary_ew.filter(regex=r'_[xy]$').columns
 
-    df_players = dfs['players'].drop(['id','created_at','updated_at'],axis='columns').rename({'id_number':'player_number','name':'player_name'},axis='columns')
+    df_players = dfs['players'].drop(['id','created_at','updated_at','transaction_date'],axis='columns').rename({'id_number':'player_number','name':'player_name'},axis='columns')
     player_n = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_n').rename({'pair_summary_id_n':'pair_summary_id_ns'},axis='columns')
     player_s = df_players.groupby('pair_summary_id').last().reset_index().add_suffix('_s').rename({'pair_summary_id_s':'pair_summary_id_ns'},axis='columns')
     player_e = df_players.groupby('pair_summary_id').first().reset_index().add_suffix('_e').rename({'pair_summary_id_e':'pair_summary_id_ew'},axis='columns')
@@ -572,7 +572,8 @@ def clean_validate_df(df):
     if df['Tricks'].isna().any():
         print_to_log_info('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    assert df['Tricks'].map(lambda x: (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? pandas regression? x is None and x is pd.NA does not work.
+    # The following line is on watch. Is it an issue with pandas version? Is it related to some change to PASS?
+    assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? works on pandas 2.0.3 but not 2.2.0? x is None and x is pd.NA does not work.
 
     df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
 
@@ -844,7 +845,7 @@ def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
 
 def Create_SD_Scores(r):
-    if r['Score_Declarer']:
+    if r['Contract'] != 'PASS':
         level = r['BidLvl']-1
         suit = r['BidSuit']
         iCDHSN = 'CDHSN'.index(suit)
@@ -873,7 +874,7 @@ def Create_SD_Score(r):
 # Note: score_max may exceed par score when probability of making/setting contract is high.
 def Create_SD_Score_Max(r):
     score_max = None
-    if r['Score_Declarer']:
+    if r['Contract'] != 'PASS':
         suit = r['BidSuit']
         iCDHSN = 'CDHSN'.index(suit)
         nsew = r['Declarer_Direction']
