@@ -732,7 +732,8 @@ def augment_df(df,sd_cache_d):
     df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
     df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Declarer_Direction']], axis='columns')
     # recompute Score and compare against actual scores to catch scoring errors such as: Board 1 at https://my.acbl.org/club-results/details/878121
-    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
+    # just use Score_NS if score is uncomputable probably due to pd.NA from director's adjustment. (r['Result'] is pd.NA) works here. why?
+    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else r['Score_NS'] if r['Result'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
     if (df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])).any():
         print_to_log(logging.WARNING, 'Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Declarer_Direction']], axis='columns')
