@@ -562,7 +562,8 @@ def clean_validate_df(df):
         df['Result'] = df.apply(lambda r: pd.NA if  r['Score_NS'] not in r['scores_l'] else r['scores_l'].index(r['Score_NS'])-(r['BidLvl']+6),axis='columns').astype('Int8') # pd.NA is due to director's adjustment
     if df['Result'].isna().any():
         print_to_log_info('NaN Results:\n',df[df['Result'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Result','scores_l']])
-    assert df['Result'].map(lambda x: x is pd.NA or -13 <= x <= 13).all()
+    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' columns.
+    assert df['Result'].map(lambda x: (x != x) or (x is pd.NA) or -13 <= x <= 13).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
     if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
         assert df['Tricks'].notnull().all()
@@ -572,7 +573,7 @@ def clean_validate_df(df):
     if df['Tricks'].isna().any():
         print_to_log_info('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    # The following line is on watch. Confirmed that there was an issue with pandas.
+    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' columns.
     assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
     df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
