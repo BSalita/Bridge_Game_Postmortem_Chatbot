@@ -572,8 +572,8 @@ def clean_validate_df(df):
     if df['Tricks'].isna().any():
         print_to_log_info('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    # The following line is on watch. Is it an issue with pandas version? Is it related to some change to PASS?
-    assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? works on pandas 2.0.3 but not 2.2.0? x is None and x is pd.NA does not work.
+    # The following line is on watch. Confirmed that there was an issue with pandas.
+    assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
     df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
 
