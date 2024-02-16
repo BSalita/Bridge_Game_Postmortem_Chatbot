@@ -562,18 +562,18 @@ def clean_validate_df(df):
         df['Result'] = df.apply(lambda r: pd.NA if  r['Score_NS'] not in r['scores_l'] else r['scores_l'].index(r['Score_NS'])-(r['BidLvl']+6),axis='columns').astype('Int8') # pd.NA is due to director's adjustment
     if df['Result'].isna().any():
         print_to_log_info('NaN Results:\n',df[df['Result'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Result','scores_l']])
-    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' columns.
+    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' and 'BidLvl' columns.
     assert df['Result'].map(lambda x: (x != x) or (x is pd.NA) or -13 <= x <= 13).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
     if 'Tricks' in df and df['Tricks'].notnull().all(): # tournaments have a Trick column with all None(?).
         assert df['Tricks'].notnull().all()
         df.loc[df['Contract'].eq('PASS'),'Tricks'] = pd.NA
     else:
-        df['Tricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA or r['Result'] is pd.NA else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
+        df['Tricks'] = df.apply(lambda r: pd.NA if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) or (r['Result'] != r['Result']) or (r['Result'] is pd.NA) else r['BidLvl']+6+r['Result'],axis='columns') # pd.NA is needed for PASS
     if df['Tricks'].isna().any():
         print_to_log_info('NaN Tricks:\n',df[df['Tricks'].isna()][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Score_NS','Score_EW','Tricks','Result','scores_l']])
     df['Tricks'] = df['Tricks'].astype('UInt8')
-    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' columns.
+    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' and 'BidLvl' columns.
     assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
     df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
@@ -687,7 +687,7 @@ def augment_df(df,sd_cache_d):
 
     # ContractType
     # PerformanceWarning: DataFrame is highly fragmented.
-    df['ContractType'] = df.apply(lambda r: 'PASS' if r['BidLvl'] is pd.NA else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
+    df['ContractType'] = df.apply(lambda r: 'PASS' if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
     # Create column of contract types by partnership by suit. e.g. CT_NS_C.
     contract_types_d = mlBridgeLib.CategorifyContractTypeBySuit(ddmakes)
     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
@@ -732,15 +732,16 @@ def augment_df(df,sd_cache_d):
     df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
     df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Declarer_Direction']], axis='columns')
     # recompute Score and compare against actual scores to catch scoring errors such as: Board 1 at https://my.acbl.org/club-results/details/878121
-    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
+    # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' and 'BidLvl' columns.
+    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
     if (df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])).any():
         print_to_log(logging.WARNING, 'Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Declarer_Direction']], axis='columns')
 
-    df['DDTricks'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
-    df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
-    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['BidLvl'] is pd.NA else r['DDTricks']-r['SL_'+r['Pair_Declarer_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-    df['DDScore_NS'] = df.apply(lambda r: 0 if r['BidLvl'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
+    df['DDTricks'] = df.apply(lambda r: pd.NA if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
+    df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
+    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else r['DDTricks']-r['SL_'+r['Pair_Declarer_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+    df['DDScore_NS'] = df.apply(lambda r: 0 if (r['BidLvl'] != r['BidLvl']) or (r['BidLvl'] is pd.NA) else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
     df['DDScore_EW'] = -df['DDScore_NS']
     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
     df['DDMPs_EW'] = df['Board_Top']-df['DDMPs_NS']
