@@ -11,111 +11,128 @@ def print_to_log(level, *args):
     logging.log(level, ' '.join(str(arg) for arg in args))
 
 import pandas as pd
+import polars as pl
 import os
-from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, TabularPandas, CategoryBlock, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, rmse, accuracy
+from fastai.tabular.all import nn, load_learner, tabular_learner, cont_cat_split, TabularDataLoaders, TabularPandas, CategoryBlock, RegressionBlock, Categorify, FillMissing, Normalize, EarlyStoppingCallback, RandomSplitter, range_of, MSELossFlat, L1LossFlat, rmse, accuracy
 import time
+from datetime import datetime
 
-def train_classifier(df, y_names, cat_names, cont_names, procs=None, valid_pct=0.2, seed=42, bs=1024*5, layers=[512,512,512], epochs=3, device='cuda'):
+
+# Function to calculate the total input size
+def calculate_input_size(learn):
+    emb_szs = {name: learn.model.embeds[i].embedding_dim for i, name in enumerate(learn.dls.cat_names)}
+    total_input_size = sum(emb_szs.values()) + len(learn.dls.cont_names)
+    return total_input_size
+
+# Function to define optimal layer sizes
+def define_layer_sizes(input_size, num_layers=3, shrink_factor=2):
+    layer_sizes = [input_size]
+    for i in range(1, num_layers):
+        layer_sizes.append(layer_sizes[-1] // shrink_factor)
+    return layer_sizes
+
+
+
+def train_classifier(df, y_names, cat_names, cont_names, procs=None, valid_pct=0.2, seed=42, bs=1024*5, layers=None, epochs=3, device='cuda', monitor='valid_loss', min_delta=0.001, patience=3):
     t = time.time()
+    print_to_log_info(f"{y_names=} {cat_names=} {cont_names} {valid_pct=} {seed=} {bs=} {layers=} {epochs=} {device=} {monitor=} {min_delta=} {patience=}")
+
     splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
-    to = TabularPandas(df, procs=procs,
-                    cat_names=cat_names,
-                    cont_names=cont_names,
-                    y_names=y_names,
-                    splits=splits_ilocs,
-                    #num_workers=10,
-                    y_block=CategoryBlock())
+    print_to_log_info(len(splits_ilocs[0]), len(splits_ilocs[1]))    
+    for y_name in y_names:
+        train_uniques = df.iloc[splits_ilocs[0]][y_name].unique()
+        valid_values = df.iloc[splits_ilocs[1]][y_name].values
+        valid_uniques = df.iloc[splits_ilocs[1]][y_name].unique()
+        values_in_validation_but_not_in_training = set(valid_uniques).difference(train_uniques)
+        #new_train_splits = splits_ilocs[0]+[iloc for iloc,value in zip(splits_ilocs[1],valid_values) if value in values_in_validation_but_not_in_training]
+        new_valid_splits = [iloc for iloc,value in zip(splits_ilocs[1],valid_values) if value not in values_in_validation_but_not_in_training]
+        splits_ilocs = (splits_ilocs[0], new_valid_splits)
+        print_to_log_info(values_in_validation_but_not_in_training, len(splits_ilocs[0]), len(splits_ilocs[1]))    
+
+    to = TabularPandas(
+        df,
+        procs=procs,
+        cat_names=cat_names,
+        cont_names=cont_names,
+        y_names=y_names,
+        splits=splits_ilocs,
+        #num_workers=10,
+        y_block=CategoryBlock()
+    )
     
+    assert set(to.valid.y).difference(to.train.y) == set(), f"validation set has classes which are not in the training set:{set(to.valid.y).difference(to.train.y)}"
     # Create a DataLoader
-    dls = to.dataloaders(bs=bs, layers=layers, device=device) # cpu or cuda
+    dls = to.dataloaders(bs=bs, device=device) # cpu or cuda
 
-    # Create a tabular learner
+    # determine layers
     learn = tabular_learner(dls, metrics=accuracy)
 
+    # Calculate the total input size
+    input_size = calculate_input_size(learn)
+
+    # Define the optimal layer sizes
+    recommended_layers = define_layer_sizes(input_size)
+    print(f"Recommended layer sizes: {recommended_layers}")
+    
+    if layers is None:
+        layers = recommended_layers
+        print(f"Using recommended layer sizes: {layers}")
+    else:
+        print(f"Using provided layer sizes: {layers}")
+
+    # Update the learner with the defined layer sizes
+    learn = tabular_learner(dls, layers=layers, metrics=accuracy)
+
     # Train the model
-    learn.fit_one_cycle(epochs) # 1 or 2 epochs is enough to get a good accuracy for large datasets
+    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # 1 or 2 epochs is often enough to get a good accuracy for large datasets
     print_to_log_info('train_classifier time:', time.time()-t)
-    return to, dls, learn
-
-# obsolete?
-def load_data(df, y_names=None, cont_names=None, cat_names=None, procs=None, y_block=None, bs=None, layers=[1024]*4, valid_pct=None, seed=42, max_card=None, device='cuda'):
-    """
-    Load and preprocess data using FastAI.
-    """
-
-    print_to_log_info(f"{y_names=} {cont_names=} {cat_names=} {bs=} {valid_pct=} {max_card=}")
-    # Determine number of CPU cores and set workers to cores-1
-    num_workers = os.cpu_count() - 1
-    print_to_log_info(f"{y_names=} {bs=} {valid_pct=} {num_workers=}")
-    if cont_names is not None:
-        print_to_log_info(f"{len(cont_names)=} {cont_names=}")
-    if cat_names is not None:
-        print_to_log_info(f"{len(cat_names)=} {cat_names=}")
-    # doesn't work for Contract. assert df.select_dtypes(include=['object','string']).columns.size == 0, df.select_dtypes(include=['object','string']).columns
-    assert not df.isna().any().any()
-    assert y_names in df, y_names
-
-    # Define continuous and categorical variables
-    if cont_names is None and cat_names is None:
-        cont_names, cat_names = cont_cat_split(df, max_card=max_card, dep_var=y_names)
-        if cont_names is not None:
-            print_to_log_info(f"{len(cont_names)=} {cont_names=}")
-        if cat_names is not None:
-            print_to_log_info(f"{len(cat_names)=} {cat_names=}")
-    assert y_names not in [cont_names + cat_names]
-    assert set(cont_names).intersection(cat_names) == set(), set(cont_names).intersection(cat_names)
-    assert set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns) == set(), set(cont_names+cat_names+[y_names]).symmetric_difference(df.columns)
-    assert df[cont_names].select_dtypes(include=['category']).columns.size == 0, df[cont_names].select_dtypes(include=['category']).columns
-
-    # Split the data into training and validation sets
-    splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
-    #display(df.iloc[splits_ilocs[0]])
-    #display(df.iloc[splits_ilocs[1]])
-    
-    # Load data into FastAI's TabularDataLoaders
-    # todo: experiment with specifying a dict of Category types for cat_names: ordinal_var_dict = {'size': ['small', 'medium', 'large']}
-    # todo: accept default class of y_block. RegressionBlock for regression, CategoryBlock for classification.
-
-    to = TabularPandas(df, procs=procs,
-                    cat_names=cat_names,
-                    cont_names=cont_names,
-                    y_names=y_names,
-                    splits=splits_ilocs,
-                    #num_workers=10,
-                    y_block=y_block,
-                    )
-    
-    dls = to.dataloaders(bs=bs, layers=layers, device=device) # cpu or cuda
-
-    return dls # return to?
-
-# obsolete?
-def train_classification(dls, epochs=3, monitor='accuracy', min_delta=0.001, patience=3):
-    """
-    Train a tabular model for classification.
-    """
-    print_to_log_info(f"{epochs=} {monitor=} {min_delta=} {patience=}")
-
-    # Create a tabular learner
-    learn = tabular_learner(dls, metrics=accuracy)
-
-    # Train the model
-    # error: Can't get attribute 'AMPMode' on <module 'fastai.callback.fp16'
-    #learn.to_fp16() # to_fp32() or to_bf16()
-    
-    # Use one cycle policy for training with early stopping
-    learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # sometimes only a couple epochs is optimal
-    
     return learn
 
-def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='valid_loss', min_delta=0.001, patience=3):
+
+
+def train_regression(df, y_names, cat_names, cont_names, procs=None, valid_pct=0.2, seed=42, bs=1024*5, layers=None, epochs=3, device='cuda', monitor='valid_loss', min_delta=0.001, patience=3, y_range=(0,1)):
     """
     Train a tabular model for regression.
     """
-    print_to_log_info(f"{epochs=} {layers=} {y_range=} {monitor=} {min_delta=} {patience=}")
+    t = time.time()
+    print_to_log_info(f"{y_names=} {cat_names=} {cont_names} {valid_pct=} {seed=} {bs=} {layers=} {epochs=} {device=} {monitor=} {min_delta=} {patience=} {y_range=}")
     # todo: check that y_names is numeric, not category.
 
-    learn = tabular_learner(dls, layers=layers, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat.
+    splits_ilocs = RandomSplitter(valid_pct=valid_pct, seed=seed)(range_of(df))
+    print_to_log_info(len(splits_ilocs[0]), len(splits_ilocs[1]))    
+
+    to = TabularPandas(
+        df,
+        procs=procs,
+        cat_names=cat_names,
+        cont_names=cont_names,
+        y_names=y_names,
+        splits=splits_ilocs,
+        #num_workers=10,
+        y_block=RegressionBlock()
+        )
+    
+    # Create a DataLoader
+    dls = to.dataloaders(bs=bs, device=device) # cpu or cuda
+
+    # determine layers
+    learn = tabular_learner(dls, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat or MSELossFlat
+
+    # Calculate the total input size
+    input_size = calculate_input_size(learn)
+
+    # Define the optimal layer sizes
+    recommended_layers = define_layer_sizes(input_size)
+    print(f"Recommended layer sizes: {recommended_layers}")
+    
+    if layers is None:
+        layers = recommended_layers
+        print(f"Using recommended layer sizes: {layers}")
+    else:
+        print(f"Using provided layer sizes: {layers}")
+
+    # Update the learner with the defined layer sizes
+    learn = tabular_learner(dls, layers=layers, metrics=rmse, y_range=y_range, loss_func=MSELossFlat()) # todo: could try loss_func=L1LossFlat or MSELossFlat
 
     # Use mixed precision training. slower and error.
     # error: Can't get attribute 'AMPMode' on <module 'fastai.callback.fp16'
@@ -123,13 +140,15 @@ def train_regression(dls, epochs=20, layers=[200]*10, y_range=(0,1), monitor='va
     
     # Use one cycle policy for training with early stopping
     learn.fit_one_cycle(epochs, cbs=EarlyStoppingCallback(monitor=monitor, min_delta=min_delta, patience=patience)) # todo: experiment with using lr_max?
-    
+    print_to_log_info('train_regression time:', time.time()-t)
     return learn
+
 
 def save_model(learn, f):
     t = time.time()
     learn.export(f)
     print_to_log_info('save_model time:', time.time()-t)
+
 
 def load_model(f):
     t = time.time()
@@ -137,35 +156,6 @@ def load_model(f):
     print_to_log_info('load_model time:', time.time()-t)
     return learn
 
-def get_predictions(learn, data, device='cpu'):
-    t = time.time()
-    if logger.isEnabledFor(logging.DEBUG):
-        data[learn.dls.train.x_names].info(verbose=True)
-        data[learn.dls.train.y_names].info(verbose=True)
-    assert set(learn.dls.train.x_names).difference(data.columns) == set(), f"df is missing column names which are in the model's training set:{set(learn.dls.train.x_names).difference(data.columns)}"
-    dl = learn.dls.test_dl(data, device=device)
-    probs, actual = learn.get_preds(dl=dl)
-    print_to_log_info('get_predictions time:', time.time()-t)
-    return probs, actual
-
-def predictions_to_df(data, y_names, preds):
-    """
-    Create a DataFrame with actual and predicted values.
-    """
-    
-    df = pd.DataFrame({
-        f'{y_names}_Actual': data[y_names],
-        f'{y_names}_Pred': preds,
-     })
-
-    if data[y_names].dtype == 'category':
-        df[f'{y_names}_Match'] = data[y_names] == preds
-    else:
-        df[f'{y_names}_Diff'] = data[y_names] - preds 
-
-    df = pd.concat([df, data.drop(columns=[y_names])], axis='columns')
-    
-    return df
 
 def make_predictions(f, data):
     """
@@ -174,88 +164,262 @@ def make_predictions(f, data):
     learn = load_learner(f)
     return get_predictions(learn, data)
 
-# obsolete pytorch stuff for app.py
-# import torch
-# import torch.nn as nn
-# import torch.optim as optim
-# from torch.optim.lr_scheduler import ReduceLROnPlateau
-# from torch.utils.data import TensorDataset, DataLoader
-# import sklearn # only needed to get __version__
-# from sklearn.model_selection import train_test_split
-# from sklearn.preprocessing import StandardScaler
-# import safetensors # only needed to get __version__
-# from safetensors.torch import load_file, save_file
-# import pickle
 
-# Create a Model
-# class NeuralNetwork(nn.Module):
-#     def __init__(self, input_size, output_size, hidden_layer_sizes=[1024]*6):
-#         super(NeuralNetwork, self).__init__()
+# doesn't seem to work as train_df dtypes are all object.(?)
+# # Function to compare columns and dtypes
+# def compare_columns_and_dtypes(train_df, infer_df):
+#     train_columns = set(train_df.columns)
+#     infer_columns = set(infer_df.columns)
+
+#     # Compare columns
+#     missing_in_infer = train_columns - infer_columns
+#     extra_in_infer = infer_columns - train_columns
+
+#     if missing_in_infer:
+#         print(f"Columns in train_df but not in infer_df: {missing_in_infer}")
+#     if extra_in_infer:
+#         print(f"Columns in infer_df but not in train_df: {extra_in_infer}")
+
+#     # Compare data types of matching columns
+#     common_columns = train_columns & infer_columns
+#     for col in common_columns:
+#         train_dtype = train_df[col].dtype
+#         infer_dtype = infer_df[col].dtype
+#         if train_dtype != infer_dtype:
+#             print(f"Column '{col}' has different dtypes: train_df ({train_dtype}), infer_df ({infer_dtype})")
+#             infer_df[col] = infer_df[col].astype(train_dtype)
+#             infer_dtype = infer_df[col].dtype
+#             assert train_dtype == infer_dtype, f"Column '{col}' still differs in dtype: train_df ({train_dtype}), infer_df ({infer_dtype})"
+
+
+def get_predictions(learn, df, y_names=None, device='cpu'):
+    """
+    Perform inference using a trained model.
+    
+    learn: Trained Fastai learner
+    inference_data: DataFrame containing the inference data
+    """
+    t = time.time()
+
+    if False: #logger.isEnabledFor(logging.DEBUG):
+        df[learn.dls.train.x_names].info(verbose=True)
+        if y_names:
+            df[y_names].info(verbose=True)
+            
+    assert set(learn.dls.train.x_names).difference(df.columns) == set(), f"df is missing column names which are in the model's training set:{set(learn.dls.train.x_names).difference(df.columns)}"
+    # Retrieve y_names from the dataloader
+    if y_names is None:
+        y_names = learn.dls.y_names # todo: or should it be learn.dls.train.y_names?
+    assert len(y_names) == 1, 'Only one target variable is supported.'
+    y_name = y_names[0]
+    del y_names
+
+    invalid_dtypes = []
+    for col in df.columns:
+        if df[col].dtype.name not in ['category','datetime64[ns]','object','string']: # dtypes which will be converted by fastai. Otherwise must be a torch compatible dtype.
+            if df[col].dtype.name not in ['float64', 'float32', 'float16', 'complex64', 'complex128', 'int64', 'int32', 'int16', 'int8', 'uint64', 'uint32', 'uint16', 'uint8', 'bool']:
+                print_to_log_info(f"Warning: {col} is neither a fastai dtype nor a torch compatible dtype: {df[col].dtype.name}. Convert to a supported dtype")
+                invalid_dtypes.append((col, df[col].dtype.name))
+    assert invalid_dtypes == [], f"Unsuported (col,dtype): {invalid_dtypes}"
+
+    assert not df.empty, 'No data to make inferences on.'
+
+    #compare_columns_and_dtypes(learn.dls.train.items, df)
+
+    #compare_columns_and_dtypes(learn.dls.valid.items, df)
+
+    if df[y_name].dtype.name in ['object','string']:
+        df[y_name] = pd.Categorical(df[y_name],categories=learn.dls.vocab)
+    if df[y_name].dtype.name in ['category']: # assumes object is a string and will be converted to category
+
+        train_uniques = learn.dls.vocab
+        values_in_test_but_not_in_training = df[y_name][~df[y_name].isin(train_uniques)]
+        print_to_log_info(df.loc[values_in_test_but_not_in_training.index])
+        print_to_log_info(f'Warning: {y_name} contains values which are missing in training set:',values_in_test_but_not_in_training)
+        df = df.drop(values_in_test_but_not_in_training.index)
+
+        # Create the dictionary with class codes as keys and class labels as values
+        pred_code_to_actual_code_d = {df[y_name].cat.categories[code]:code for code in df[y_name].cat.codes.tolist()}
+        print_to_log_info('pred_code_to_actual_code_d:',pred_code_to_actual_code_d)
+
+        # Create a dataloader for the inference data
+        dl = learn.dls.test_dl(df)
+
+        # Make predictions on the inference data
+        preds, targets = learn.get_preds(dl=dl)#, with_input=True, with_decoded=True)
+
+        # Convert probabilities to class labels
+        pred_codes = preds.argmax(dim=1).tolist()
+        pred_codes_to_actual_codes = [pred_code_to_actual_code_d.get(train_uniques[code],None) for code in pred_codes] # PASS is temp!!!
+        pred_labels = [train_uniques[code] for code in pred_codes]
         
-#         # Create a list of sizes representing each layer (input + hidden + output)
-#         all_sizes = [input_size] + hidden_layer_sizes + [output_size]
+        # True labels
+        true_codes = df[y_name].cat.codes
+        true_labels = df[y_name]
         
-#         # Dynamically create the linear layers
-#         self.layers = nn.ModuleList([
-#             nn.Linear(all_sizes[i], all_sizes[i+1]) for i, _ in enumerate(all_sizes[:-1])
-#         ])
+        results = {
+            '_'.join([y_name,'Actual']): true_labels,
+            '_'.join([y_name,'Actual','Code']): true_codes,
+            '_'.join([y_name,'Targets','Code']): targets.squeeze().tolist(),
+            '_'.join([y_name,'Pred']): pred_labels,
+            '_'.join([y_name,'Pred','Code']): pred_codes_to_actual_codes,
+            '_'.join([y_name,'Match','Code']): [pred_code == true_code for pred_code, true_code in zip(pred_codes_to_actual_codes, true_codes)],
+            '_'.join([y_name,'Match']): [pred_label == true_label for pred_label, true_label in zip(pred_labels, true_labels)]
+        }
+    else:
+
+        # Create a dataloader for the inference data
+        dl = learn.dls.test_dl(df)
+
+        # Make predictions on the inference data
+        preds, targets = learn.get_preds(dl=dl)#, with_input=True, with_decoded=True)
+
+        # Since this is regression, preds and targets are continuous values
+        true_values = targets.squeeze().tolist()
+        pred_values = preds.squeeze().tolist()
+
+        results = {
+            f'{y_name}_Actual': true_values,
+            f'{y_name}_Pred': pred_values,
+            f'{y_name}_Error': [pred - true for pred, true in zip(pred_values, true_values)],
+            f'{y_name}_AbsoluteError': [abs(pred - true) for pred, true in zip(pred_values, true_values)]
+        }        
+    return pd.DataFrame(results)
+
+
+# create a test set using date and sample size. current default is 10k samples ge 2024-07-01.
+def sample_by_date(df, include_dates='2024-07-01', max_samples=10000):
+    include_date = datetime.strptime(include_dates, '%Y-%m-%d') # i'm not getting why datetime.datetime.strptime isn't working here but the only thing that works elsewhere?
+
+    date_filter = df['Date'] >= include_date
         
-#         self.relu = nn.ReLU()
-#         self.sigmoid = nn.Sigmoid()
+    return df.filter(~date_filter), df.filter(date_filter).sample(n=max_samples) if max_samples < date_filter.sum() else df.filter(date_filter)
 
-#     def forward(self, x):
-#         # Process input through each linear layer followed by ReLU, except the last layer
-#         for layer in self.layers[:-1]:
-#             x = self.relu(layer(x))
-        
-#         # Last layer is followed by sigmoid
-#         x = self.sigmoid(self.layers[-1](x))
-#         return x
 
-    # with open(predicted_rankings_model_file,'rb') as f:
-    #     y_name, columns_to_scale, X_scaler, y_scaler = pickle.load(f) # on lenovo5-1tb, had to manually copy pickle file from /mnt/e/bridge because git pull seems to have pulled a bad copy.
+# Calculate feature importance
+def find_first_linear_layer(module):
+    if isinstance(module, nn.Linear):
+        return module
+    elif isinstance(module, (nn.Sequential, nn.ModuleList)):
+        for layer in module:
+            found = find_first_linear_layer(layer)
+            if found:
+                return found
+    elif hasattr(module, 'children'):
+        for layer in module.children():
+            found = find_first_linear_layer(layer)
+            if found:
+                return found
+    return None
 
-    # predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_model.pth"
-    # predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
-    # if not predicted_rankings_model_file.exists():
-    #     st.error(f"Oops. {predicted_rankings_model_filename} not found.")
-    #     return None
-    # with open(predicted_rankings_model_file,'rb') as f:
-    #     model_state_dict = torch.load(f, map_location=torch.device('cpu'))
 
-    # print_to_log('y_name:', y_name, 'columns_to_scale:', columns_to_scale)
-    # if logging.isEnabledFor(logging.DEBUG):
-    #     st.session_state.df.info(verbose=True)
-    # assert set(columns_to_scale).difference(set(st.session_state.df.columns)) == set(), set(columns_to_scale).difference(set(st.session_state.df.columns))
+def get_feature_importance(learn):
+    importance = {}
 
-    # df = st.session_state.df.copy()
-    # df['Date'] = pd.to_datetime(df['Date']).astype('int64') # only need to do once (all rows have same value) then assign to all rows.
-    # for d in mlBridgeLib.NESW:
-    #     df['Player_Number_'+d] = pd.to_numeric(df['Player_Number_'+d], errors='coerce').astype('float32').fillna(0) # float32 because could be NaN
-    # df['Vul'] = df['Vul'].astype('uint8') # 0-3
-    # df['Dealer'] = df['Dealer'].astype('category')
+    # Find the first linear layer in the model
+    linear_layer = find_first_linear_layer(learn.model)
+    if linear_layer is None:
+        raise ValueError("No linear layer found in the model.")
+    
+    # Get the absolute mean of the weights across the input features
+    weights = linear_layer.weight.abs().mean(dim=0)
 
-    # df = df[[y_name]+columns_to_scale.tolist()].copy() # todo: columns_to_scale needs to be made a list before saving to pkl
-    # assert df.isna().sum().sum() == 0, df.columns[df.isna().sum().gt(0)] # todo: must be a better way of showing columns with na.
-    # X = df.drop(columns=[y_name])
-    # y = df[y_name]
-    # for col in X.select_dtypes(include='category').columns:
-    #     X[col] = X[col].cat.codes
-    # assert X.select_dtypes(include=['category','string']).empty
+    # Get all feature names
+    all_columns = learn.dls.train_ds.items.columns.tolist()
+    feature_names = [name for name in all_columns if name != learn.dls.y_names[0]]
 
-    # X_scaled = X.copy()
-    # X_scaled = X_scaler.transform(X)
+    # Check if embedding layers or other preprocessing steps affect the input size
+    cat_names = learn.dls.cat_names
+    cont_names = learn.dls.cont_names
 
-    # # Initialize the model and load weights
-    # model_for_pred = NeuralNetwork(X_scaled.shape[1],1) # 1 is output_size
-    # model_for_pred.load_state_dict(model_state_dict)
+    # Calculate the total input size to the first linear layer
+    emb_szs = {name: learn.model.embeds[i].embedding_dim for i, name in enumerate(cat_names)}
+    total_input_size = sum(emb_szs.values()) + len(cont_names)
 
-    # # Make predictions
-    # model_for_pred.eval()
-    # with torch.no_grad():
-    #     predictions_scaled = model_for_pred(torch.tensor(X_scaled, dtype=torch.float32)) # so fast (1ms) that we're good with using the CPU
+    print(f"Embedding sizes: {emb_szs}")
+    print(f"Total input size to the first linear layer: {total_input_size}")
+    print(f"Shape of weights: {weights.shape}")
 
-    # predicted_board_result_ns = y_scaler.inverse_transform(predictions_scaled)
-    # predicted_board_result_ns_s = pd.Series(predicted_board_result_ns.flatten())
-    # predicted_board_result_ns_adjusted_s = predicted_board_result_ns_s*.5/predicted_board_result_ns_s.mean() # scale predictions so NS mean is 50%
-    # # Create a DataFrame for predictions and save or further use
+    # Ensure the number of weights matches the total input size
+    if len(weights) != total_input_size:
+        raise ValueError(f"Number of weights ({len(weights)}) does not match total input size ({total_input_size}).")
+
+    # Assign importance to each feature
+    idx = 0
+    for name in cat_names:
+        emb_size = emb_szs[name]
+        importance[name] = weights[idx:idx+emb_size].mean().item()  # Average the importance across the embedding dimensions
+        idx += emb_size
+    for name in cont_names:
+        importance[name] = weights[idx].item()
+        idx += 1
+    
+    return importance
+
+
+def chart_feature_importance(learn):
+    # Calculate and display feature importance
+    importance = get_feature_importance(learn)
+    sorted_importance = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+    print(f"\nFeature Importances {len(importance)}:")
+    for name, imp in sorted_importance:
+        print_to_log_info(f"{name}: {imp:.4f}")
+
+    # Visualize the importance
+    from matplotlib import pyplot as plt
+
+    plt.figure(figsize=(24, 4))
+    plt.bar(range(len(importance)), [imp for name, imp in sorted_importance])
+    plt.xticks(range(len(importance)), [name for name, imp in sorted_importance], rotation=45, ha='right')
+    plt.title('Feature Importance')
+    #plt.tight_layout()
+    plt.show()
+
+
+# todo: Single_Dummy_Features?
+# todo: opponent features: Opponents_HCP 
+# assert df_pretrained.columns[df_pretrained.isna().any()].empty, df_pretrained.columns[df_pretrained.isna().any()]
+
+#df_pretrained = df_pretrained.astype({col:dtype for regex_col, dtype in astype_cols.items() for col in df_pretrained.filter(regex=regex_col)})
+
+
+# FillMissing is causing following error. It is a known issue in fastai.
+# c:\Users\bsali\miniconda3\envs\bridge12\Lib\site-packages\fastai\tabular\core.py:312: FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+# The behavior will change in pandas 3.0. This inplace method will never work because the intermediate object on which we are setting values always behaves as a copy.
+
+def train_model(df, y_names, cat_names=None, cont_names=None, nsamples=None, procs=[Categorify, FillMissing, Normalize], valid_pct=0.2, bs=1024*10, layers=None, epochs=3, device='cpu',y_range=(0,1)):
+
+    # todo: disallow String/Utf8 and force use of pl.Categorical?
+
+    # setup columns and validate
+    print(f"{y_names=}")
+    assert isinstance(y_names,list) and len(y_names) == 1, 'Only one target variable is supported.'
+
+    print(df.describe())
+    unimplemented_dtypes = df.select(pl.exclude(pl.Boolean,pl.Categorical,pl.Int8,pl.Int16,pl.Int32,pl.Int64,pl.Float32,pl.Float64,pl.String,pl.UInt8,pl.Utf8)).columns
+    print(f"{unimplemented_dtypes=}") # todo: how to deal with these?
+
+    # setup cat and cont names. All columns are assumed to be either cat or cont. Booleans should be in cat. Ints could be in either.
+    if cat_names is None:
+        cat_names = list(set(df.select(pl.col([pl.Boolean,pl.Categorical,pl.String])).columns).difference(y_names))
+    print(f"{cat_names=}")
+    if cont_names is None:
+        cont_names = list(set(df.columns).difference(cat_names + y_names)) # pl.Datetime,pl.Float32,pl.Float64,pl.Int32,pl.Int64
+    print(f"{cont_names=}")
+    assert set(y_names).intersection(cat_names+cont_names) == set(), set(y_names).intersection(cat_names+cont_names)
+    assert set(cat_names).intersection(cont_names) == set(), set(cat_names).intersection(cont_names)
+
+    if nsamples is None:
+        pandas_df = df[y_names+cat_names+cont_names].to_pandas()
+    else:
+        pandas_df = df[y_names+cat_names+cont_names].sample(nsamples,seed=42).to_pandas()
+
+    print('y_names[0].dtype:',pandas_df[y_names[0]].dtype.name)
+    if pandas_df[y_names[0]].dtype.name in ['boolean','category','object','string','uint8']: # 'object' is a probably a string. todo: What about ints? should classifier or regression be called?
+        learn = train_classifier(pandas_df, y_names, cat_names, cont_names, procs=procs, valid_pct=min(valid_pct,10000/len(pandas_df)), bs=bs, layers=layers, epochs=epochs, device=device)
+    elif pandas_df[y_names[0]].dtype.name in ['float32','float64']:
+        learn = train_regression(pandas_df, y_names, cat_names, cont_names, procs=procs, valid_pct=min(valid_pct,10000/len(pandas_df)), bs=bs, layers=layers, epochs=epochs, device=device, y_range=y_range)
+    else:
+        raise ValueError(f"y_names dtype of {pandas_df[y_names[0]].dtype.name} not supported.")
+
+    return learn

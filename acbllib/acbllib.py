@@ -16,6 +16,7 @@ import re
 import traceback
 import requests
 from bs4 import BeautifulSoup
+from io import StringIO
 import urllib
 from collections import defaultdict
 import time
@@ -94,7 +95,7 @@ def extract_club_games(htmls, acbl_url):
         ClubInfos[cn] = ci
         print_to_log_info(f'{ci}')
         # assumes first table is our target
-        d = pd.read_html(str(html_table))
+        d = pd.read_html(StringIO(str(html_table)))
         assert len(d) == 1
         df = pd.DataFrame(d[0])
         df.insert(0,'Club',cn)
@@ -117,17 +118,18 @@ def extract_club_result_json(dfs, filtered_clubs, starting_nclub, ending_nclub, 
     headers={"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36"}
     for ndf,(kdf,df) in enumerate(filtered_clubs.items()):
         if ndf < starting_nclub or ndf >= ending_nclub:
-            print_to_log_info(f"Skipping club #{ndf} {kdf}") # obsolete when filtered_clubs works
+            #print_to_log_info(f"Skipping club #{ndf} {kdf}") # obsolete when filtered_clubs works
             continue
         ndf += 1
         except_count = 0
         total_results = len(df['ResultUrl'])
         for cn, (nurl, url) in zip(df['Club'],enumerate(df['ResultUrl'])):
-            nurl += 1
+            #nurl += 1
             total_urls_processed += 1
             html_file = url.replace(acbl_url,'').replace('club-results','club-results/'+str(cn))+'.html'
             json_file = html_file.replace('.html','.data.json')
-            print_to_log_info(f'Processing club ({ndf}/{total_clubs}): result file ({nurl}/{total_results}): {html_file}')
+            if nurl % 100 == 0: # commented out because overloaded notebook output causing system instability.
+                print_to_log_info(f'Processing club ({ndf}/{total_clubs}): result file ({nurl}/{total_results}): {html_file}')
             #if ndf < 1652:
             #    continue
             html_path = acblPath.joinpath(html_file)
@@ -140,13 +142,13 @@ def extract_club_result_json(dfs, filtered_clubs, starting_nclub, ending_nclub, 
                 #else:
                 #    print_to_log(f'Missing local html file: {html_file}')
                 try:
-                    with open(json_path, 'r') as f:
+                    with open(json_path, 'r', encoding='utf-8') as f:
                         data_json = json.load(f)
                 except:
                     print_to_log_info(f'Exception when reading json file: {json_file}. Deleting html and json files.')
                 else:
                     total_local_files_read += 1
-                    print_to_log_info(f'Reading local ({total_local_files_read}/{total_local_files}) file:{json_path}: len:{json_path.stat().st_size}')
+                    #print_to_log_info(f'Reading local ({total_local_files_read}/{total_local_files}) file:{json_path}: len:{json_path.stat().st_size}') # commented out because overloaded notebook output causing system instability.
             else:
                 print_to_log_info(f'Requesting {url}')
                 try:
@@ -187,7 +189,7 @@ def extract_club_result_json(dfs, filtered_clubs, starting_nclub, ending_nclub, 
                             data_json = json.loads(vardata.group(1))
                             #print_to_log(json.dumps(data_json, indent=4))
                             print_to_log_info(f"Writing {json_path}")
-                            with open(json_path, 'w') as f:
+                            with open(json_path, 'w', encoding='utf-8') as f:
                                 json.dump(data_json, f, indent=2)
                             bbo_tournament_id = data_json["bbo_tournament_id"]
                             print_to_log_info(f'bbo_tournament_id: {bbo_tournament_id}')
@@ -224,20 +226,20 @@ def club_results_json_to_sql(urls, starting_nfile=0, ending_nfile=0, initially_d
         print_to_log_info(f"Processing ({nfile}/{total_urls}): file:{json_file.as_posix()}")
         if skip_existing_files:
             if sql_file.exists():
-               print_to_log_info(f"Skipping: File exists:{sql_file.as_posix()}")
+               #print_to_log_info(f"Skipping: File exists:{sql_file.as_posix()}") # removed to avoid too much output
                continue
         try:
             data_json = None
-            with open(json_file, 'r') as f:
+            with open(json_file, 'r', encoding='utf-8') as f:
                 data_json = json.load(f)
             #print_to_log(f"Reading {json_file.as_posix()} dict len:{len(data_json)}")
             if len(event_types) > 0 and data_json['type'] not in event_types:
-                #print_to_log(f"Skipping type:{data_json['type']}: file{json_file.as_posix()}")
+                print_to_log(f"Skipping type:{data_json['type']}: file{json_file.as_posix()}") # removed to avoid too much output
                 continue
             tables = defaultdict(lambda :defaultdict(dict))
             primary_keys = ['id']
             mlBridgeLib.json_to_sql_walk(tables,"events","","",data_json,primary_keys) # "events" is the main table.
-            with open(sql_file,'w') as f:
+            with open(sql_file,'w', encoding='utf-8') as f:
                 mlBridgeLib.CreateSqlFile(tables,f,primary_keys)
             total_files_written += 1
         except Exception as e:
@@ -270,7 +272,7 @@ def club_results_create_sql_db(db_file_connection_string, create_tables_sql_file
 
     if create_tables:
         print_to_log_info(f"Creating tables from:{create_tables_sql_file}")
-        with open(create_tables_sql_file, 'r') as f:
+        with open(create_tables_sql_file, 'r', encoding='utf-8') as f:
             create_sql = f.read()
         raw_connection.executescript(create_sql) # create tables
 
@@ -292,14 +294,13 @@ def club_results_create_sql_db(db_file_connection_string, create_tables_sql_file
     total_filtered_urls = len(filtered_urls)
     start_time = time.time()
     for nfile,url in enumerate(filtered_urls):
-        nfile += 1
         sql_file = url
-        if (nfile % 100) == 0:
-            print_to_log_info(f"Executing SQL script ({nfile}/{total_filtered_urls}): file:{sql_file.as_posix()}")
+        #if (nfile % 1000) == 0:
+        #    print_to_log_info(f"Executing SQL script ({nfile}/{total_filtered_urls}): file:{sql_file.as_posix()}")
         
         try:
             sql_script = None
-            with open(sql_file, 'r') as f:
+            with open(sql_file, 'r', encoding='utf-8') as f:
                 sql_script = f.read()
             start_script_time = time.time()
             raw_connection.executescript(sql_script)
@@ -318,8 +319,8 @@ def club_results_create_sql_db(db_file_connection_string, create_tables_sql_file
             break
         else:
             script_execution_time = time.time()-start_script_time
-            if (nfile % 100) == 0:
-                print_to_log_info(f"SQL script executed: file:{url.as_posix()}: time:{round(script_execution_time,2)}")
+            if (nfile % 1000) == 0:
+                print_to_log_info(f"{nfile}/{total_filtered_urls} SQL script executed: file:{url.as_posix()}: time:{round(script_execution_time,2)}")
             total_script_execution_time += script_execution_time
             total_scripts_executed += 1
 
@@ -517,7 +518,7 @@ def download_tournament_players_history(player_ids, acbl_api_key, dirPath):
                 session_json = response.json()
                 #json_pretty = json.dumps(json_response, indent=4)
                 print_to_log_info(f'{sessions_count}/{sessions_total}: Writing:{filePath_json} len:{len(session_json)}')
-                with open(filePath_json,'w',encoding='UTF8') as f:
+                with open(filePath_json,'w',encoding='utf-8') as f:
                     f.write(json.dumps(session_json, indent=4))
         if sessions_count != sessions_total:
             print_to_log_info(f'Session count mismatch: {dirPath}: variance:{sessions_count-sessions_total}')

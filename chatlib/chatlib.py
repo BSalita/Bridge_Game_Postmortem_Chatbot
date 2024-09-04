@@ -10,6 +10,7 @@ def print_to_log(level, *args):
     logging.log(level, ' '.join(str(arg) for arg in args))
 
 import pandas as pd
+import polars as pl
 from pprint import pprint # obsolete?
 import pathlib
 import sys
@@ -90,7 +91,7 @@ def json_dict_to_df(d,kl,jdl):
 
 # todo: obsolete?
 # todo: if dtype isnumeric() downcast to minimal size. Some columns may have dtype of int64 because of sql declaration ('Board').
-def convert_to_best_dtype(k,v):
+def convert_to_best_dtypex(k,v):
     vv = v.convert_dtypes(infer_objects=True)
     vvv = vv.copy()
     for col in vv.columns:
@@ -274,11 +275,12 @@ def merge_clean_augment_tournament_dfs(dfs, dfs_results, acbl_api_key, acbl_numb
         df_board_results['declarer'] = df_board_results['declarer'].map(lambda x: x[0].upper() if len(x) else None) # None is needed for PASS
         df_board_results['Pct_NS'] = df_board_results['Pct_NS'].div(100)
         df_board_results['Pct_EW'] = df_board_results['Pct_EW'].div(100)
-        df_board_results['table_number'] = None
-        df_board_results['Round'] = None
+        df_board_results['Table'] = None # todo: is this right?
+        df_board_results['Round'] = None # todo: is this right?
+        df_board_results['tb_count'] = None # todo: is this right?
         df_board_results['dealer'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToDealer)
-        df_board_results['Vul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3 # todo: use 'vul' instead for consistency?
-        df_board_results['event_id'] = section['session_id'] # for club compatibility
+        df_board_results['iVul'] = df_board_results['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3
+        df_board_results['event_id'] = section['session_id'].astype('int32') # for club compatibility
         df_board_results['section_name'] = section['section_label'] # for club compatibility
         df_board_results['section_id'] = df_board_results['event_id']+'-'+df_board_results['section_name'] # for club compatibility
         df_board_results['Date'] = pd.to_datetime(df_event['start_date'][0]) # converting to datetime64[ns] for human readable display purposes but will create 'iDate' (int64) in augment
@@ -434,7 +436,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
     for col in df.columns:
         print_to_log_info('cols:',col,df[col].dtype)
 
-    df.drop(['id','created_at','updated_at','board_id','double_dummy_ns','double_dummy_ew','pair_summary_id_ns','pair_summary_id_ew'],axis='columns',inplace=True)
+    df.drop(['id','created_at','updated_at','board_id','double_dummy_ns','double_dummy_ew'],axis='columns',inplace=True)
 
     df.rename({
         'board':'Board',
@@ -452,6 +454,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
         'ns_score':'Score_NS',
         'ew_score':'Score_EW',
         'session_number':'Session',
+        'table_number':'Table',
         'tricks_taken':'Tricks',
        },axis='columns',inplace=True)
 
@@ -461,7 +464,7 @@ def merge_clean_augment_club_dfs(dfs,sd_cache_d,acbl_number): # todo: acbl_numbe
         'Date':'datetime64[ns]', # human-readable date for display. also will create 'iDate' (int64) in augment
         'Final_Standing_NS':'float32',
         'Final_Standing_EW':'float32',
-        'hand_record_id':'string',
+        'hand_record_id':'int64',
         'Pair_Number_NS':'uint16',
         'Pair_Number_EW':'uint16',
         })
@@ -534,12 +537,13 @@ def clean_validate_df(df):
     assert (df['Contract'].eq('PASS')|df['Dbl'].notna()).all()
     assert (df['Contract'].eq('PASS')|df['Dbl'].isin(['','X','XX'])).all()
 
-    assert df['table_number'].isna().all() or df['table_number'].ge(1).all() # some events have NaN table_numbers.
+    assert df['Table'].isna().all() or df['Table'].ge(1).all() # some events have NaN table_numbers.
  
     # create more useful Vul column
     # PerformanceWarning: DataFrame is highly fragmented.
-    df['Vul'] = df['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3
-
+    df['iVul'] = df['Board'].map(mlBridgeLib.BoardNumberToVul).astype('uint8') # 0 to 3
+    df['Vul'] = df['iVul'].map(lambda x: mlBridgeLib.vul_syms[x]).astype('string') # None, NS, EW, Both
+ 
     if not pd.api.types.is_numeric_dtype(df['Score_NS']):
         # PerformanceWarning: DataFrame is highly fragmented.
         df['Score_NS'] = df['Score_NS'].astype('string') # make sure all elements are a string
@@ -576,7 +580,9 @@ def clean_validate_df(df):
     # The following line is on watch. Confirmed that there was an issue with pandas. Effects 'Result' and 'Tricks' and 'BidLvl' columns.
     assert df['Tricks'].map(lambda x: (x != x) or (x is pd.NA) or (0 <= x <= 13)).all() # hmmm, x != x is the only thing which works? Does the new pandas behave as expected? Remove x != x or x is pd.NA?
 
-    df['Round'].fillna(0,inplace=True) # player numbers are sometimes missing. fill with 0.
+    df['Round'] = df['Round'].fillna(0) # Round is sometimes missing. fill with 0.
+    df['tb_count'] = df['tb_count'].fillna(0).astype('uint8') # tb_count is sometimes missing a value. fill with 0.
+    df['Table'] = df['Table'].fillna(0).astype('uint8') # todo: Table is often missing a value. fill with 0.
 
     df.drop(['scores_l'],axis='columns',inplace=True)
 
@@ -615,6 +621,19 @@ def TuplesToSuits(df,tuples,column,excludes=[]):
             # PerformanceWarning: DataFrame is highly fragmented.
             df[k] = v
     return d
+
+
+# Pandas version of mlBridgeLib's Polars version
+# Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
+def CategorifyContractTypeByDirection(df):
+    contract_types_d = {}
+    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
+    for c in cols:
+        for t in mlBridgeLib.contract_types:
+            print_to_log_debug('CT:',c,t,len((t == df[c]).values))
+            new_c = c+'_'+t
+            contract_types_d[new_c] = (t == df[c]).values
+    return contract_types_d
 
 
 def augment_df(df,sd_cache_d):
@@ -694,7 +713,7 @@ def augment_df(df,sd_cache_d):
     assert len(df) == len(contract_types_df)
     df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
     del contract_types_df,contract_types_d
-    contract_types_d = mlBridgeLib.CategorifyContractTypeByDirection(df)
+    contract_types_d = CategorifyContractTypeByDirection(df) # using local pandas version instead of mlBridgeLib's Polars version
     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
     assert len(df) == len(contract_types_df)
     df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
@@ -714,8 +733,8 @@ def augment_df(df,sd_cache_d):
                 print_to_log(logging.WARNING,f'Board {board} score {matchpoint_ns_d[board][score_ns][3]} tuple {matchpoint_ns_d[board][score_ns]} does not match matchpoint score {match_points_ns}') # ok if off by epsilon
 
     # Vul columns
-    df['Vul_NS'] = (df['Vul']&1).astype('bool')
-    df['Vul_EW'] = (df['Vul']&2).astype('bool')
+    df['Vul_NS'] = (df['iVul']&1).astype('bool')
+    df['Vul_EW'] = (df['iVul']&2).astype('bool')
 
     # board result columns
     df['OverTricks'] = df['Result'].gt(0)
@@ -785,7 +804,7 @@ def augment_df(df,sd_cache_d):
     # masterpoints columns
     for d in mlBridgeLib.NESW:
         df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
-        df['mp_total_'+d.lower()].fillna(300,inplace=True) # unknown number of masterpoints. fill with 300.
+        df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].fillna(300) # unknown number of masterpoints. fill with 300.
     df['MP_Sum_NS'] = df['mp_total_n']+df['mp_total_s']
     df['MP_Sum_EW'] = df['mp_total_e']+df['mp_total_w']
     df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
@@ -801,8 +820,8 @@ def augment_df(df,sd_cache_d):
     df.rename({'dealer':'Dealer'},axis='columns',inplace=True)
     assert df['Dealer'].isin(list('NESW')).all()
     df['Dealer'] = df['Dealer'].astype('category') # todo: should this be done earlier?
-    assert df['Vul'].isin([0,1,2,3]).all() # 0 to 3
-    df['Vul'] = df['Vul'].astype('uint8') # todo: should this be done earlier?
+    assert df['iVul'].isin([0,1,2,3]).all() # 0 to 3
+    df['iVul'] = df['iVul'].astype('uint8') # todo: should this be done earlier?
     df['iDate'] = df['Date'].astype('int64')
     return df, sd_cache_d, matchpoint_ns_d
 

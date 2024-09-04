@@ -5,6 +5,8 @@
 
 #!pip install openai python-dotenv pandas --quiet
 
+# todo: load_model() is failing if numpy >= 2.0.0 is installed.
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # or DEBUG
@@ -34,6 +36,14 @@ from dotenv import load_dotenv
 import streamlit_chat
 import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
+
+# Only declared to display version information
+import fastai
+import numpy as np
+import polars as pl
+import safetensors
+import sklearn
+import torch
 
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
@@ -342,7 +352,7 @@ def create_schema_string(df, conn):
                 dtype_name = 'string'
                 df[col] = df[col].astype(dtype_name)
             elif dtype_name == 'uint8':
-                df[col] = pd.to_numeric(df[col], errors='ignore')
+                df[col] = pd.to_numeric(df[col]) # errors='ignore' removed because its being deprecated
             df_dtypes_d[col] = dtype_name
             dtypes_d[dtype_name].append(col)
         for obj in complex_objects:
@@ -622,7 +632,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
     # make predictions
     with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
         t = time.time()
-        Predict_Game_Results()
+        df = Predict_Game_Results(df) # returning updated df for conn.register()
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
     # Create a DuckDB table from the DataFrame
@@ -669,7 +679,7 @@ def chat_initialize(player_number, session_id): # todo: rename to session_id?
         t = time.time()
         streamlit_chat.message(
             f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
-        streamlitlib.ShowDataFrameTable(df, key='clear_conversation_game_data_df')
+        streamlitlib.ShowDataFrameTable(df, key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
         print_to_log_info('ShowDataFrameTable time:', time.time()-t)
 
     return True
@@ -828,90 +838,99 @@ def sd_observations_changed():
         st.session_state.conn.register('results', st.session_state.df)
         # todo: experimenting with outputing a dataframe of some SD relevant columns
         streamlitlib.ShowDataFrameTable(st.session_state.df[['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']+st.session_state.df.filter(regex=r'^SD').columns.to_list(
-        )].sort_values(['Board']).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='sd_observations_changed_sd_df')
+        )].sort_values(['Board'], tooltips=st.session_state.dataframe_tooltips).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='sd_observations_changed_sd_df')
 
 
 import mlBridgeAi
 
-def Predict_Game_Results():
+def Predict_Game_Results(df):
     # Predict game results using a saved model.
 
-    if st.session_state.df is None:
+    if df is None:
         return None
 
     club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
 
-    st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
+    df['Declarer_Rating'] = df['Declarer_Rating'].fillna(.5) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
 
     # create columns from model's predictions.
-    predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contracts_fastai_model.pkl"
+    predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contract_fastai_model.pkl"
     predicted_contracts_model_file = savedModelsPath.joinpath(predicted_contracts_model_filename)
+    print_to_log_info('predicted_contract_model_file:',predicted_contracts_model_file)
     if not predicted_contracts_model_file.exists():
         st.error(f"Oops. {predicted_contracts_model_filename} not found.")
         return None
-    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
+    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
-    print_to_log_debug('isna:',st.session_state.df.isna().sum())
-    #st.session_state.df['Contract'] = st.session_state.df['Contract'].str.replace(' ','').str.upper() # todo: should not be needed if cleaned
-    # not needed here: st.session_state.df['Contract'] = st.session_state.df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else r['Contract'].replace('NT','N')+r['Declarer_Direction'],axis='columns')
-    # todo: assert that Contract equals BidLvl + BidSuit + Dbl + Declarer_Direction
-    assert st.session_state.df['Contract'].isin(mlBridgeLib.contract_classes).all(), st.session_state.df['Contract'][~st.session_state.df['Contract'].isin(mlBridgeLib.contract_classes)]
-    predicted_contract_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
-    y_name = 'Contract' # todo: get this from learn ynames
-    st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
-    st.session_state.df[y_name+'_Code_Actual'] = learn.dls.vocab.map_objs(st.session_state.df[y_name])
-    st.session_state.df[y_name+'_Code_Pred'] = [prob.argmax().item() for prob in predicted_contract_probs]
-    st.session_state.df[y_name+'_Pred'] = learn.dls.vocab.map_ids(st.session_state.df[y_name+'_Code_Pred'])
-    st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
-    st.session_state.df[y_name+'_Code_Match'] = st.session_state.df[y_name+'_Code_Actual'] == st.session_state.df[y_name+'_Code_Pred']
+    print_to_log_debug('isna:',df.isna().sum())
+    contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
+    df['Contract'] = df['Contract'].astype('category',categories=contracts_all)
+    #df['Contract'] = df['Contract'].astype('string')
+    print(df['Contract'])
+    #df = df.drop(df[~df['Contract'].isin(learn.dls.vocab)].index)
+    assert df['Contract'].isin(mlBridgeLib.contract_classes).all(), df['Contract'][~df['Contract'].isin(mlBridgeLib.contract_classes)]
+    #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.vocab)
+    #import pickle
+    #save_df_filename = "app_df.pkl"
+    #save_df_file = savedModelsPath.joinpath(save_df_filename)
+    #with open(save_df_file, 'wb') as f:
+    #    pickle.dump(df,f)
+    #print(f"Saved {save_df_filename}: size:{save_df_file.stat().st_size}")
+    pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+    df = pd.concat([df,pred_df],axis='columns')
+    print(df)
 
     # create columns from model's predictions.
-    predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_directions_fastai_model.pkl"
+    predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_declarer_direction_fastai_model.pkl"
     predicted_directions_model_file = savedModelsPath.joinpath(predicted_directions_model_filename)
+    print_to_log_info('predicted_declarer_direction_model_file:',predicted_directions_model_file)
     if not predicted_directions_model_file.exists():
         st.error(f"Oops. {predicted_directions_model_file} not found.")
         return None
-    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) st.session_state.df['ParScore_MPs'] = st.session_state.df['ParScore_MPs_NS']
+    # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
     learn = mlBridgeAi.load_model(predicted_directions_model_file)
-    print_to_log_debug('isna:',st.session_state.df.isna().sum())
-    #st.session_state.df['Tricks'].fillna(.5,inplace=True)
-    #st.session_state.df['Result'].fillna(.5,inplace=True)
-    st.session_state.df['Declarer_Rating'].fillna(.5,inplace=True) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
-    predicted_declarer_direction_NESW_probs, _ = mlBridgeAi.get_predictions(learn, st.session_state.df) # classifier returns list containing a probability for every class label (NESW)
-    y_name = 'Declarer_Direction'
-    class_labels = learn.dls.vocab
-    # following obsolete?
-    #for i,l in enumerate(class_labels):
-    #    st.session_state.df['_'.join([y_name,l,'Pred'])] = predicted_declarer_direction_NESW_probs[:,i]
-    predicted_declarer_direction = [class_labels[l.argmax().item()] for l in predicted_declarer_direction_NESW_probs]
-    st.session_state.df[y_name+'_Actual'] = st.session_state.df[y_name]
-    st.session_state.df[y_name+'_Pred'] = predicted_declarer_direction
-    st.session_state.df['Declarer_Number_Pred'] = st.session_state.df.apply(lambda r: r['Player_Number_'+r[y_name+'_Pred']],axis='columns')
-    st.session_state.df['Declarer_Name_Pred'] = st.session_state.df.apply(lambda r: r['Player_Name_'+r[y_name+'_Pred']],axis='columns')
-    st.session_state.df[y_name+'_Match'] = st.session_state.df[y_name+'_Actual'] == st.session_state.df[y_name+'_Pred']
-    st.session_state.df['Declarer_Pair_Direction_Match'] = st.session_state.df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
+    print_to_log_debug('isna:',df.isna().sum())
+    #df['Tricks'].fillna(.5,inplace=True)
+    #df['Result'].fillna(.5,inplace=True)
+    # FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+    df['Declarer_Rating'] = df['Declarer_Rating'].fillna(.5) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
+    # encode categories using original y categories
+    #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.procs.categorify.classes[learn.dls.y_names[0]])
+    print(df['Declarer_Direction'])
+    #df['Declarer_Direction'] = df['Declarer_Direction'].astype('string')
+    print('vocab:',learn.dls.vocab)
+    pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+    df = pd.concat([df,pred_df],axis='columns')
+    y_name = learn.dls.y_names[0]
+    print(y_name)
+    print(df)
+    df['Declarer_Number_Pred'] = df.apply(lambda r: r['Player_Number_'+(r['Dealer'] if r[y_name+'_Pred']=='PASS' else r[y_name+'_Pred'][-1])],axis='columns')
+    df['Declarer_Name_Pred'] = df.apply(lambda r: r['Player_Name_'+(r['Dealer'] if r[y_name+'_Pred']=='PASS' else r[y_name+'_Pred'][-1])],axis='columns')
+    df['Declarer_Pair_Direction_Match'] = df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
 
     # create columns from model's predictions.
-    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_rankings_fastai_model.pkl"
+    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_pct_ns_fastai_model.pkl"
     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
+    print_to_log_info('predicted_pct_ns_model_file:',predicted_rankings_model_file)
     if not predicted_rankings_model_file.exists():
         st.error(f"Oops. {predicted_rankings_model_file} not found.")
         return None
-    y_name = 'Pct_NS'
-    #predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, st.session_state.df)
+    #y_name = 'Pct_NS'
+    #predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, df)
     learn = mlBridgeAi.load_model(predicted_rankings_model_file)
-    predicted_board_result_pcts_ns, _ = mlBridgeAi.get_predictions(learn, st.session_state.df)
+    #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.procs.categorify.classes[learn.dls.y_names[0]])
+    pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+    df = pd.concat([df,pred_df],axis='columns')
+    y_name = learn.dls.y_names[0]
+    print(y_name)
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
-    st.session_state.df[y_name_ns+'_Actual'] = st.session_state.df[y_name_ns]
-    st.session_state.df[y_name_ew+'_Actual'] = st.session_state.df[y_name_ew]
-    st.session_state.df[y_name_ns+'_Pred'] = predicted_board_result_pcts_ns
-    st.session_state.df[y_name_ew+'_Pred'] = 1-predicted_board_result_pcts_ns
-    st.session_state.df[y_name_ns+'_Diff'] = st.session_state.df[y_name_ns+'_Actual']-st.session_state.df[y_name_ns+'_Pred']
-    st.session_state.df[y_name_ew+'_Diff'] = st.session_state.df[y_name_ew+'_Actual']-st.session_state.df[y_name_ew+'_Pred']
+    df[y_name_ew+'_Actual'] = df[y_name_ew]
+    df[y_name_ew+'_Pred'] = 1-df[y_name_ns+'_Pred']
+    df[y_name_ns+'_Diff'] = df[y_name_ns+'_Actual']-df[y_name_ns+'_Pred']
+    df[y_name_ew+'_Diff'] = df[y_name_ew+'_Actual']-df[y_name_ew+'_Pred']
 
-    return ([y_name_ns+'_Actual', y_name_ns+'_Pred', y_name_ns+'_Diff'], [y_name_ew+'_Actual', y_name_ew+'_Pred', y_name_ew+'_Diff'])
-
+    return df # return newly created df. created by df = pd.concat().
 
 def read_favorites():
 
@@ -978,6 +997,7 @@ def reset_data():
     st.session_state.prompts_selectbox = 'Choose a Prompt'
     st.session_state.vetted_prompts = None
     st.session_state.vetted_prompt_titles = None
+    st.session_state.dataframe_tooltips = None
 
     # augmented columns
     st.session_state.player_number = None
@@ -1031,9 +1051,9 @@ def reset_data():
 
 def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
-    # fastai:{fastai.__version__} pytorch:{fastai.__version__} sklearn:{sklearn.__version__} safetensors:{safetensors.__version__}
+    # fastai:{fastai.__version__} pytorch:{torch.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__}
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} Query Params:{st.query_params.to_dict()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__} numpy:{np.__version__} polars:{pl.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} Query Params:{st.query_params.to_dict()}")
 
 
 def create_sidebar():
@@ -1095,9 +1115,11 @@ def create_sidebar():
 
         # create dict of vetted prompts
         st.session_state.vetted_prompt_titles = {
-            vp['title']: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
+            vp['title']: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()
+        }
         st.session_state.vetted_prompts = {
-            k: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()}
+            k: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()
+        }
 
         # favorite buttons
         for k, button in st.session_state.favorites['Buttons'].items():
@@ -1124,6 +1146,10 @@ def create_sidebar():
         if len(st.session_state.vetted_prompts):
             st.sidebar.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
                                     on_change=prompts_selectbox_change, key='prompts_selectbox')
+            
+        st.session_state.dataframe_tooltips = {
+            col: tip for col, tip in st.session_state.favorites['ToolTips'].items()
+        }
 
     if st.session_state.player_number_favorites is not None:
         st.sidebar.write(
@@ -1184,7 +1210,7 @@ def create_tab_bar():
             if st.session_state.df is not None:
                 # AgGrid unreliable in displaying within tab so using st.dataframe instead
                 # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
-                streamlitlib.ShowDataFrameTable(st.session_state.df, key='data_tab_df')
+                streamlitlib.ShowDataFrameTable(st.session_state.df, key='data_tab_df', tooltips=st.session_state.dataframe_tooltips)
                 #st.dataframe(st.session_state.df)
 
         with dtypes:
@@ -1365,7 +1391,7 @@ def create_main_section():
                 df.index.name = 'Row'
                 st.session_state.df_unique_id += 1 # only needed because message dataframes aren't being released for some unknown reason.
                 streamlitlib.ShowDataFrameTable(
-                    df, key='main_messages_df_'+str(st.session_state.df_unique_id), color_column=None if len(df.columns) <= 1 else df.columns[1]) # only colorize if more than one column.
+                    df, key='main_messages_df_'+str(st.session_state.df_unique_id), color_column=None if len(df.columns) <= 1 else df.columns[1], tooltips=st.session_state.dataframe_tooltips) # only colorize if more than one column.
                 pdf_assets.append(df)
                 # else:
                 #    st.dataframe(df.T.style.format(precision=2, thousands=""))

@@ -140,7 +140,7 @@ def plot_heatmap(cross_table, fmt='.2f', xlabel=None, ylabel=None, zlabel=None, 
 # AgGrid doesn't handle Series.
 # st.dataframe is incredibly slow when displaying color styles per cell. Haven't been able to find a way to display alternating row colors, only per cell styling.
 # st.table has huge row size.
-def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=None,ngroup_name=None,round=2):
+def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=None,ngroup_name=None,round=2,tooltips=None):
 
     if output_method == 'table':
         st.table(table_df.style.format({col:'{:,.2f}' for col in table_df.select_dtypes('float')}).set_table_styles(style_table())) #,1600,500)
@@ -159,6 +159,10 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
         gb.configure_default_column(cellStyle={'color': 'black', 'font-size': '12px'}, suppressMenu=True, wrapHeaderText=True, autoHeaderHeight=True)
         # some streamlit custom_css examples: https://discuss.streamlit.io/t/how-to-use-custom-css-in-ag-grid-tables/26743
         # patch - 17-Aug-2023 - added - #gridToolBar to fix missing horizontal scrollbar. https://discuss.streamlit.io/t/st-aggrid-horizontal-scroll-bar-disappears-when-i-define-a-height/46217/10?u=bsalita
+        # Define column tooltips
+        if tooltips is not None:
+            for col in table_df.columns:
+                gb.configure_column(col, headerTooltip=tooltips.get(col,col))
         custom_css = {
             '.ag-header-cell-text': {'font-size': '12px', 'text-overflow': 'revert;', 'font-weight': 700},
             '.ag-theme-streamlit': {'transform': 'scale(0.8)', 'transform-origin': '0 0'},

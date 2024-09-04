@@ -23,6 +23,7 @@ def print_to_log(level, *args):
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import os
 import pathlib
 from collections import defaultdict
@@ -46,6 +47,7 @@ NESW = 'NESW' # Hands and PBN order
 NWES = 'NWES' # board_record_string (brs) ordering
 SHDCN = 'SHDCN' # ordering used by dds
 NextPosition = {'N':'E','E':'S','S':'W','W':'N'}
+position_rotations_by_dealer = {'N':'NESW','E':'ESWN','S':'SWNE','W':'WNES'}
 direction_order = NESW
 NS_EW = ['NS','EW'] # list of partnership directions
 major_suits = 'HS'
@@ -56,6 +58,7 @@ ranked_suit_rev = reversed(ranked_suit) # card denominations - low to high
 ranked_suit_dict = {c:n for n,c in enumerate(ranked_suit)}
 max_bidding_level = 7
 tricks_in_a_book = 6
+# todo: rename to VulToDDSVul
 vul_d = {'None':0, 'Both':1, 'N_S':2, 'E_W':3} # dds vul encoding is weird
 vul_syms = ['None','N_S','E_W','Both']
 vul_directions = [[],[0,2],[1,3],[0,1,2,3]]
@@ -69,7 +72,9 @@ allHigherContracts_d = {c:allContracts[n+1:] for n,c in enumerate(allContracts)}
 suit_names_d = {'S':'Spades','H':'Hearts','D':'Diamonds','C':'Clubs','N':'No-Trump'}
 contract_classes = ['PASS'] + [level+suit+dbl+decl for level in '1234567' for suit in 'CDHSN' for dbl in ['','X','XX'] for decl in 'NESW']
 contract_classes_dtype = pd.CategoricalDtype(contract_classes, ordered=False)
-
+declarer_direction_to_pair_direction = {'N':'NS','S':'NS','E':'EW','W':'EW'}
+# creates a dict all possible opening bids in auction order. key is npasses and values are opening bids.
+auction_order = [level+suit for level in '1234567' for suit in 'CDHSN']+['x','xx','p'] # todo: put into mlBridgeLib
 
 def pd_options_display():
     # display options overrides
@@ -84,6 +89,8 @@ def pd_options_display():
     pd.options.display.expand_frame_repr = False
     #pd.set_option("display.expand_frame_repr", False)
 
+#def beep(): # todo: jupyter notebooks and windows only. disable for others.
+#    !powershell "[console]::beep(500,300)"
 
 # todo: could save a couple seconds by creating dict of deals
 def calc_double_dummy_deals(deals, batch_size=40):
@@ -376,7 +383,7 @@ wd = {c:1<<n for n,c in enumerate(ranked_suit_rev)}
 def HandsToBin(hands):
     t = tuple(HandToBin(hand) for hand in hands)
     assert sum(tt[0] for tt in t) == (1<<(13*4))-1
-    return tuple(tuple([bin(h[0]),tuple(bin(s) for s in h[1])]) for h in t)
+    return tuple(tuple([bin(h[0])[2:].zfill(52),tuple(bin(s)[2:].zfill(13) for s in h[1])]) for h in t)
 def HandToBin(hand):
     t = tuple(SuitToBin(suit) for suit in hand)
     tsum = sum(h<<(n*13) for n,h in enumerate(reversed(t))) # order spades to clubs
@@ -468,6 +475,17 @@ def ContractType(tricks,suit):
     return ct
 
 
+def ContractTypeFromContract(contract):
+    # contact is 'PASS'|[1-7][CDHSN]X*[NESW]
+    if contract[0] == 'P':
+        tricks = 0
+        suit = None
+    else:
+        tricks = int(contract[0])+6
+        suit = contract[1]
+    return ContractType(tricks,suit)
+
+
 def CategorifyContractTypeBySuit(ddmakes):
     contract_types_d = defaultdict(list)
     for dd in ddmakes:
@@ -482,16 +500,17 @@ def CategorifyContractTypeBySuit(ddmakes):
 # Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
 def CategorifyContractTypeByDirection(df):
     contract_types_d = {}
-    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
+    cols = df.select(pl.selectors.matches(r'CT_(NS|EW)_[CDHSN]')).columns
     for c in cols:
         for t in contract_types:
-            print_to_log_debug('CT:',c,t,len((t == df[c]).values))
+            #print_to_log_debug('CT:',c,t)
             new_c = c+'_'+t
-            contract_types_d[new_c] = (t == df[c]).values
+            contract_types_d[new_c] = (t == df[c])
     return contract_types_d
 
 
 # convert vul to boolean based on direction
+# todo: rename to DirectionVulToBool
 def DirectionToVul(vul, nesw):
     return nesw in vul_directions[vul_syms.index(vul)]
 
@@ -536,13 +555,20 @@ def DDmakesToScores(ddmakes,vuls):
         scoresl.append(directionsl)
     return scoresl
 
-
-def ContractToScores(df,direction='Declarer_Direction'):
+def ContractToScores(df,direction='Declarer_Direction',cache={}):
     assert 'NSEW' not in df and direction in df
-    scores_l = df.apply(lambda r: [0]*14 if r['Contract']=='PASS' else scoresd[r['BidLvl']-1,StrainSymToValue(r['BidSuit']),DirectionSymToDealer(r[direction]) in vul_directions[r['Vul']],len(r['Dbl']),'NSEW'.index(r[direction])],axis='columns') # scoresd[level, suit, vulnerability, double, declarer]
-    # adjusted score? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
+    scores_l = []
+    for bidlvl,bidsuit,direction,ivul,dbl in df[['BidLvl','BidSuit',direction,'iVul','Dbl']].to_numpy(): # rows: # convert df to list of tuples
+        if bidlvl is pd.NA or bidlvl == 0: # Contract of 'PASS' in which case BidSuit and Dbl are nulls.
+            scores = [[0]*14]
+        elif (bidlvl,bidsuit,direction,ivul,dbl) in cache:
+            scores = cache[(bidlvl,bidsuit,direction,ivul,dbl)]
+        else:
+            scores = scoresd[bidlvl-1,StrainSymToValue(bidsuit),DirectionSymToDealer(direction) in vul_directions[ivul],len(dbl),'NSEW'.index(direction)]
+            cache[(bidlvl,bidsuit,direction,ivul,dbl)] = scores
+        scores_l.append(scores)
+    # what to do about adjusted scores? assert df['Score_NS'].isin(scores_l).all(), df[df.apply(lambda r: r['Score_NS'] not in r['scores_l'],axis='columns')]
     return scores_l
-
 
 # Convert score tuples into Par.
 # todo: rewrite into two defs; looping, core logic
@@ -743,7 +769,7 @@ def ScoreDicts():
 
 
 # returns scoring array(14) where all sets are doubled. For situations where perfect defense is assumed (Par, match point predictions)
-def ScoreDoubledSets(level, suit, vul, double, declarer):
+def ScoreDoubledSets(level, suit, vul, double, declarer): # vul = is declarer vul? declarer = NSEW.index(declarer). if declarer is EW (declarer >= 2), returns negative.
     return scoresd[(level, suit, vul, 1, declarer)][:level+7]+scoresd[(level, suit, vul, double, declarer)][7+level:]
 
 
@@ -1291,7 +1317,7 @@ def CreateSqlTablesFile(f,tables,primary_keys):
 # only create file if it doesn't exist. Must manually delete file if new version is wanted.
 #create_tables_sql_file = pathlib.Path("acbl_tournament_sessions_schema.sql")
 #if not create_tables_sql_file.exists():
-#    with open(create_tables_sql_file,'w') as f:
+#    with open(create_tables_sql_file,'w',encoding='utf-8') as f:
 #        CreateSqlTablesFile(f,tables)
 #tables = defaultdict(lambda :defaultdict(dict))
 #json_to_sql_walk(tables,'events',"",[],data_json,primary_keys)

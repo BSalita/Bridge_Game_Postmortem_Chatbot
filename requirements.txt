@@ -1,7 +1,9 @@
 # for app.py
 streamlit
+streamlit-chat
 openai
-pandas < 2.1.0
+pandas
+polars
 duckdb
 requests
 urllib3
@@ -11,7 +13,8 @@ termcolor
 streamlit-chat
 bs4
 endplay
-pyparse>=3.0.0
+pyparse
+#pyparse>=3.0.0
 sqlalchemy
 sqlalchemy_utils
 safetensors
@@ -24,6 +27,8 @@ torchaudio
 # for streamlitlib
 reportlab
 markdown
+aiohttp
+
 
 # for mlBridgeLib
 numpy

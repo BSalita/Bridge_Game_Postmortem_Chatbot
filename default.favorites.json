@@ -381,6 +381,7 @@
 			"Wrong_Side": {
 				"title": "Boards Played from Wrong Side",
 				"help": "**Showing boards played from wrong side (DD tricks declarer < DD tricks dummy).**",
+				"comment": "Todo: Looks like opponent's par score and sd score is presented as our score. Needs to be in declarer's direction or break into NS and EW?",
 				"prompts": [
 					{
 						"prompt": "Show board, contract, result, score, parscore, pct, parscore pct, sd pct, dd tricks, dd tricks dummy. Show those boards we played and dd tricks < dd tricks dummy.",
@@ -602,5 +603,12 @@
 				]
 			}
 		}
+	},
+	"ToolTips": {
+		"Board": "Board number.",
+		"Contract": "Contract bid.",
+		"Score": "Actual score.",
+		"ParScore": "Par score.",
+		"Pct": "Percentage."
 	}
 }
