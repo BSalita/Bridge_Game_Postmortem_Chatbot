@@ -864,7 +864,7 @@ def Predict_Game_Results(df):
     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
     print_to_log_debug('isna:',df.isna().sum())
     contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
-    df['Contract'] = df['Contract'].astype('category',categories=contracts_all)
+    df['Contract'] = pd.Categorical(df['Contract'], categories=contracts_all)
     #df['Contract'] = df['Contract'].astype('string')
     print(df['Contract'])
     #df = df.drop(df[~df['Contract'].isin(learn.dls.vocab)].index)
