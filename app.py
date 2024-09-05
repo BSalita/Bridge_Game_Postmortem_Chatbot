@@ -864,19 +864,10 @@ def Predict_Game_Results(df):
     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
     print_to_log_debug('isna:',df.isna().sum())
     contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
-    # Check if all contracts in df are in contracts_all
-    unknown_contracts = set(df['Contract'].unique()) - set(contracts_all)
-    if unknown_contracts:
-        print(f"Warning: Unknown contracts found: {unknown_contracts}")
-        # Add unknown contracts to contracts_all
-        contracts_all.extend(unknown_contracts)
-    df['Contract'] = pd.Categorical(df['Contract'], categories=contracts_all)
-    # Ensure the model's vocabulary matches the current data
-    if set(df['Contract'].cat.categories) != set(learn.dls.vocab):
-        print("Warning: Mismatch between model vocabulary and data categories.")
-        print(f"Model vocab: {learn.dls.vocab}")
-        print(f"Data categories: {df['Contract'].cat.categories}")
-        # You might want to retrain the model or adjust the data here
+    #df['Contract'] = df['Contract'].astype('category',categories=contracts_all)
+    #df['Contract'] = df['Contract'].astype('string')
+    #print(df['Contract'])
+    #df = df.drop(df[~df['Contract'].isin(learn.dls.vocab)].index)
     assert df['Contract'].isin(mlBridgeLib.contract_classes).all(), df['Contract'][~df['Contract'].isin(mlBridgeLib.contract_classes)]
     #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.vocab)
     #import pickle
