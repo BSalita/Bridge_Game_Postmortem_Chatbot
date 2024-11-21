@@ -1,5 +1,6 @@
 # for app.py
 streamlit
+streamlit-extras
 streamlit-chat
 openai
 pandas

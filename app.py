@@ -1080,7 +1080,7 @@ def create_sidebar():
         launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls[st.session_state.session_id][1]})"
     st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
 
-    # These files are releoaded each time for development purposes. Only takes a second.
+    # These files are reloaded each time for development purposes. Only takes a second.
     # todo: put filenames into a .json or .toml file?
     st.session_state.default_favorites_file = pathlib.Path(
         'default.favorites.json')
