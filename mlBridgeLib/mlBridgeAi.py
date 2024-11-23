@@ -216,7 +216,7 @@ def get_predictions(learn, df, y_names=None, device='cpu'):
 
     invalid_dtypes = []
     for col in df.columns:
-        if df[col].dtype.name not in ['category','datetime64[ns]','object','string']: # dtypes which will be converted by fastai. Otherwise must be a torch compatible dtype.
+        if df[col].dtype.name not in ['category','datetime64[us]','object','string']: # dtypes which will be converted by fastai. Otherwise must be a torch compatible dtype.
             if df[col].dtype.name not in ['float64', 'float32', 'float16', 'complex64', 'complex128', 'int64', 'int32', 'int16', 'int8', 'uint64', 'uint32', 'uint16', 'uint8', 'bool']:
                 print_to_log_info(f"Warning: {col} is neither a fastai dtype nor a torch compatible dtype: {df[col].dtype.name}. Convert to a supported dtype")
                 invalid_dtypes.append((col, df[col].dtype.name))
@@ -243,7 +243,20 @@ def get_predictions(learn, df, y_names=None, device='cpu'):
         print_to_log_info('pred_code_to_actual_code_d:',pred_code_to_actual_code_d)
 
         # Create a dataloader for the inference data
-        dl = learn.dls.test_dl(df)
+        # Compare dtypes
+        dtypes_df1 = dict(zip(df.columns, df.dtypes))
+        dtypes_df2 = dict(zip(learn.dls.xs.columns, learn.dls.xs.dtypes))
+
+        # Find columns with different dtypes
+        different_dtypes = {col: (dtypes_df1[col], dtypes_df2[col]) for col in dtypes_df1 if col in dtypes_df2 and dtypes_df1[col] != dtypes_df2[col]}
+
+        # Report differences
+        for col, (dtype1, dtype2) in different_dtypes.items():
+            print(f"Column '{col}' has different dtypes: {dtype1} in df1, {dtype2} in df2")
+        cols = df.columns.tolist()
+        #cols.remove('Date')
+
+        dl = learn.dls.test_dl(df[cols])
 
         # Make predictions on the inference data
         preds, targets = learn.get_preds(dl=dl)#, with_input=True, with_decoded=True)
