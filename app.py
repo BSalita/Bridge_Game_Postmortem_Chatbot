@@ -619,7 +619,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     # Convert 'Date' to datetime and extract scalers
     assert df['Date'].n_unique() == 1, "Oops. Date is non-unique."
-    st.session_state.game_date = pl.col("Date").str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S").first()
+    st.session_state.game_date = df['Date'].first() # showing time in case player played multiple games on same day
     assert df['event_id'].eq(st.session_state.session_id).all()
 
     # Iterate over player directions
@@ -667,10 +667,9 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Boards_We_Played'),
                 ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Our_Boards'),
                 ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Boards_I_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.player_id]))).alias('Boards_We_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Boards_Partner_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Partners_Boards'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (~pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.player_id]))).alias('Boards_Opponent_Declared')
+                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.partner_id]))).alias('Boards_We_Declared'),
+                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
+                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (~pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.partner_id]))).alias('Boards_Opponent_Declared')
             ])
             break
 
@@ -724,18 +723,19 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
     #streamlit_chat.message(f"Morty: {content}", logo=st.session_state.assistant_logo)
 
     if st.session_state.show_sql_query:
-        t = time.time()
-        streamlit_chat.message(
-            f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
+        pass
+        #t = time.time()
+        #streamlit_chat.message(
+        #    f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
         # todo: replace query string with query from json file.
-        ShowDataFrameTable(df, query='SELECT Board, Contract, Result, Tricks, Score_NS, Pct_NS, ParScore_NS', key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
-        print_to_log_info('ShowDataFrameTable time:', time.time()-t)
+        #ShowDataFrameTable(df, query='SELECT Board, Contract, Result, Tricks, Score_NS, Pct_NS, ParScore_NS', key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
+        #print_to_log_info('ShowDataFrameTable time:', time.time()-t)
 
     return True
 
 
 def slash_about():
-    content = f"Hey {st.session_state.player_name} ({st.session_state.player_id}), let's chat about your game on {st.session_state.game_date} (event id {st.session_state.session_id}). Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.player_id}) who played {st.session_state.partner_direction}."
+    content = f"Hey {st.session_state.player_name} ({st.session_state.player_id}), let's chat about your game on {st.session_state.game_date} (event id {st.session_state.session_id}). Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
     return content
 
 
