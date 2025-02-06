@@ -149,10 +149,7 @@ def json_dict_to_types(json_dict,root_name,path):
 
 
 # todo: finish converting from pandas to polars. hitch is that pd.json_normalize() is pandas only.
-def create_club_dfs(acbl_number,event_url):
-    data = acbllib.get_club_results_details_data(event_url)
-    if data is None:
-        return None
+def create_club_dfs(data):
     dfs = {}
     event_df = pd.json_normalize(data,max_level=0) # todo: convert to polars
     dfs['event'] = pl.from_pandas(event_df)
@@ -175,6 +172,11 @@ def create_club_dfs(acbl_number,event_url):
     dfs['players'] = pl.from_pandas(pd.json_normalize(data,['sessions','sections','pair_summaries','players']))
     dfs['board_results'] = pl.from_pandas(pd.json_normalize(data,['sessions','sections','boards','board_results']))
     return dfs
+
+
+# def create_tournament_dfs(data):
+#     return create_club_dfs(data)
+
 
 
 def merge_clean_augment_club_dfs(dfs, sd_cache_d, acbl_number):  # todo: acbl_number obsolete?
@@ -217,7 +219,7 @@ def merge_clean_augment_club_dfs(dfs, sd_cache_d, acbl_number):  # todo: acbl_nu
     df_br_b_sections_sessions = df_br_b_sections_sessions.with_columns(pl.col("event_id").cast(pl.Int64)) # todo: hack to fix hack in pandas to polars conversion error
     df_br_b_sections_sessions_clubs = df_br_b_sections_sessions.join(df_clubs, on='event_id', how='left')
     print_to_log_info(df_br_b_sections_sessions_clubs.head(1))
-    assert df_br_b_sections_sessions_clubs.height == df_br_b_sections.height
+    assert df_br_b_sections_sessions_clubs.height == df_br_b_sections_sessions.height
     #assert not df_sections.columns.str.contains(r'^.*_[xy]$').any()
 
     df_events = dfs['event'].rename({'id': 'event_id', 'club_name': 'event_club_name', 'type': 'event_type'}).drop(['created_at', 'updated_at', 'transaction_date', 'deleted_at'])
@@ -302,7 +304,7 @@ def merge_clean_augment_club_dfs(dfs, sd_cache_d, acbl_number):  # todo: acbl_nu
 
     df = df.with_columns([
         pl.col('board_record_string').cast(pl.Utf8),
-        pl.col("Date").str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S"),
+        pl.col('Date').str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S"),
         #pl.col('Final_Standing_NS').cast(pl.Float32), # Final_Standing_NS is not a column in the data. use percentage instead?
         #pl.col('Final_Standing_EW').cast(pl.Float32), # Final_Standing_EW is not a column in the data. use percentage instead?
         pl.col('hand_record_id').cast(pl.Int64),
@@ -320,42 +322,193 @@ def merge_clean_augment_club_dfs(dfs, sd_cache_d, acbl_number):  # todo: acbl_nu
 
     #return df, sd_cache_d, matchpoint_ns_d
 
+def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_id):
+    # dfs_results contains: tournament[], event[], overalls[], handrecord[], sections[]
+    print_to_log_info('merge_clean_augment_tournament_dfs: dfs keys:', dfs.keys())
+
+    # tournament: ['_schedule_id', 'sanction', 'alt_sanction', 'name', 'start_date', 'end_date', 'district', 'unit', 'category', 'type', 'mp_restrictions', 'allowed_conventions', 'schedule_pdf', 'schedule_link', 'locations', 'last_updated', 'schedule_available', 'cancelled', 'contacts']
+    # 'event': ['sanction', '_id', '_schedule_id', 'id', 'name', 'event_code', 'start_date', 'start_time', 'game_type', 'event_type', 'mp_limit', 'mp_color', 'mp_rating', 'is_charity', 'is_juniors', 'is_mixed', 'is_playthrough', 'is_seniors', 'is_side_game', 'is_womens', 'session_count', 'is_online', 'results_available', 'strat_count', 'strat_letters']
+    # 'handrecord': ['box_number', 'board_number',
+    #     'north_spades', 'north_hearts', 'north_diamonds', 'north_clubs', 'east_spades', 'east_hearts', 'east_diamonds', 'east_clubs', 'south_spades', 'south_hearts', 'south_diamonds', 'south_clubs', 'west_spades', 'west_hearts', 'west_diamonds', 'west_clubs',
+    #     'double_dummy_north_south', 'double_dummy_east_west', 'double_dummy_par_score', 'dealer', 'vulnerability']
+    # 'sections': ['id', 'number', 'transaction_date', 'hand_records', 'sections']
+    # 'overall': ['session_id', 'mp_won', 'mp_color', 'score', 'team_number', 'pair_number', 'percentage', 'rank_strat_1', 'rank_strat_2', 'rank_strat_3', 'section', 'players']
+    results_dfs_d = {}
+    for k,v in json_results_d.items():
+        print_to_log_info(k,type(v))
+        if isinstance(v,list):
+            results_dfs_d[k] = pl.DataFrame(v,strict=False) # concat the list of dicts into a single dict. 'sections' needs strict=False.
+        elif isinstance(v,dict):
+            results_dfs_d[k] = pl.DataFrame(v)
+        else:
+            results_dfs_d[k] = v
+
+    section_label = dfs['section']
+    df = results_dfs_d['sections'].filter(pl.col('section_label').eq(section_label)) # filter for the section of interest
+    print_to_log_info(df.head(1))
+
+    df = df.explode('board_results').unnest('board_results')
+    print_to_log_info(df.head(1))
+
+    ns_df = df.filter(pl.col('orientation') == 'N-S').drop(['orientation'])
+    print_to_log_info(ns_df.head(1))
+    ew_df = df.filter(pl.col('orientation') == 'E-W').drop(['orientation'])
+    print_to_log_info(ew_df.head(1))
+    assert ns_df.height == ew_df.height, f'ns_df.height: {ns_df.height}, ew_df.height: {ew_df.height}'
+    assert ns_df.columns == ew_df.columns, f'ns_df.columns: {ns_df.columns}, ew_df.columns: {ew_df.columns}'
+
+    identical_columns = ['session_id', 'section_label', 'movement_type', 'scoring_type', 'board_number', 'contract', 'declarer']
+    print_to_log_info(identical_columns)
+    # for col in identical_columns:
+    #     for i in range(ns_df.height):
+    #         if ns_df[col][i] != ew_df[col][i]:
+    #             print_to_log_info(f'ns_df[{col}][{i}]: {ns_df[col][i]}, ew_df[{col}][{i}]: {ew_df[col][i]}')
+        #assert ns_df[col].equals(ew_df[col], null_equal=True), (ns_df[col], ew_df[col])
+    #assert ns_df[identical_columns].equals(ew_df[identical_columns], null_equal=True), f'ns_df: {ns_df[identical_columns].head(1)}, ew_df: {ew_df[identical_columns].head(1)}'
+    rename_directional_columns = ['match_points', 'percentage', 'pair_number']
+    ns_df = ns_df.rename({
+        **{col: col+'_ns' for col in rename_directional_columns},
+        'opponent_pair_number': 'pair_number_ew'
+    })
+    print_to_log_info(ns_df.head(1))
+    ew_df = ew_df.rename({
+        **{col: col+'_ew' for col in rename_directional_columns},
+        'opponent_pair_number': 'pair_number_ns'
+    })
+    print_to_log_info(ew_df.head(1))
+
+    ns_df = ns_df.with_columns(
+        pl.col('pair_acbl').list.get(0).cast(pl.UInt32).alias('player_number_n'),
+        pl.col('pair_acbl').list.get(1).cast(pl.UInt32).alias('player_number_s'),
+        pl.col('pair_names').list.get(0).cast(pl.String).alias('player_name_n'),
+        pl.col('pair_names').list.get(1).cast(pl.String).alias('player_name_s'),
+        pl.col('opponent_pair_names').list.get(0).cast(pl.String).alias('opponent_pair_name_n'),
+        pl.col('opponent_pair_names').list.get(1).cast(pl.String).alias('opponent_pair_name_s'),
+    ).drop(['pair_acbl','pair_names','opponent_pair_names'])
+    print_to_log_info(ns_df.head(1))
+
+    ew_df = ew_df.with_columns(
+        pl.col('pair_acbl').list.get(0).cast(pl.UInt32).alias('player_number_e'),
+        pl.col('pair_acbl').list.get(1).cast(pl.UInt32).alias('player_number_w'),
+        pl.col('pair_names').list.get(0).cast(pl.String).alias('player_name_e'),
+        pl.col('pair_names').list.get(1).cast(pl.String).alias('player_name_w'),
+        pl.col('opponent_pair_names').list.get(0).cast(pl.String).alias('opponent_pair_name_e'),
+        pl.col('opponent_pair_names').list.get(1).cast(pl.String).alias('opponent_pair_name_w'),
+    ).drop(['pair_acbl','pair_names','opponent_pair_names'])
+    print_to_log_info(ew_df.head(1))
+
+    df = ns_df.join(ew_df, left_on=identical_columns+['pair_number_ns','pair_number_ew'], right_on=identical_columns+['pair_number_ew','pair_number_ns'], how='left')
+    #df['session_id', 'section_label', 'movement_type', 'scoring_type', 'board_number', 'contract', 'declarer','pair_number_ns','pair_number_ew']
+    print_to_log_info(df.head(1))
+
+    # using df['section_results'].to_frame() because explode() creates a duplicate field 'session_id' unless selected.
+    # section_results columns:
+    # ['session_id', 'section_label', 'pair_number', 'team_number', 'orientation', 'strat', 'next_session_assignment',
+    #     'next_session_qualification', 'score_cumulative', 'score_carryover', 'score_adjustment', 'percentage', 'mp_won', 'mp_color',
+    #     'section_rank_strat_1', 'section_rank_strat_2', 'section_rank_strat_3',
+    #     'overall_rank_strat_1', 'overall_rank_strat_2', 'overall_rank_strat_3', 'players', 'score_section']
+    df_section_results = df['section_results'].to_frame().explode('section_results').unnest('section_results')
+
+    # from mlBridgeLib. todo: convert to polars
+    def hrs_to_brss(hrs,void='',ten='10'):
+        cols = [d+'_'+s for d in ['north','west','east','south'] for s in ['spades','hearts','diamonds','clubs']] # remake of hands below, comments says the order needs to be NWES?????
+        return hrs[cols].apply(lambda r: ''.join(['SHDC'[i%4]+c for i,c in enumerate(r.values)]).replace(' ','').replace('-',void).replace('10',ten), axis='columns')
+
+    df_handrecord = results_dfs_d['handrecord']
+    df_handrecord = df_handrecord.with_columns(
+        pl.Series('board_record_string',mlBridgeLib.hrs_to_brss(df_handrecord.to_pandas()),pl.Utf8), # todo: eliminate polars to pandas conversion and back
+    )
+
+    df = df.join(df_handrecord['board_number','board_record_string','dealer','vulnerability'],on='board_number',how='left')
+
+    df = df.rename({
+        'board_number': 'Board',
+        #'club_id_number': 'Club',
+        'contract': 'Contract',
+        #'game_date': 'Date',
+        'match_points_ns': 'MP_NS',
+        'match_points_ew': 'MP_EW',
+        'pair_number_ns': 'Pair_Number_NS',
+        'pair_number_ew': 'Pair_Number_EW',
+        #'percentage_ns': 'Final_Standing_NS', # percentage_ns is not a column in the data. use percentage instead?
+        #'percentage_ew': 'Final_Standing_EW', # percentage_ew is not a column in the data. use percentage instead?
+        #'result': 'Result',
+        #'round_number': 'Round',
+        #'score_ns': 'Score_NS',
+        #'score_ew': 'Score_EW',
+        'score': 'Score_NS',
+        'section_label': 'section_name', # change to section_name for compatibility with clubs
+        #'table_number': 'Table',
+        #'tricks_taken': 'Tricks',
+    })
+
+    df = df.with_columns([
+        (pl.col('percentage_ns')/100).cast(pl.Float32).alias('Pct_NS'),
+        (pl.col('percentage_ew')/100).cast(pl.Float32).alias('Pct_EW'),
+        #pl.col('board_record_string').cast(pl.Utf8),
+        pl.lit(results_dfs_d['event']['start_date'].to_list()[0]).alias('Date'), # no time in the data, can't use %Y-%m-%d %H:%M:%S
+        pl.lit(results_dfs_d['event']['id'].to_list()[0]).alias('event_id'),
+        #pl.col('hand_record_id').cast(pl.Int64), # only box_number is present in the data
+        pl.col('Pair_Number_NS').cast(pl.UInt16),
+        pl.col('Pair_Number_EW').cast(pl.UInt16),
+        #pl.col('pair_summary_id').alias('pair_summary_id_ns'), # todo: remove this alias after ai model is updated to use pair_summary_id
+        #pl.col('pair_summary_id').alias('pair_summary_id_ew'), # todo: remove this alias after ai model is updated to use pair_summary_id
+    ])
+
+    df = acbldf_to_mldf(df) # todo: temporarily convert to pandas to use augment_df until clean_validate_df is converted to polars
+
+    return df
+
 
 def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     # Rename columns
     df = df.rename({'declarer': 'Declarer_Direction'})
-    assert df['Declarer_Direction'].is_in(list('NESW')).all() # apparently acbl converts declarer to 'N' if PASS
+    df = df.with_columns(pl.col('Declarer_Direction').replace_strict(mlBridgeLib.Direction_to_NESW_d,return_dtype=pl.String))
 
     # Drop rows where 'Board' is NaN
     df = df.filter(pl.col('Board').is_not_null() & pl.col('Board').gt(0))
 
-    # Convert 'Board' to UInt8
+    # Convert 'Board' to UInt8.
+    # todo: use UInt16 instead of UInt8?
     df = df.with_columns(pl.col('Board').cast(pl.UInt8))
 
-    # Calculate 'MP_Top'
-    tops = df.group_by('Board').agg(
-        (pl.count('MP_NS') - 1).alias('MP_Top')
-    )
-    df = df.join(tops, on='Board')
-
-    df = df.with_columns(pl.col('board_record_string').map_elements(mlBridgeLib.brs_to_pbn,return_dtype=pl.Utf8).alias('PBN'))
+    if 'board_record_string' in df.columns:
+        df = df.with_columns(pl.col('board_record_string').map_elements(mlBridgeLib.brs_to_pbn,return_dtype=pl.Utf8).alias('PBN'))
 
     df = df.rename({'dealer': 'Dealer'})
-    # todo: drop rows where Dealer is not in NESW
-    assert df['Dealer'].is_in(list('NESW')).all()
+    df = df.with_columns(pl.col('Dealer').replace_strict(mlBridgeLib.Direction_to_NESW_d,return_dtype=pl.String))
 
-    # Calculate percentages
+    # Calculate percentages - problems strange values and with multiple section computations. Can't all be director's adjustments?
     if 'Pct_NS' not in df.columns and 'Pct_EW' not in df.columns:
+        if 'MP_Top' not in df.columns:
+            # Calculate 'MP_Top'
+            df = df.with_columns([
+                pl.col('MP_NS').count().over('Board').alias('MP_Top')
+            ])
         df = df.with_columns([
             (pl.col('MP_NS').cast(pl.Float32) / pl.col('MP_Top')).alias('Pct_NS'),
-            (pl.col('MP_EW').cast(pl.Float32) / pl.col('MP_Top')).alias('Pct_EW')
+            #(pl.col('MP_EW').cast(pl.Float32) / pl.col('MP_Top')).alias('Pct_EW')
         ])
-
-    # Cap percentages at 1
-    df = df.with_columns([
-        pl.when(pl.col('Pct_NS') > 1).then(1).otherwise(pl.col('Pct_NS')).alias('Pct_NS'),
-        pl.when(pl.col('Pct_EW') > 1).then(1).otherwise(pl.col('Pct_EW')).alias('Pct_EW')
-    ])
+        df = df.with_columns([
+            pl.when(pl.col('Pct_NS') > 1).then(1).otherwise(pl.col('Pct_NS')).alias('Pct_NS'),
+            #pl.when(pl.col('Pct_EW') > 1).then(1).otherwise(pl.col('Pct_EW')).alias('Pct_EW')
+        ])
+        df = df.with_columns([
+            (1 - pl.col('Pct_NS')).alias('Pct_EW'),
+        ])
+    else:   
+        # Cap percentages at 1
+        df = df.with_columns([
+            pl.when(pl.col('Pct_NS') > 1).then(1).otherwise(pl.col('Pct_NS')).alias('Pct_NS'),
+            pl.when(pl.col('Pct_EW') > 1).then(1).otherwise(pl.col('Pct_EW')).alias('Pct_EW')
+        ])
+        # I've seen some seemingly correct Pct_NS but null for Pct_EW. Mystery. Can't all be directory adjustments?
+        df = df.with_columns([
+            (1 - pl.col('Pct_NS')).alias('Pct_EW'),
+        ])
+        df = df.with_columns([
+            (pl.col('MP_NS') / pl.col('Pct_NS')).alias('MP_Top')
+        ])
 
     # Function to transform names into "first last" format
     def last_first_to_first_last(name):
@@ -369,9 +522,20 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
         df = df.rename({f'player_number_{d.lower()}': f'Player_ID_{d}'})
         df = df.rename({f'player_name_{d.lower()}': f'Player_Name_{d}'})
         df = df.with_columns([
+            pl.col(f'Player_ID_{d}').cast(pl.Utf8).alias(f'Player_ID_{d}'),
             #pl.col(f'Player_ID_{d}').cast(pl.UInt32).alias(f'iPlayer_Number_{d}'),
-            pl.col(f'Player_Name_{d}').map_elements(last_first_to_first_last).alias(f'Player_Name_{d}')
+            pl.col(f'Player_Name_{d}').map_elements(last_first_to_first_last, return_dtype=pl.Utf8).alias(f'Player_Name_{d}')
         ])
+
+    # chatgpt suggested this. nothing else looked as good. seems like something else would be better. it's one thing where pandas codes better than polars.
+    df = df.with_columns(
+        pl.when(pl.col("Declarer_Direction") == "N").then(pl.col("Player_ID_N"))
+        .when(pl.col("Declarer_Direction") == "E").then(pl.col("Player_ID_E"))
+        .when(pl.col("Declarer_Direction") == "S").then(pl.col("Player_ID_S"))
+        .when(pl.col("Declarer_Direction") == "W").then(pl.col("Player_ID_W"))
+        .otherwise(None)
+        .alias("Number_Declarer")
+    )
 
     # Clean up contracts
     df = df.with_columns(
@@ -381,6 +545,28 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
             .str.replace('NT', 'N')
             .alias('Contract')
         )
+
+    # drop rows where 'Score' is null. They are different from 'PASS' in 'Score'.
+    df = df.filter(pl.col('Score_NS').is_not_null())
+    # 'Score' is a string if no 'PASS' otherwise it might be an int (i64).
+    if df.schema['Score_NS'] == pl.Utf8:
+        # acbl tournament data has 'PASS' in 'score'.
+        df = df.with_columns(
+            pl.when(pl.col('Score_NS') == 'PASS')
+            .then(pl.lit('PASS'))
+            .otherwise(pl.col('Contract'))
+            .alias('Contract')
+        )
+        # Drop invalid contracts
+        drop_rows = (
+            (pl.col('Contract') != 'PASS') & 
+            (pl.col('Contract').is_null() | pl.col('Score_NS').is_null())
+        )
+        print_to_log_info('Dropping rows:',df.filter(drop_rows))
+        df = df.filter(~drop_rows)
+        df = df.with_columns(pl.col('Score_NS').str.replace('PASS', '0'))
+    df = df.with_columns(pl.col('Score_NS').cast(pl.Int16).alias('Score_NS'))
+    df = df.with_columns(pl.col('Score_NS').neg().cast(pl.Int16).alias('Score_EW'))
 
     df = df.with_columns([
         pl.when(pl.col('Contract') == 'PASS')
@@ -411,50 +597,72 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
         .alias('Contract'),
     ])
 
-    # Drop invalid contracts
-    drop_rows = (
-        (pl.col('Contract') != 'PASS') & 
-        (pl.col('Score_NS') == 'PASS') & 
-        (pl.col('Score_EW') == 'PASS') & 
-        (pl.col('BidLvl').is_null() | pl.col('BidSuit').is_null() | pl.col('Dbl').is_null())
-    )
-    df = df.filter(~drop_rows)
+    if 'vulnerability' in df.columns:
+        df = df.rename({'vulnerability':'Vul'})
+        df = df.with_columns([
+            pl.col('Vul').replace_strict(mlBridgeLib.Vulnerability_to_Vul_d,return_dtype=pl.Utf8)
+        ])
+   
+    if 'iVul' not in df.columns and 'Vul' not in df.columns:
+        df = df.with_columns([
+            pl.col('Board').map_elements(mlBridgeLib.BoardNumberToVul,return_dtype=pl.UInt8).alias('iVul'),
+        ])
 
-    # Create 'iVul' and 'Vul' columns
-    df = df.with_columns([
-        pl.col('Board').map_elements(mlBridgeLib.BoardNumberToVul,return_dtype=pl.UInt8).alias('iVul'),
-    ])
-    # Create 'iVul' and 'Vul' columns
-    df = df.with_columns([
-        pl.col('iVul').map_elements(lambda x: mlBridgeLib.vul_syms[x],return_dtype=pl.Utf8).alias('Vul')
-    ])
+    if 'Vul' not in df.columns:
+        df = df.with_columns([
+            pl.col('iVul').replace_strict(mlBridgeLib.Vulnerability_to_Vul_d,return_dtype=pl.Utf8).alias('Vul')
+        ])
 
-    # Convert 'Score_NS' to int16
-    df = df.with_columns(pl.col('Score_NS').str.replace('PASS', '0').cast(pl.Int16).alias('Score_NS'))
-    df = df.with_columns(pl.col('Score_NS').neg().alias('Score_EW'))
+    if 'iVul' not in df.columns:
+        df = df.with_columns([
+            pl.col('Vul').replace_strict(mlBridgeLib.vul_sym_to_index_d,return_dtype=pl.UInt8).alias('iVul'),
+        ])
 
     # Create 'Result' and 'Tricks' columns
-    df = df.with_columns([
-        pl.when(pl.col('Result').is_not_null())
-        .then(pl.col('Result').map_elements(lambda x: 0 if x in ['=', '0', ''] else int(x[1:]) if x[0] == '+' else int(x),return_dtype=pl.Int8))
-        .otherwise(pl.col('Result'))
-        .cast(pl.Int8)
-        .alias('Result')
-    ])
+    if 'Result' in df.columns:
+        df = df.with_columns([
+            pl.when(pl.col('Result').is_not_null())
+            .then(pl.col('Result').map_elements(lambda x: 0 if x in ['=', '0', ''] else int(x[1:]) if x[0] == '+' else int(x),return_dtype=pl.Int8))
+            .otherwise(pl.col('Result'))
+            .cast(pl.Int8)
+            .alias('Result')
+        ])
+    else:
+        assert 'Tricks' not in df.columns
+        df = df.with_columns(pl.Series('scores_l',mlBridgeLib.ContractToScores(df),pl.List(pl.Int16)))
+
+        df = df.with_columns(
+            pl.Series('Result',[None if r[0] == 'PASS' or r[1] not in r[2] else r[2].index(r[1])-(r[3]+6) for r in df['Contract','Score_NS','scores_l','BidLvl'].rows()],dtype=pl.Int8),
+        )
+        # can be null if errata.
+        df.filter(pl.col('Result').is_null())['Board','Contract','Score_NS','BidLvl','Vul','iVul','scores_l']
+        df.drop_in_place('scores_l') # ugh, con.register() hangs unless this is done. Probably from when it was pl.Object.
 
     df = df.with_columns(
-        pl.when(pl.col('Contract') == 'PASS')
+        pl.when((pl.col('Contract') == 'PASS') | (pl.col('Result').is_null())) # 'Result' can be null if errata.
         .then(pl.lit(None))
         .otherwise(pl.col('BidLvl') + 6 + pl.col('Result'))
         .alias('Tricks')
+
     )
+    print_to_log_info('PASS:',df.filter(pl.col('Contract') == 'PASS').height)
+
 
     # Fill missing values
-    df = df.with_columns([
-        pl.col('Round').fill_null(0),
-        pl.col('tb_count').fill_null(0).cast(pl.UInt8),
-        pl.col('Table').fill_null(0).cast(pl.UInt8)
-    ])
+    if 'Round' in df.columns:
+        df = df.with_columns([
+            pl.col('Round').fill_null(0),
+        ])
+
+    if 'tb_count' in df.columns:
+        df = df.with_columns([
+            pl.col('tb_count').fill_null(0).cast(pl.UInt8),
+        ])
+
+    if 'Table' in df.columns:
+        df = df.with_columns([
+            pl.col('Table').fill_null(0).cast(pl.UInt8)
+        ])
 
     # Assert no columns start with 'ns_' or 'ew_'
     for col in df.columns:
@@ -699,6 +907,7 @@ def augment_df(df,sd_cache_d):
     return df, sd_cache_d, matchpoint_ns_d
 
 
+# todo: merge into mlBridgeAugmentLib. requires converting to Polars.
 def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)

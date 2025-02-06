@@ -36,7 +36,6 @@ import json
 import os
 from datetime import datetime, timezone 
 from dotenv import load_dotenv
-import streamlit_chat
 import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
 
@@ -48,9 +47,13 @@ import safetensors
 import sklearn
 import torch
 
+# todo: only want to assert if first time. assert os.getenv("ACBL_API_KEY") is None, f"ACBL_API_KEY environment variable should not be set. Remove .streamlit/secrets.toml file? {os.getenv('ACBL_API_KEY')}"
 load_dotenv()
 acbl_api_key = os.getenv("ACBL_API_KEY")
 assert acbl_api_key is not None, "ACBL_API_KEY environment variable not set. See README.md for instructions."
+print('acbl_api_key:',acbl_api_key)
+assert 'Bearer' not in acbl_api_key, "ACBL_API_KEY must not contain 'Bearer' or it will be rejected by ACBL."
+assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Authorization' or it will be rejected by ACBL."
 openai_api_key = os.getenv("OPENAI_API_KEY")
 assert openai_api_key is not None, "OPENAI_API_KEY environment variable not set. See README.md for instructions."
 openai_async_client = AsyncOpenAI(api_key=openai_api_key)
@@ -86,15 +89,17 @@ savedModelsPath = rootPath.joinpath('SavedModels')
 
 # pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
-def ShowDataFrameTable(df, key, query='SELECT * FROM self', show_sql_query=True, color_column=None, tooltips=None):
+def ShowDataFrameTable(df, key, query=None, show_sql_query=True, color_column=None, tooltips=None):
+    if query is None:
+        query = f'SELECT * FROM {st.session_state.con_register_name}'
     if show_sql_query and st.session_state.show_sql_query:
         st.text(f"SQL Query: {query}")
 
     # if query doesn't contain 'FROM self', add 'FROM self ' to the beginning of the query.
     # can't just check for startswith 'from self'. Not universal because 'from self' can appear in subqueries or after JOIN.
     # this syntax makes easy work of adding FROM but isn't compatible with polars SQL. duckdb only.
-    if 'from self' not in query.lower():
-        query = 'FROM self ' + query
+    if f'from {st.session_state.con_register_name}' not in query.lower():
+        query = f'FROM {st.session_state.con_register_name} ' + query
 
     # polars SQL has so many issues that it's impossible to use. disabling until 2030.
     # try:
@@ -362,15 +367,25 @@ def get_tournament_session_results(session_id, acbl_api_key):
 
 
 def create_club_dfs(player_id, event_url):
-    return chatlib.create_club_dfs(player_id, event_url)
+    data = acbllib.get_club_results_details_data(event_url)
+    if data is None:
+        return None
+    return chatlib.create_club_dfs(data)
+
+
+# def create_tournament_dfs(player_id, event_url):
+#     data = acbllib.get_tournament_results_details_data(event_url, acbl_api_key)
+#     if data is None:
+#         return None
+#     return chatlib.create_tournament_dfs(data)
 
 
 def merge_clean_augment_club_dfs(dfs, sd_cache_d, player_id):
     return chatlib.merge_clean_augment_club_dfs(dfs, sd_cache_d, player_id)
 
 
-def merge_clean_augment_tournament_dfs(dfs, dfs_results, sd_cache_d, player_id):
-    return chatlib.merge_clean_augment_tournament_dfs(dfs, dfs_results, sd_cache_d, player_id)
+def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_id):
+    return chatlib.merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_id)
 
 
 # no caching because of hashing parameter concerns
@@ -457,18 +472,18 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
             session_id = list(game_urls.keys())[0]  # default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
-    # with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
-    #     t = time.time()
-    #     tournament_session_urls = get_tournament_sessions_from_acbl_number(player_id, acbl_api_key) # returns [url, url, description, dfs]
-    #     if tournament_session_urls is None:
-    #         st.error(f"Player number {player_id} not found.")
-    #         return False
-    #     if len(tournament_session_urls) == 0:
-    #         st.error(f"Could not find any tournament sessions for {player_id}.")
-    #     elif session_id is None:
-    #         session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
-    #     print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
-    tournament_session_urls = {} # just ignore tournament sessions for now
+    with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
+        t = time.time()
+        tournament_session_urls = get_tournament_sessions_from_acbl_number(player_id, acbl_api_key) # returns [url, url, description, dfs]
+        if tournament_session_urls is None:
+            st.error(f"Player number {player_id} not found.")
+            return False
+        if len(tournament_session_urls) == 0:
+            st.error(f"Could not find any tournament sessions for {player_id}.")
+        elif session_id is None:
+            session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
+        print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
+    #tournament_session_urls = {} # just ignore tournament sessions for now
 
     if session_id is None:
         st.error(f"Could not find any club or tournament sessions for {player_id}.")
@@ -513,7 +528,9 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 return False
             print_to_log_info('create_club_dfs time:', time.time()-t) # takes 3s
 
-        with st.spinner(f"Processing data for club game: {session_id} and player {player_id}. Takes 30 seconds ..."):
+        with st.spinner(f"Processing data for club game: {session_id} and player {player_id}. Takes 1 minute ..."):
+        # todo: show descriptions similar to the tournament session descriptions below
+        #with st.spinner(f"Processing data for club game: {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
             #df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_id) # doesn't use any caching
             df = merge_clean_augment_club_dfs(dfs, {}, player_id)
@@ -533,6 +550,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     elif session_id in tournament_session_urls:
         dfs = tournament_session_urls[session_id][3]
+        #dfs = create_tournament_dfs(player_id, tournament_session_urls[session_id][3])
         if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
             st.error(
                 f"Session {session_id} has missing or invalid session data. Choose another session.")
@@ -549,29 +567,30 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 f"Session {session_id} is {dfs['score_score_type']}. Expecting an ACBL pairs match point session. Choose another session.")
             return False
 
-        with st.spinner(f"Collecting data for tournament session {session_id} and player {player_id} from ACBL."):
+        with st.spinner(f"Collecting data for tournament {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
+
 
             response = get_tournament_session_results(session_id, acbl_api_key)
             assert response.status_code == 200, response.status_code
-            dfs_results = response.json()
-            if dfs_results is None:
+            json_results_d = response.json()
+            if json_results_d is None:
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
                 return False
-            print_to_log_info('dfs_results:',dfs_results.keys())
+            print_to_log_info('json_results_d:',json_results_d.keys())
 
-            if len(dfs_results['sections']) == 0:
+            if len(json_results_d['sections']) == 0:
                 st.error(
                     f"Session {session_id} has no sections. Choose another session.")
                 return False
 
-            if 'handrecord' not in dfs_results or len(dfs_results['handrecord']) == 0 or 'box_number' not in dfs_results or not dfs_results['box_number'].isdigit():
+            if 'handrecord' not in json_results_d or len(json_results_d['handrecord']) == 0 or 'box_number' not in json_results_d or not json_results_d['box_number'].isdigit():
                 st.error(
                     f"Session {session_id} has a missing hand record. Cannot chat about shuffled sessions. Choose another session.")
                 return False
 
-            for section in dfs_results['sections']: # is it better/possible to only examine the section which the player played in?
+            for section in json_results_d['sections']: # is it better/possible to only examine the section which the player played in?
 
                 if section['scoring_type'] != 'Matchpoints':
                     st.error(
@@ -584,22 +603,30 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     return False
             print_to_log_info('get_tournament_session_results time:', time.time()-t)
 
-        with st.spinner(f"Processing data for tournament session {session_id} for player {player_id}. Takes 30 seconds ..."):
+        with st.spinner(f"Processing data for tournament session {session_id} for player {player_id}. Takes 1 minute ..."):
             t = time.time()
             #with Profiler():
 
-            df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_tournament_dfs(tournament_session_urls[session_id][3], dfs_results, acbl_api_key, player_id) # doesn't use any caching
+            df = merge_clean_augment_tournament_dfs(dfs, json_results_d, acbl_api_key, player_id)
             if df is None:
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
                 return False
             print_to_log_info('merge_clean_augment_tournament_dfs time:', time.time()-t)
+            #df = acbllib.convert_ffdf_to_mldf(df)
+            df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
+            df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
+            df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
+            df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df) # todo: rows
+            with open('df_columns.txt','w') as f:
+                for col in sorted(df.columns):
+                    f.write(col+'\n')
 
-        st.session_state.dfs_results = dfs_results
+        st.session_state.json_results_d = json_results_d
     else:
         assert False, f"session_id not found: {session_id}"
 
-    # game appears valid. Save it.
+    # session appears valid. Save it.
     st.session_state.session_id = session_id
 
     with st.spinner(f"Creating everything data table."):
@@ -620,7 +647,6 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
     # Convert 'Date' to datetime and extract scalers
     assert df['Date'].n_unique() == 1, "Oops. Date is non-unique."
     st.session_state.game_date = df['Date'].first() # showing time in case player played multiple games on same day
-    assert df['event_id'].eq(st.session_state.session_id).all()
 
     # Iterate over player directions
     for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
@@ -632,9 +658,9 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
             st.session_state.partner_direction = partner_direction
             st.session_state.opponent_pair_direction = opponent_pair_direction
 
-            section_ids = rows.select('section_id').unique()
-            assert section_ids.height == 1, "Oops. section_id non-unique."
-            st.session_state.section_id = section_ids[0, 0]
+            session_ids = rows.select('session_id').unique()
+            assert session_ids.height == 1, "Oops. session_id non-unique."
+            st.session_state.session_id = session_ids[0, 0]
 
             section_names = rows.select('section_name').unique()
             assert section_names.height == 1, "Oops. section_name non-unique."
@@ -671,9 +697,11 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
                 ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (~pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.partner_id]))).alias('Boards_Opponent_Declared')
             ])
-            break
+            break # only want to do this once.
 
-        print_to_log_info('create everything data table time:', time.time()-t)
+        print_to_log_info(f"create everything data table: {player_direction=} time:{time.time()-t}")
+
+
 
     # make predictions
     # todo: add back in
@@ -684,8 +712,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'self' for duckdb discovery. SQL queries will reference this df/table.
-    con.register('self', df)
-    #con.register('my_table', df)
+    con.register(st.session_state.con_register_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
 
     st.session_state.df_schema_string = create_schema_string(df, con)
     # todo: temp for debugging
@@ -812,7 +839,7 @@ def reset_messages():
     #augmented_system_prompt += f" My Pair Direction is always {st.session_state.pair_direction}."
     #augmented_system_prompt += f" My 'Pair Number {st.session_state.opponent_pair_direction}' is always {st.session_state.pair_number}."
     #augmented_system_prompt += f" Opponent Pair Direction is always {st.session_state.opponent_pair_direction}."
-    #augmented_system_prompt += f" My Section Id is always {st.session_state.section_id}."
+    #augmented_system_prompt += f" My Session Id is always {st.session_state.session_id}."
     #augmented_system_prompt += f" My Section Name is always {st.session_state.section_name}."
     #augmented_system_prompt += f" \"My boards means\" boards having a Declarer Number of always {st.session_state.player_id}."
     #augmented_system_prompt += f" \"Our boards\" means boards having a Pair Number always {st.session_state.pair_direction} of {st.session_state.pair_number}."
@@ -884,7 +911,7 @@ def single_dummy_sample_count_changed():
         st.session_state.df, st.session_state.sd_cache_d = Augment_Single_Dummy(
             st.session_state.df, {}, st.session_state.single_dummy_sample_count, st.session_state.matchpoint_ns_d) # using {} to disable cache
         # must reregister if df is changed!
-        st.session_state.con.register('self', st.session_state.df)
+        st.session_state.con.register(st.session_state.con_register_name, st.session_state.df)
         # todo: experimenting with outputing a dataframe of some SD relevant columns
         ShowDataFrameTable(st.session_state.df[['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']+st.session_state.df.filter(regex=r'^SD').columns.to_list(
         )].sort_values(['Board'], tooltips=st.session_state.dataframe_tooltips).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='single_dummy_sample_count_changed_sd_df')
@@ -897,7 +924,7 @@ def chat_input_on_submit():
 
 
 
-# import mlBridgeAi
+# import mlBridgeAiLib
 
 # def Predict_Game_Results(df):
 #     # Predict game results using a saved model.
@@ -917,7 +944,7 @@ def chat_input_on_submit():
 #         st.error(f"Oops. {predicted_contracts_model_filename} not found.")
 #         return None
 #     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
-#     learn = mlBridgeAi.load_model(predicted_contracts_model_file)
+#     learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
 #     print_to_log_debug('isna:',df.isna().sum())
 #     contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
 #     #df['Contract'] = df['Contract'].astype('category',categories=contracts_all)
@@ -932,7 +959,7 @@ def chat_input_on_submit():
 #     #with open(save_df_file, 'wb') as f:
 #     #    pickle.dump(df,f)
 #     #print(f"Saved {save_df_filename}: size:{save_df_file.stat().st_size}")
-#     pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
 #     df = pd.concat([df,pred_df],axis='columns')
 #     print(df)
 
@@ -944,7 +971,7 @@ def chat_input_on_submit():
 #         st.error(f"Oops. {predicted_directions_model_file} not found.")
 #         return None
 #     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
-#     learn = mlBridgeAi.load_model(predicted_directions_model_file)
+#     learn = mlBridgeAiLib.load_model(predicted_directions_model_file)
 #     print_to_log_debug('isna:',df.isna().sum())
 #     #df['Tricks'].fillna(.5,inplace=True)
 #     #df['Result'].fillna(.5,inplace=True)
@@ -955,7 +982,7 @@ def chat_input_on_submit():
 #     print(df['Declarer_Direction'])
 #     #df['Declarer_Direction'] = df['Declarer_Direction'].astype('string')
 #     print('vocab:',learn.dls.vocab)
-#     pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
 #     df = pd.concat([df,pred_df],axis='columns')
 #     y_name = learn.dls.y_names[0]
 #     print(y_name)
@@ -972,10 +999,10 @@ def chat_input_on_submit():
 #         st.error(f"Oops. {predicted_rankings_model_file} not found.")
 #         return None
 #     #y_name = 'Pct_NS'
-#     #predicted_board_result_pcts_ns, _ = mlBridgeAi.make_predictions(predicted_rankings_model_file, df)
-#     learn = mlBridgeAi.load_model(predicted_rankings_model_file)
+#     #predicted_board_result_pcts_ns, _ = mlBridgeAiLib.make_predictions(predicted_rankings_model_file, df)
+#     learn = mlBridgeAiLib.load_model(predicted_rankings_model_file)
 #     #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.procs.categorify.classes[learn.dls.y_names[0]])
-#     pred_df = mlBridgeAi.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
+#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
 #     df = pd.concat([df,pred_df],axis='columns')
 #     y_name = learn.dls.y_names[0]
 #     print(y_name)
@@ -1023,14 +1050,13 @@ def reset_data():
     st.session_state.tournament_sessions = {}
     st.session_state.game_date = None
     st.session_state.session_id = None
-    st.session_state.dfs_results = None
+    st.session_state.json_results_d = None
 
     # chat
     #st.session_state.ai_api = None
     st.session_state.system_prompt = None
     st.session_state.augmented_system_prompt = None
     st.session_state.messages = []
-    st.session_state.pdf_link = None
     st.session_state.dataframes = defaultdict(list)
     st.session_state.df = None
     st.session_state.matchpoint_ns_d = None
@@ -1038,10 +1064,12 @@ def reset_data():
 
     # sql
     #st.session_state.con = None
+    st.session_state.con_register_name = 'self'
     #st.session_state.show_sql_query = None
     st.session_state.commands_sql = None
     st.session_state.df_meta = None
     st.session_state.df_schema_string = None
+
 
     # favorite files
     st.session_state.favorites = None
@@ -1066,7 +1094,7 @@ def reset_data():
     st.session_state.pair_direction = None
     st.session_state.pair_name = None
     st.session_state.opponent_pair_direction = None
-    st.session_state.section_id = None
+    st.session_state.session_id = None
     st.session_state.section_name = None
 
     main_message_df_count = 0
@@ -1136,6 +1164,13 @@ def create_sidebar():
         launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls[st.session_state.session_id][1]})"
     st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
 
+    # if st.sidebar.download_button(label="Download Personalized Report",
+    #         data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
+    #         file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
+    #        mime='application/octet-stream',
+    #         key='personalized_report_download_button'):
+    #     st.warning('Personalized report downloaded.')
+
     # These files are reloaded each time for development purposes. Only takes a second.
     # todo: put filenames into a .json or .toml file?
     st.session_state.default_favorites_file = pathlib.Path(
@@ -1155,10 +1190,6 @@ def create_sidebar():
     if release_notes_file.exists():
         with open(release_notes_file, 'r') as f:
             st.session_state.release_notes = f.read()  # text string
-
-    if st.sidebar.button("Clear Conversation", key='clear_chat_button'):
-        reset_messages()
-        streamlitlib.move_focus()
 
     st.session_state.pdf_link = st.sidebar.empty()
 
@@ -1197,11 +1228,6 @@ def create_sidebar():
                     #st.rerun() # this caused some systems to loop. not sure why.
                 else:
                     ask_questions_without_context(ups, st.session_state.ai_api)
-
-        # favorite prompts selectboxes
-        if len(st.session_state.vetted_prompts):
-            st.sidebar.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
-                                    on_change=prompts_selectbox_change, key='prompts_selectbox')
             
         st.session_state.dataframe_tooltips = {
             col: tip for col, tip in st.session_state.favorites['ToolTips'].items()
@@ -1239,6 +1265,15 @@ def create_sidebar():
 
         st.checkbox(
             "Ninja Coder Mode (Show SQL Queries)", on_change=show_sql_query_change, key='sql_query_checkbox')
+
+        # favorite prompts selectboxes
+        if len(st.session_state.vetted_prompts):
+            st.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
+                                    on_change=prompts_selectbox_change, key='prompts_selectbox')
+
+        if st.button("Clear Conversation", key='clear_chat_button'):
+            reset_messages()
+            streamlitlib.move_focus()
 
         if len(st.session_state.ai_apis):
             st.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
@@ -1408,6 +1443,14 @@ def show_dfs(vetted_prompts, pdf_assets):
                     #break
         #break
 
+    if st.session_state.pdf_link.download_button(label="Download Personalized Report",
+            data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
+            file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
+            disabled = len(st.session_state.pdf_assets) == 0,
+            mime='application/octet-stream',
+            key='personalized_report_download_button'):
+        st.warning('Personalized report downloaded.')
+
 
 def create_main_section():
 
@@ -1429,15 +1472,17 @@ def create_main_section():
     read_favorites()
     st.session_state.vetted_prompts = load_vetted_prompts(st.session_state.default_favorites_file)
 
-    pdf_assets = []
+    pdf_assets = st.session_state.pdf_assets
+    pdf_assets.clear()
     pdf_assets.append(f"# Bridge Game Postmortem Report Personalized for {st.session_state.player_id}")
     pdf_assets.append(f"### Created by http://postmortem.chat")
     pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.session_id}")
+
     print_to_log_info('messages: len:', len(st.session_state.messages))
 
     with st.container(border=True):
         st.markdown('### Your Personalized Report')
-        st.text(f'Game Date:? Session:{st.session_state.session_id} Player:{st.session_state.player_id} Partner:{st.session_state.partner_id}')
+        st.text(f'Game Date:{st.session_state.game_date} Session:{st.session_state.session_id} Player:{st.session_state.player_id} Partner:{st.session_state.partner_id}')
         show_dfs(st.session_state.vetted_prompts, pdf_assets)
 
         # As a text link
@@ -1452,11 +1497,6 @@ def create_main_section():
                             </button>
                         </a>''', unsafe_allow_html=True)
 
-    if st.sidebar.download_button(label="Download Personalized Report",
-            data=streamlitlib.create_pdf(pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
-            file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
-            mime='application/octet-stream'):
-        st.warning('Personalized report downloaded.')
 
     if st.session_state.show_sql_query:
         with st.container():
@@ -1645,16 +1685,20 @@ def main():
             pathlib.PosixPath = pathlib.WindowsPath
         else:
             pathlib.WindowsPath = pathlib.PosixPath
+        st.session_state.pdf_assets = []
         st.session_state.ai_api = DEFAULT_AI_MODEL
         st.session_state.con = duckdb.connect()
+        st.session_state.con_register_name = 'self'
         st.session_state.show_sql_query = False
         st.session_state.player_id = None
         st.session_state.session_id = None
         st.session_state_tournament_session_id = None
         st.session_state.single_dummy_sample_count = 10
         st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
-        st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
-        st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/main/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+        #st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+        #st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+        st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+        st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
         # causes streamlit connection error
         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
         #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:

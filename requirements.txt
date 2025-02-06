@@ -3,17 +3,20 @@ streamlit
 streamlit-extras
 streamlit-chat
 stqdm
+tqdm
+asteval
+asyncio
 
 openai
 pandas
 polars
 duckdb
 requests
+htmlx
 urllib3
 python-dotenv
 tenacity
 termcolor
-streamlit-chat
 bs4
 endplay
 pyparse
