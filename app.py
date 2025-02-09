@@ -462,8 +462,8 @@ def safe_resource():
 
 
 def augment_df(df):
-    with safe_resource():
-        with st.spinner('Creating hand data. Takes 1 to 2 minutes...'):
+    with st.spinner('Creating hand data. Takes 1 to 2 minutes...'):
+        with safe_resource():
             # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()
             df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
     with st.spinner('Augmenting with matchpoints and percentages data...'):
