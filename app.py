@@ -454,6 +454,27 @@ def create_schema_string(df, con):
     return df_schema_string
 
 
+import threading
+
+@st.cache_resource
+def safe_resource():
+    return threading.Lock()
+
+
+def augment_df(df):
+    with safe_resource():
+        with st.spinner('Creating hand data. Takes 1 to 2 minutes...'):
+            # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()
+            df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
+    with st.spinner('Augmenting with matchpoints and percentages data...'):
+        df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
+    with st.spinner('Augmenting with result data...'):
+        df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
+    with st.spinner('Augmenting with DD and SD data...'):
+        df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df)
+    return df
+        
+        
 def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
@@ -539,23 +560,23 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
                 return False
             print_to_log_info('merge_clean_augment_club_dfs time:', time.time()-t) # takes 30s
-            acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
-            acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
-            if acbl_session_player_cache_df_file.exists():
-                df = pl.read_parquet(acbl_session_player_cache_df_file)
-                print(f"Loaded {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
+
+            if st.session_state.do_not_cache_df:
+                df = augment_df(df)
             else:
-                #df = acbllib.convert_ffdf_to_mldf(df)
-                df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
-                df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
-                df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
-                df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df)
-                acbl_session_player_cache_dir = pathlib.Path('cache')
-                acbl_session_player_cache_dir.mkdir(exist_ok=True)  # Creates directory if it doesn't exist
                 acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
                 acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
-                df.write_parquet(acbl_session_player_cache_df_file)
-                print(f"Saved {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
+                if acbl_session_player_cache_df_file.exists():
+                    df = pl.read_parquet(acbl_session_player_cache_df_file)
+                    print(f"Loaded {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
+                else:
+                    df = augment_df(df)
+                    acbl_session_player_cache_dir = pathlib.Path('cache')
+                    acbl_session_player_cache_dir.mkdir(exist_ok=True)  # Creates directory if it doesn't exist
+                    acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
+                    acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
+                    df.write_parquet(acbl_session_player_cache_df_file)
+                    print(f"Saved {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
             with open('df_columns.txt','w') as f:
                 for col in sorted(df.columns):
                     f.write(col+'\n')
@@ -1073,6 +1094,7 @@ def reset_data():
     st.session_state.df = None
     st.session_state.matchpoint_ns_d = None
     st.session_state.function_calls = None
+    st.session_state.do_not_cache_df = True
 
     # sql
     #st.session_state.con = None
@@ -1081,7 +1103,6 @@ def reset_data():
     st.session_state.commands_sql = None
     st.session_state.df_meta = None
     st.session_state.df_schema_string = None
-
 
     # favorite files
     st.session_state.favorites = None
