@@ -539,11 +539,23 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
                 return False
             print_to_log_info('merge_clean_augment_club_dfs time:', time.time()-t) # takes 30s
-            #df = acbllib.convert_ffdf_to_mldf(df)
-            df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
-            df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
-            df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
-            df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df)
+            acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
+            acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
+            if acbl_session_player_cache_df_file.exists():
+                df = pl.read_parquet(acbl_session_player_cache_df_file)
+                print(f"Loaded {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
+            else:
+                #df = acbllib.convert_ffdf_to_mldf(df)
+                df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
+                df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
+                df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
+                df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df)
+                acbl_session_player_cache_dir = pathlib.Path('cache')
+                acbl_session_player_cache_dir.mkdir(exist_ok=True)  # Creates directory if it doesn't exist
+                acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
+                acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
+                df.write_parquet(acbl_session_player_cache_df_file)
+                print(f"Saved {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
             with open('df_columns.txt','w') as f:
                 for col in sorted(df.columns):
                     f.write(col+'\n')
