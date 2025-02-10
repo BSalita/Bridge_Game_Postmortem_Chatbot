@@ -465,14 +465,13 @@ def safe_resource():
 def perform_hand_augmentations(df):
     # Create an empty placeholder for status messages
     status_placeholder = st.empty()
-    status_placeholder.info("Hand augmentation process queued. Please wait...")
 
     acquired = False
     mutex = safe_resource()
     while not acquired:
         acquired = mutex.acquire(timeout=2)
         if not acquired:
-            status_placeholder.info("Still queued... waiting for your turn.")
+            status_placeholder.info("Hand analysis is queued for processing. Please wait...")
             time.sleep(1)
     try:
         status_placeholder.empty()
@@ -680,10 +679,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 return False
             print_to_log_info('merge_clean_augment_tournament_dfs time:', time.time()-t)
             #df = acbllib.convert_ffdf_to_mldf(df)
-            df = mlBridgeAugmentLib.perform_hand_augmentations(df,{},sd_productions=st.session_state.single_dummy_sample_count)
-            df = mlBridgeAugmentLib.PerformMatchPointAndPercentAugmentations(df)
-            df = mlBridgeAugmentLib.PerformResultAugmentations(df,{})
-            df = mlBridgeAugmentLib.Perform_DD_SD_Augmentations(df) # todo: rows
+            df = augment_df(df)
             with open('df_columns.txt','w') as f:
                 for col in sorted(df.columns):
                     f.write(col+'\n')
