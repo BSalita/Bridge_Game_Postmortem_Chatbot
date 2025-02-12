@@ -71,13 +71,13 @@ DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 #import mlBridgeLib.mlBridgeLib
 sys.path.append(str(pathlib.Path.cwd().joinpath('acbllib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('chatlib')))  # global
-sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global
+sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 # streamlitlib, mlBridgeLib, chatlib must be placed after sys.path.append. vscode re-format likes to move them to the top
 import acbllib
 import streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
 import mlBridgeLib # must be placed after sys.path.append. vscode re-format likes to move this to the top
-import mlBridgeAugmentLib
+import mlBridgeAugmentLib # Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
 import chatlib  # must be placed after sys.path.append. vscode re-format likes to move this to the top
 
 # override pandas display options
@@ -454,34 +454,23 @@ def create_schema_string(df, con):
     return df_schema_string
 
 
-import threading
-import time
-
-@st.cache_resource
-def safe_resource():
-    return threading.Lock()
-
-
-def perform_hand_augmentations(df):
-    # Create an empty placeholder for status messages
-    status_placeholder = st.empty()
-
-    acquired = False
-    mutex = safe_resource()
-    while not acquired:
-        acquired = mutex.acquire(timeout=2)
-        if not acquired:
-            status_placeholder.info("Hand analysis is queued for processing. Please wait...")
-            time.sleep(1)
-    try:
-        status_placeholder.empty()
-        progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
-        df = augmenter.perform_hand_augmentations()
-    finally:
-        mutex.release()
-
-    return df
+def perform_hand_augmentations(df, sd_productions):
+    """Wrapper for backward compatibility"""
+    def hand_augmentation_work(df, progress, **kwargs):
+        augmenter = mlBridgeAugmentLib.HandAugmenter(
+            df, 
+            {}, 
+            sd_productions=kwargs.get('sd_productions'),
+            progress=progress
+        )
+        return augmenter.perform_hand_augmentations()
+    
+    return streamlitlib.perform_queued_work(
+        df, 
+        hand_augmentation_work, 
+        work_description="Hand analysis",
+        sd_productions=sd_productions
+    )
 
 
 def augment_df(df):
@@ -493,7 +482,7 @@ def augment_df(df):
         #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
         #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
         #     df = augmenter.perform_hand_augmentations()
-        df = perform_hand_augmentations(df)
+        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
     with st.spinner('Augmenting with matchpoints and percentages data...'):
         augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
         df = augmenter.perform_matchpoint_augmentations()

@@ -82,9 +82,10 @@ def Calculate_DD_Par(df, d):
             dd_result = ctypes.pointer(tableRes.results[handno])
 
             # Par calculations are not multi-threading
-            res = dds.DealerParBin(dd_result, par_result, mlBridgeLib.NESW.index(dealer), mlBridgeLib.vul_d[vul])
+            res = dds.DealerParBin(dd_result, par_result, mlBridgeLib.NESW.index(dealer), mlBridgeLib.vul_dds_d[vul])
             if res != dds.RETURN_NO_FAULT:
                 dds.ErrorMessage(res, line)
+
                 print(f"DealerParBin: DDS error: {line.value.decode('utf-8')}")
                 assert False, r
 
