@@ -594,11 +594,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_NS, Name_Declarer AS Name_NS, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM self WHERE Pair_Declarer_Direction='NS' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Number_Declarer AS Declarer_NS, Name_Declarer AS Name_NS, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM self WHERE Declarer_Pair_Direction='NS' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_EW, Name_Declarer AS Name_EW, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM self WHERE Pair_Declarer_Direction='EW' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Number_Declarer AS Declarer_EW, Name_Declarer AS Name_EW, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DDTricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DDTricks AS INT)) AS Pct_EQ_DD FROM self WHERE Declarer_Pair_Direction='EW' GROUP BY Number_Declarer, Name_Declarer ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
 					}
 				]
 			}

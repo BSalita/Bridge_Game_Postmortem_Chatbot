@@ -19,7 +19,7 @@ sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib'))) #
 sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('acbllib'))) # removed .parent
 sys.path
 import mlBridgeLib
-import acbllib
+# import acbllib
 
 
 # obsolete?
@@ -62,90 +62,90 @@ import acbllib
 
 
 # merge acbl json dicts into logically related dicts. dicts will be used to create dfs
-def json_dict_to_df(d,kl,jdl):
-    print_to_log_debug(kl)
-    dd = {}
-    d[kl] = dd
-    assert not isinstance(jdl,dict)
-    for i,jd in enumerate(jdl):
-        for k,v in jd.items():
-            kkl = kl+(k,i)
-            print_to_log_debug(i,kl,k,kkl)
-            #time.sleep(.00001)
-            if isinstance(v,list):
-                print_to_log_debug('\n',type(v),kkl,v)
-                json_dict_to_df(d,kkl,v)
-                print_to_log_debug('list:',kkl,len(d[kkl]))
-            elif isinstance(v,dict):
-                #kkl = kl+(k,)
-                print_to_log_debug('\n',type(v),kkl,v)
-                json_dict_to_df(d,kkl,[v])
-                print_to_log_debug('dict:',kkl,len(d[kkl]))
-            else:
-                if k not in dd:
-                    dd[k] = []
-                dd[k].append(v)
-            #assert k != 'points',[kl,k,type(v),v]
-    return d
+# def json_dict_to_df(d,kl,jdl):
+#     print_to_log_debug(kl)
+#     dd = {}
+#     d[kl] = dd
+#     assert not isinstance(jdl,dict)
+#     for i,jd in enumerate(jdl):
+#         for k,v in jd.items():
+#             kkl = kl+(k,i)
+#             print_to_log_debug(i,kl,k,kkl)
+#             #time.sleep(.00001)
+#             if isinstance(v,list):
+#                 print_to_log_debug('\n',type(v),kkl,v)
+#                 json_dict_to_df(d,kkl,v)
+#                 print_to_log_debug('list:',kkl,len(d[kkl]))
+#             elif isinstance(v,dict):
+#                 #kkl = kl+(k,)
+#                 print_to_log_debug('\n',type(v),kkl,v)
+#                 json_dict_to_df(d,kkl,[v])
+#                 print_to_log_debug('dict:',kkl,len(d[kkl]))
+#             else:
+#                 if k not in dd:
+#                     dd[k] = []
+#                 dd[k].append(v)
+#             #assert k != 'points',[kl,k,type(v),v]
+#     return d
 
 
 # todo: obsolete?
 # todo: if dtype isnumeric() downcast to minimal size. Some columns may have dtype of int64 because of sql declaration ('Board').
-def convert_to_best_dtypex(k,v):
-    vv = v.convert_dtypes(infer_objects=True)
-    vvv = vv.copy()
-    for col in vv.columns:
-        print_to_log_debug(col,vvv[col].dtype)
-        # todo: special cases. maybe should be done before writing to acbl_club_results.sqlite?
-        if col in ['ns_score','ew_score']:
-            vvv[col] = vvv[col].replace('PASS','0')
-        elif col == 'result':
-            vvv[col] = vvv[col].replace('+','0').replace('=','0').replace('','0') # don't use .str. and all 3 are needed.
-        elif col == 'tricks_taken':
-            vvv[col] = vvv[col].replace('','0')
-        if vvv[col].dtype == 'string' and vvv[col].notna().all() and vvv[col].ne('').all():
-            print_to_log_debug(f"String: {col}")
-            try:
-                if vvv[col].str.contains('.',regex=False).any():
-                    print_to_log_debug(f"Trying to convert {col} to float")
-                    converted_values = pd.to_numeric(vvv[col], downcast='float', errors='raise')
-                elif vvv[col].str.contains('-',regex=False).any():
-                    print_to_log_debug(f"Trying to convert {col} to integer")
-                    converted_values = pd.to_numeric(vvv[col], downcast='integer', errors='raise')
-                else:
-                    print_to_log_debug(f"Trying to convert {col} to unsigned")
-                    converted_values = pd.to_numeric(vvv[col], downcast='unsigned', errors='raise')
-                vvv[col] = converted_values
-                print_to_log_debug(f"Converted {col} to {vvv[col].dtype}")
-            except ValueError:
-                print_to_log(logging.WARNING, f"Can't convert {col} to float. Keeping as string")
-    print_to_log_debug(f"dfs_dtype_conversions['{k}'] = "+'{')
-    for col in vvv.columns:
-        print_to_log_debug(f"    '{col}':'{v[col].dtype},{vv[col].dtype},{vvv[col].dtype}',")
-    print_to_log_debug("}\n")
-    return vvv
+# def convert_to_best_dtypex(k,v):
+#     vv = v.convert_dtypes(infer_objects=True)
+#     vvv = vv.copy()
+#     for col in vv.columns:
+#         print_to_log_debug(col,vvv[col].dtype)
+#         # todo: special cases. maybe should be done before writing to acbl_club_results.sqlite?
+#         if col in ['ns_score','ew_score']:
+#             vvv[col] = vvv[col].replace('PASS','0')
+#         elif col == 'result':
+#             vvv[col] = vvv[col].replace('+','0').replace('=','0').replace('','0') # don't use .str. and all 3 are needed.
+#         elif col == 'tricks_taken':
+#             vvv[col] = vvv[col].replace('','0')
+#         if vvv[col].dtype == 'string' and vvv[col].notna().all() and vvv[col].ne('').all():
+#             print_to_log_debug(f"String: {col}")
+#             try:
+#                 if vvv[col].str.contains('.',regex=False).any():
+#                     print_to_log_debug(f"Trying to convert {col} to float")
+#                     converted_values = pd.to_numeric(vvv[col], downcast='float', errors='raise')
+#                 elif vvv[col].str.contains('-',regex=False).any():
+#                     print_to_log_debug(f"Trying to convert {col} to integer")
+#                     converted_values = pd.to_numeric(vvv[col], downcast='integer', errors='raise')
+#                 else:
+#                     print_to_log_debug(f"Trying to convert {col} to unsigned")
+#                     converted_values = pd.to_numeric(vvv[col], downcast='unsigned', errors='raise')
+#                 vvv[col] = converted_values
+#                 print_to_log_debug(f"Converted {col} to {vvv[col].dtype}")
+#             except ValueError:
+#                 print_to_log(logging.WARNING, f"Can't convert {col} to float. Keeping as string")
+#     print_to_log_debug(f"dfs_dtype_conversions['{k}'] = "+'{')
+#     for col in vvv.columns:
+#         print_to_log_debug(f"    '{col}':'{v[col].dtype},{vv[col].dtype},{vvv[col].dtype}',")
+#     print_to_log_debug("}\n")
+#     return vvv
 
 
 # g_all_functions_in_module = {n:f for n,f in inspect.getmembers(sys.modules[__name__], inspect.isfunction)}
 
-def json_dict_to_types(json_dict,root_name,path):
-    dfs = {}
-    root = []
-    df = pd.json_normalize(json_dict,path,max_level=0)
-    for k,v in df.items():
-        if isinstance(v,dict):
-            assert k not in dfs, k
-            dfs[k] = pd.DataFrame(v)
-            if all(isinstance(kk,int) or (isinstance(kk,str) and kk.isnumeric()) for kk,vv in v.items()): # dict but with list like indices
-                dfs[k] = dfs[k].T
-        elif isinstance(v,list):
-            assert k not in dfs, k
-            dfs[k] = pd.DataFrame(v)
-        else:
-            root.append({k:v})
-    assert k not in dfs, k
-    dfs[root_name] = pd.DataFrame(root)
-    return dfs
+# def json_dict_to_types(json_dict,root_name,path):
+#     dfs = {}
+#     root = []
+#     df = pd.json_normalize(json_dict,path,max_level=0)
+#     for k,v in df.items():
+#         if isinstance(v,dict):
+#             assert k not in dfs, k
+#             dfs[k] = pd.DataFrame(v)
+#             if all(isinstance(kk,int) or (isinstance(kk,str) and kk.isnumeric()) for kk,vv in v.items()): # dict but with list like indices
+#                 dfs[k] = dfs[k].T
+#         elif isinstance(v,list):
+#             assert k not in dfs, k
+#             dfs[k] = pd.DataFrame(v)
+#         else:
+#             root.append({k:v})
+#     assert k not in dfs, k
+#     dfs[root_name] = pd.DataFrame(root)
+#     return dfs
 
 
 # todo: finish converting from pandas to polars. hitch is that pd.json_normalize() is pandas only.
@@ -350,6 +350,7 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
     df = df.explode('board_results').unnest('board_results')
     print_to_log_info(df.head(1))
 
+    # todo: no need to filter by orientation and concat. instead do everything in 1 df by filtering on orientation.
     ns_df = df.filter(pl.col('orientation') == 'N-S').drop(['orientation'])
     print_to_log_info(ns_df.head(1))
     ew_df = df.filter(pl.col('orientation') == 'E-W').drop(['orientation'])
@@ -359,21 +360,16 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
 
     identical_columns = ['session_id', 'section_label', 'movement_type', 'scoring_type', 'board_number', 'contract', 'declarer']
     print_to_log_info(identical_columns)
-    # for col in identical_columns:
-    #     for i in range(ns_df.height):
-    #         if ns_df[col][i] != ew_df[col][i]:
-    #             print_to_log_info(f'ns_df[{col}][{i}]: {ns_df[col][i]}, ew_df[{col}][{i}]: {ew_df[col][i]}')
-        #assert ns_df[col].equals(ew_df[col], null_equal=True), (ns_df[col], ew_df[col])
-    #assert ns_df[identical_columns].equals(ew_df[identical_columns], null_equal=True), f'ns_df: {ns_df[identical_columns].head(1)}, ew_df: {ew_df[identical_columns].head(1)}'
-    rename_directional_columns = ['match_points', 'percentage', 'pair_number']
     ns_df = ns_df.rename({
-        **{col: col+'_ns' for col in rename_directional_columns},
-        'opponent_pair_number': 'pair_number_ew'
+        'match_points': 'match_points_ns',
+        'percentage': 'percentage_ns',
+        'pair_number': 'pair_number_ns',
     })
     print_to_log_info(ns_df.head(1))
     ew_df = ew_df.rename({
-        **{col: col+'_ew' for col in rename_directional_columns},
-        'opponent_pair_number': 'pair_number_ns'
+        'match_points': 'match_points_ew',
+        'percentage': 'percentage_ew',
+        'pair_number': 'pair_number_ew',
     })
     print_to_log_info(ew_df.head(1))
 
@@ -397,8 +393,15 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
     ).drop(['pair_acbl','pair_names','opponent_pair_names'])
     print_to_log_info(ew_df.head(1))
 
-    df = ns_df.join(ew_df, left_on=identical_columns+['pair_number_ns','pair_number_ew'], right_on=identical_columns+['pair_number_ew','pair_number_ns'], how='left')
-    #df['session_id', 'section_label', 'movement_type', 'scoring_type', 'board_number', 'contract', 'declarer','pair_number_ns','pair_number_ew']
+    ew_cols = [
+        'player_number_e','player_number_w',
+        'player_name_e','player_name_w',
+        'opponent_pair_name_e','opponent_pair_name_w',
+        'match_points_ew',
+        'percentage_ew',
+        'pair_number_ew',
+        ]
+    df = pl.concat([ns_df,ew_df[ew_cols]],how='horizontal')
     print_to_log_info(df.head(1))
 
     # using df['section_results'].to_frame() because explode() creates a duplicate field 'session_id' unless selected.
@@ -673,337 +676,337 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 
 
 # todo: use Augment_Metric_By_Suits or TuplesToSuits?
-def Augment_Metric_By_Suits(metrics,metric,dtype='uint8'):
-    for d,direction in enumerate(mlBridgeLib.NESW):
-        for s,suit in  enumerate(mlBridgeLib.SHDC):
-            metrics['_'.join([metric,direction])] = metrics[metric].map(lambda x: x[1][d][0]).astype(dtype)
-            metrics['_'.join([metric,direction,suit])] = metrics[metric].map(lambda x: x[1][d][1][s]).astype(dtype)
-    for direction in mlBridgeLib.NS_EW:
-        metrics['_'.join([metric,direction])] = metrics['_'.join([metric,direction[0]])]+metrics['_'.join([metric,direction[1]])].astype(dtype)
-        for s,suit in  enumerate(mlBridgeLib.SHDC):
-            metrics['_'.join([metric,direction,suit])] = metrics['_'.join([metric,direction[0],suit])]+metrics['_'.join([metric,direction[1],suit])].astype(dtype)
+# def Augment_Metric_By_Suits(metrics,metric,dtype='uint8'):
+#     for d,direction in enumerate(mlBridgeLib.NESW):
+#         for s,suit in  enumerate(mlBridgeLib.SHDC):
+#             metrics['_'.join([metric,direction])] = metrics[metric].map(lambda x: x[1][d][0]).astype(dtype)
+#             metrics['_'.join([metric,direction,suit])] = metrics[metric].map(lambda x: x[1][d][1][s]).astype(dtype)
+#     for direction in mlBridgeLib.NS_EW:
+#         metrics['_'.join([metric,direction])] = metrics['_'.join([metric,direction[0]])]+metrics['_'.join([metric,direction[1]])].astype(dtype)
+#         for s,suit in  enumerate(mlBridgeLib.SHDC):
+#             metrics['_'.join([metric,direction,suit])] = metrics['_'.join([metric,direction[0],suit])]+metrics['_'.join([metric,direction[1],suit])].astype(dtype)
 
 
-def TuplesToSuits(df,tuples,column,excludes=[]):
-    d = {}
-    d['_'.join([column])] = tuples.map(lambda x: x[0])
-    for i,direction in enumerate('NESW'):
-        d['_'.join([column,direction])] = tuples.map(lambda x: x[1][i][0])
-        for j,suit in enumerate('SHDC'):
-            d['_'.join([column,direction,suit])] = tuples.map(lambda x: x[1][i][1][j])
-    for i,direction in enumerate(['NS','EW']):
-        d['_'.join([column,direction])] = tuples.map(lambda x: x[1][i][0]+x[1][i+2][0])
-        for j,suit in enumerate('SHDC'):
-            d['_'.join([column,direction,suit])] = tuples.map(lambda x: x[1][i][1][j]+x[1][i+2][1][j])
-    for k,v in d.items():
-        if k not in excludes:
-            # PerformanceWarning: DataFrame is highly fragmented.
-            df[k] = v
-    return d
+# def TuplesToSuits(df,tuples,column,excludes=[]):
+#     d = {}
+#     d['_'.join([column])] = tuples.map(lambda x: x[0])
+#     for i,direction in enumerate('NESW'):
+#         d['_'.join([column,direction])] = tuples.map(lambda x: x[1][i][0])
+#         for j,suit in enumerate('SHDC'):
+#             d['_'.join([column,direction,suit])] = tuples.map(lambda x: x[1][i][1][j])
+#     for i,direction in enumerate(['NS','EW']):
+#         d['_'.join([column,direction])] = tuples.map(lambda x: x[1][i][0]+x[1][i+2][0])
+#         for j,suit in enumerate('SHDC'):
+#             d['_'.join([column,direction,suit])] = tuples.map(lambda x: x[1][i][1][j]+x[1][i+2][1][j])
+#     for k,v in d.items():
+#         if k not in excludes:
+#             # PerformanceWarning: DataFrame is highly fragmented.
+#             df[k] = v
+#     return d
 
 
-# Pandas version of mlBridgeLib's Polars version
-# Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
-def CategorifyContractTypeByDirection(df):
-    contract_types_d = {}
-    cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
-    for c in cols:
-        for t in mlBridgeLib.contract_types:
-            print_to_log_debug('CT:',c,t,len((t == df[c]).values))
-            new_c = c+'_'+t
-            contract_types_d[new_c] = (t == df[c]).values
-    return contract_types_d
+# # Pandas version of mlBridgeLib's Polars version
+# # Create columns of contract types by partnership by suit by contract. e.g. CT_NS_C_Game
+# def CategorifyContractTypeByDirection(df):
+#     contract_types_d = {}
+#     cols = df.filter(regex=r'CT_(NS|EW)_[CDHSN]').columns
+#     for c in cols:
+#         for t in mlBridgeLib.contract_types:
+#             print_to_log_debug('CT:',c,t,len((t == df[c]).values))
+#             new_c = c+'_'+t
+#             contract_types_d[new_c] = (t == df[c]).values
+#     return contract_types_d
 
 
-def augment_df(df,sd_cache_d):
+# def augment_df(df,sd_cache_d):
 
-    # positions
-    df['Pair_Declarer_Direction'] = df['Declarer_Direction'].map(mlBridgeLib.PlayerDirectionToPairDirection)
-    df['Opponent_Pair_Direction'] = df['Pair_Declarer_Direction'].map(mlBridgeLib.PairDirectionToOpponentPairDirection)
-    df['Direction_OnLead'] = df['Declarer_Direction'].map(mlBridgeLib.NextPosition)
-    df['Direction_Dummy'] = df['Direction_OnLead'].map(mlBridgeLib.NextPosition)
-    df['Direction_NotOnLead'] = df['Direction_Dummy'].map(mlBridgeLib.NextPosition)
-    df['OnLead'] = df.apply(lambda r: r['Player_ID_'+r['Direction_OnLead']], axis='columns') # todo: keep as lower case?
-    df['Dummy'] = df.apply(lambda r: r['Player_ID_'+r['Direction_Dummy']], axis='columns') # todo: keep as lower case?
-    df['NotOnLead'] = df.apply(lambda r: r['Player_ID_'+r['Direction_NotOnLead']], axis='columns') # todo: keep as lower case?
+#     # positions
+#     df['Declarer_Pair_Direction'] = df['Declarer_Direction'].map(mlBridgeLib.PlayerDirectionToPairDirection)
+#     df['Opponent_Pair_Direction'] = df['Declarer_Pair_Direction'].map(mlBridgeLib.PairDirectionToOpponentPairDirection)
+#     df['Direction_OnLead'] = df['Declarer_Direction'].map(mlBridgeLib.NextPosition)
+#     df['Direction_Dummy'] = df['Direction_OnLead'].map(mlBridgeLib.NextPosition)
+#     df['Direction_NotOnLead'] = df['Direction_Dummy'].map(mlBridgeLib.NextPosition)
+#     df['OnLead'] = df.apply(lambda r: r['Player_ID_'+r['Direction_OnLead']], axis='columns') # todo: keep as lower case?
+#     df['Dummy'] = df.apply(lambda r: r['Player_ID_'+r['Direction_Dummy']], axis='columns') # todo: keep as lower case?
+#     df['NotOnLead'] = df.apply(lambda r: r['Player_ID_'+r['Direction_NotOnLead']], axis='columns') # todo: keep as lower case?
 
-    # hands
-    df['hands'] = df['board_record_string'].map(mlBridgeLib.brs_to_hands)
-    assert df['hands'].map(mlBridgeLib.hands_to_brs).eq(df['board_record_string'].str.replace('-','').str.replace('T','10')).all(), df[df['hands'].map(mlBridgeLib.hands_to_brs).ne(df['board_record_string'])][['Board','board_record_string','hands']]
-    # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without '-' and club f-f with '-'? Removing '-' in both so compare works.
-    df['PBN'] = df['hands'].map(mlBridgeLib.HandToPBN)
-    assert df['PBN'].map(mlBridgeLib.pbn_to_hands).eq(df['hands']).all(), df[df['PBN'].map(mlBridgeLib.pbn_to_hands).ne(df['hands'])]
-    brs = df['PBN'].map(mlBridgeLib.pbn_to_brs)
-    assert brs.map(mlBridgeLib.brs_to_pbn).eq(df['PBN']).all(), df[brs.map(mlBridgeLib.brs_to_pbn).ne(df['PBN'])]
+#     # hands
+#     df['hands'] = df['board_record_string'].map(mlBridgeLib.brs_to_hands)
+#     assert df['hands'].map(mlBridgeLib.hands_to_brs).eq(df['board_record_string'].str.replace('-','').str.replace('T','10')).all(), df[df['hands'].map(mlBridgeLib.hands_to_brs).ne(df['board_record_string'])][['Board','board_record_string','hands']]
+#     # ouch. Sometimes acbl hands use '-' in board_record_string, sometimes they don't. Are online hands without '-' and club f-f with '-'? Removing '-' in both so compare works.
+#     df['PBN'] = df['hands'].map(mlBridgeLib.HandToPBN)
+#     assert df['PBN'].map(mlBridgeLib.pbn_to_hands).eq(df['hands']).all(), df[df['PBN'].map(mlBridgeLib.pbn_to_hands).ne(df['hands'])]
+#     brs = df['PBN'].map(mlBridgeLib.pbn_to_brs)
+#     assert brs.map(mlBridgeLib.brs_to_pbn).eq(df['PBN']).all(), df[brs.map(mlBridgeLib.brs_to_pbn).ne(df['PBN'])]
 
-    # OHE cards
-    bin_handsl = mlBridgeLib.HandsLToBin(df['hands'])
-    ohe_handsl = mlBridgeLib.BinLToOHE(bin_handsl)
-    ohe_hands_df = mlBridgeLib.OHEToCards(df,ohe_handsl)
-    df = pd.concat([df,ohe_hands_df],axis='columns',join='inner')
+#     # OHE cards
+#     bin_handsl = mlBridgeLib.HandsLToBin(df['hands'])
+#     ohe_handsl = mlBridgeLib.BinLToOHE(bin_handsl)
+#     ohe_hands_df = mlBridgeLib.OHEToCards(df,ohe_handsl)
+#     df = pd.concat([df,ohe_hands_df],axis='columns',join='inner')
 
-    # hand evaluation metrics
-    # todo: use Augment_Metric_By_Suits or TuplesToSuits?
-    # 'hands' is ordered CDHS
-    hcp = df['hands'].map(mlBridgeLib.HandsToHCP)
-    TuplesToSuits(df,hcp,'HCP',['HCP'])
-    qt = df['hands'].map(mlBridgeLib.HandsToQT)
-    TuplesToSuits(df,qt,'QT',['QT'])
-    dp = df['hands'].map(mlBridgeLib.HandsToDistributionPoints)
-    TuplesToSuits(df,dp,'DP',['DP'])
-    sl = df['hands'].map(mlBridgeLib.HandsToSuitLengths) # sl is needed later by LoTT
-    TuplesToSuits(df,sl,'SL',['SL','SL_N','SL_E','SL_S','SL_W','SL_NS','SL_EW'])
-    so = mlBridgeLib.CDHS
-    for d in mlBridgeLib.NESW:
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[f'SL_{d}_{so}'] = df.filter(regex=f'^SL_{d}_[{so}]$').values.tolist() # ordered from clubs to spades [CDHS]
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[f'SL_{d}_{so}_J'] = df[f'SL_{d}_{so}'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # joined CDHS into category
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[f'SL_{d}_ML_S'] = df[f'SL_{d}_{so}'].map(lambda l: [v for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[f'SL_{d}_ML_SI'] = df[f'SL_{d}_{so}'].map(lambda l: [n for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least containing indexes
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[f'SL_{d}_ML_SJ'] = df[f'SL_{d}_ML_S'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # ordered most-to-least and joined into category
+#     # hand evaluation metrics
+#     # todo: use Augment_Metric_By_Suits or TuplesToSuits?
+#     # 'hands' is ordered CDHS
+#     hcp = df['hands'].map(mlBridgeLib.HandsToHCP)
+#     TuplesToSuits(df,hcp,'HCP',['HCP'])
+#     qt = df['hands'].map(mlBridgeLib.HandsToQT)
+#     TuplesToSuits(df,qt,'QT',['QT'])
+#     dp = df['hands'].map(mlBridgeLib.HandsToDistributionPoints)
+#     TuplesToSuits(df,dp,'DP',['DP'])
+#     sl = df['hands'].map(mlBridgeLib.HandsToSuitLengths) # sl is needed later by LoTT
+#     TuplesToSuits(df,sl,'SL',['SL','SL_N','SL_E','SL_S','SL_W','SL_NS','SL_EW'])
+#     so = mlBridgeLib.CDHS
+#     for d in mlBridgeLib.NESW:
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[f'SL_{d}_{so}'] = df.filter(regex=f'^SL_{d}_[{so}]$').values.tolist() # ordered from clubs to spades [CDHS]
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[f'SL_{d}_{so}_J'] = df[f'SL_{d}_{so}'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # joined CDHS into category
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[f'SL_{d}_ML_S'] = df[f'SL_{d}_{so}'].map(lambda l: [v for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[f'SL_{d}_ML_SI'] = df[f'SL_{d}_{so}'].map(lambda l: [n for v,n in sorted([(ll,n) for n,ll in enumerate(l)],key=lambda k:(-k[0],k[1]))]) # ordered most-to-least containing indexes
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[f'SL_{d}_ML_SJ'] = df[f'SL_{d}_ML_S'].map(lambda l:'-'.join([str(v) for v in l])).astype('category') # ordered most-to-least and joined into category
 
-    # Create columns containing column names of the NS,EW longest suit.
-    sl_cols = [('_'.join(['SL_Max',d]),['_'.join(['SL',d,s]) for s in mlBridgeLib.SHDC]) for d in mlBridgeLib.NS_EW]
-    for d in sl_cols:
-        # PerformanceWarning: DataFrame is highly fragmented.
-        df[d[0]] = df[d[1]].idxmax(axis=1).astype('category') # defaults to object so need string or category
+#     # Create columns containing column names of the NS,EW longest suit.
+#     sl_cols = [('_'.join(['SL_Max',d]),['_'.join(['SL',d,s]) for s in mlBridgeLib.SHDC]) for d in mlBridgeLib.NS_EW]
+#     for d in sl_cols:
+#         # PerformanceWarning: DataFrame is highly fragmented.
+#         df[d[0]] = df[d[1]].idxmax(axis=1).astype('category') # defaults to object so need string or category
 
-    df = mlBridgeLib.append_double_dummy_results(df)
+#     df = mlBridgeLib.append_double_dummy_results(df)
 
-    # LoTT
-    ddmakes = df.apply(lambda r: tuple([tuple([r['_'.join(['DD',d,s])] for s in 'CDHSN']) for d in 'NESW']),axis='columns')
-    LoTT_l = [mlBridgeLib.LoTT_SHDC(t,l) for t,l in zip(ddmakes,sl)] # [mlBridgeLib.LoTT_SHDC(ddmakes[i],sl[i]) for i in range(len(df))]
-    df['LoTT_Tricks'] = [t for t,l,v in LoTT_l]
-    df['LoTT_Suit_Length'] = [l for t,l,v in LoTT_l] # todo: is this correct? use SL_Max_(NS|EW) instead? verify LoTT_Suit_Length against SL_Max_{declarer_pair_direction}.
-    df['LoTT_Variance'] = [v for t,l,v in LoTT_l]
-    del LoTT_l
-    df = df.astype({'LoTT_Tricks':'uint8','LoTT_Suit_Length':'uint8','LoTT_Variance':'int8'})
+#     # LoTT
+#     ddmakes = df.apply(lambda r: tuple([tuple([r['_'.join(['DD',d,s])] for s in 'CDHSN']) for d in 'NESW']),axis='columns')
+#     LoTT_l = [mlBridgeLib.LoTT_SHDC(t,l) for t,l in zip(ddmakes,sl)] # [mlBridgeLib.LoTT_SHDC(ddmakes[i],sl[i]) for i in range(len(df))]
+#     df['LoTT_Tricks'] = [t for t,l,v in LoTT_l]
+#     df['LoTT_Suit_Length'] = [l for t,l,v in LoTT_l] # todo: is this correct? use SL_Max_(NS|EW) instead? verify LoTT_Suit_Length against SL_Max_{declarer_pair_direction}.
+#     df['LoTT_Variance'] = [v for t,l,v in LoTT_l]
+#     del LoTT_l
+#     df = df.astype({'LoTT_Tricks':'uint8','LoTT_Suit_Length':'uint8','LoTT_Variance':'int8'})
 
-    # ContractType
-    # PerformanceWarning: DataFrame is highly fragmented.
-    df['ContractType'] = df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
-    # Create column of contract types by partnership by suit. e.g. CT_NS_C.
-    contract_types_d = mlBridgeLib.CategorifyContractTypeBySuit(ddmakes)
-    contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
-    assert len(df) == len(contract_types_df)
-    df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
-    del contract_types_df,contract_types_d
-    contract_types_d = CategorifyContractTypeByDirection(df) # using local pandas version instead of mlBridgeLib's Polars version
-    contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
-    assert len(df) == len(contract_types_df)
-    df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
-    del contract_types_df,contract_types_d
+#     # ContractType
+#     # PerformanceWarning: DataFrame is highly fragmented.
+#     df['ContractType'] = df.apply(lambda r: 'PASS' if r['Contract'] == 'PASS' else mlBridgeLib.ContractType(r['BidLvl']+6,r['BidSuit']),axis='columns').astype('category')
+#     # Create column of contract types by partnership by suit. e.g. CT_NS_C.
+#     contract_types_d = mlBridgeLib.CategorifyContractTypeBySuit(ddmakes)
+#     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
+#     assert len(df) == len(contract_types_df)
+#     df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
+#     del contract_types_df,contract_types_d
+#     contract_types_d = CategorifyContractTypeByDirection(df) # using local pandas version instead of mlBridgeLib's Polars version
+#     contract_types_df = pd.DataFrame(contract_types_d,dtype='category')
+#     assert len(df) == len(contract_types_df)
+#     df = pd.concat([df,contract_types_df],axis='columns') # ,join='inner')
+#     del contract_types_df,contract_types_d
 
-    # create dict of NS matchpoint data.
-    matchpoint_ns_d = {} # key is board. values are matchpoint details (score, beats, ties, matchpoints, pct).
-    for board,g in df.groupby('Board'):
-        board_mps_ns = {}
-        for score_ns in g['Score_NS']:
-            board_mps_ns = mlBridgeLib.MatchPointScoreUpdate(score_ns,board_mps_ns) # convert to float32 here? It's still a string because it might originally have AVG+ or AVG- etc.
-        matchpoint_ns_d[board] = board_mps_ns
-    # validate boards are scored correctly
-    for board,g in df.groupby('Board'):
-        for score_ns,match_points_ns in zip(g['Score_NS'],g['MP_NS'].astype('float32')):
-            if matchpoint_ns_d[board][score_ns][3] != match_points_ns: # match_points_ns is a string because it might originally have AVG+ or AVG- etc.
-                print_to_log(logging.WARNING,f'Board {board} score {matchpoint_ns_d[board][score_ns][3]} tuple {matchpoint_ns_d[board][score_ns]} does not match matchpoint score {match_points_ns}') # ok if off by epsilon
+#     # create dict of NS matchpoint data.
+#     matchpoint_ns_d = {} # key is board. values are matchpoint details (score, beats, ties, matchpoints, pct).
+#     for board,g in df.groupby('Board'):
+#         board_mps_ns = {}
+#         for score_ns in g['Score_NS']:
+#             board_mps_ns = mlBridgeLib.MatchPointScoreUpdate(score_ns,board_mps_ns) # convert to float32 here? It's still a string because it might originally have AVG+ or AVG- etc.
+#         matchpoint_ns_d[board] = board_mps_ns
+#     # validate boards are scored correctly
+#     for board,g in df.groupby('Board'):
+#         for score_ns,match_points_ns in zip(g['Score_NS'],g['MP_NS'].astype('float32')):
+#             if matchpoint_ns_d[board][score_ns][3] != match_points_ns: # match_points_ns is a string because it might originally have AVG+ or AVG- etc.
+#                 print_to_log(logging.WARNING,f'Board {board} score {matchpoint_ns_d[board][score_ns][3]} tuple {matchpoint_ns_d[board][score_ns]} does not match matchpoint score {match_points_ns}') # ok if off by epsilon
 
-    # Vul columns
-    df['Vul_NS'] = (df['iVul']&1).astype('bool')
-    df['Vul_EW'] = (df['iVul']&2).astype('bool')
+#     # Vul columns
+#     df['Vul_NS'] = (df['iVul']&1).astype('bool')
+#     df['Vul_EW'] = (df['iVul']&2).astype('bool')
 
-    # board result columns
-    df['OverTricks'] = df['Result'].gt(0)
-    df['JustMade'] = df['Result'].eq(0)
-    df['UnderTricks'] = df['Result'].lt(0)
+#     # board result columns
+#     df['OverTricks'] = df['Result'].gt(0)
+#     df['JustMade'] = df['Result'].eq(0)
+#     df['UnderTricks'] = df['Result'].lt(0)
 
-    df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Pair_Declarer_Direction']], axis='columns')
-    df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Pair_Declarer_Direction']], axis='columns')
-    df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Pair_Declarer_Direction']], axis='columns')
-    df['Pair_Number_Defender'] = df.apply(lambda r: r['Pair_Number_'+r['Opponent_Pair_Direction']], axis='columns')
-    df['Number_Declarer'] = df.apply(lambda r: r['Player_ID_'+r['Declarer_Direction']], axis='columns') # todo: keep as lower case?
-    df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Declarer_Direction']], axis='columns')
-    # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
-    df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
-    df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Pair_Declarer_Direction']], axis='columns')
-    # recompute Score and compare against actual scores to catch scoring errors such as: Board 1 at https://my.acbl.org/club-results/details/878121
-    # just use Score_NS if score is uncomputable probably due to pd.NA from director's adjustment. (r['Result'] is pd.NA) works here. why?
-    df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else r['Score_NS'] if r['Result'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
-    if (df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])).any():
-        print_to_log(logging.WARNING, 'Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
-    df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Pair_Declarer_Direction']], axis='columns')
+#     df[f"Vul_Declarer"] = df.apply(lambda r: r['Vul_'+r['Declarer_Pair_Direction']], axis='columns')
+#     df['Pct_Declarer'] = df.apply(lambda r: r['Pct_'+r['Declarer_Pair_Direction']], axis='columns')
+#     df['Pair_Number_Declarer'] = df.apply(lambda r: r['Pair_Number_'+r['Declarer_Pair_Direction']], axis='columns')
+#     df['Pair_Number_Defender'] = df.apply(lambda r: r['Pair_Number_'+r['Opponent_Pair_Direction']], axis='columns')
+#     df['Number_Declarer'] = df.apply(lambda r: r['Player_ID_'+r['Declarer_Direction']], axis='columns') # todo: keep as lower case?
+#     df['Name_Declarer'] = df.apply(lambda r: r['Player_Name_'+r['Declarer_Direction']], axis='columns')
+#     # todo: drop either Tricks or Tricks_Declarer as they are invariant and duplicates
+#     df['Tricks_Declarer'] = df['Tricks'] # synonym for Tricks
+#     df['Score_Declarer'] = df.apply(lambda r: r['Score_'+r['Declarer_Pair_Direction']], axis='columns')
+#     # recompute Score and compare against actual scores to catch scoring errors such as: Board 1 at https://my.acbl.org/club-results/details/878121
+#     # just use Score_NS if score is uncomputable probably due to pd.NA from director's adjustment. (r['Result'] is pd.NA) works here. why?
+#     df['Computed_Score_Declarer'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else r['Score_NS'] if r['Result'] is pd.NA else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NESW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['Result'],True), axis='columns')
+#     if (df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])).any():
+#         print_to_log(logging.WARNING, 'Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
+#     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Declarer_Pair_Direction']], axis='columns')
 
-    df['DDTricks'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
-    df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
-    # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['DDTricks']-r['SL_'+r['Pair_Declarer_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-    df['DDScore_NS'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
-    df['DDScore_EW'] = -df['DDScore_NS']
-    df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
-    df['DDMPs_EW'] = df['MP_Top']-df['DDMPs_NS']
-    df['DDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][4],axis='columns')
-    df['DDPct_EW'] = 1-df['DDPct_NS']
+#     df['DDTricks'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
+#     df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
+#     # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['DDTricks']-r['SL_'+r['Declarer_Pair_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+#     df['DDScore_NS'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
+#     df['DDScore_EW'] = -df['DDScore_NS']
+#     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
+#     df['DDMPs_EW'] = df['MP_Top']-df['DDMPs_NS']
+#     df['DDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][4],axis='columns')
+#     df['DDPct_EW'] = 1-df['DDPct_NS']
 
-    # Declarer ParScore columns
-    # ACBL online games have no par score data. Must create it.
-    if 'par' not in df or df['par'].eq('').all():
-        df.rename({'ParScore_EndPlay_NS':'ParScore_NS','ParScore_EndPlay_EW':'ParScore_EW','ParContracts_EndPlay':'ParContracts'},axis='columns',inplace=True)
-        #df['ParScore_NS'] = df['ParScore_EndPlay_NS']
-        #df['ParScore_EW'] = df['ParScore_EndPlay_EW']
-        #df['ParContracts'] = df['ParContracts_EndPlay']
-        #df.drop(['ParScore_EndPlay_NS','ParScore_EndPlay_EW','ParContracts_EndPlay'],axis='columns',inplace=True)
-    else:
-        # parse par column and create ParScore column.
-        df['ParScore_NS'] = df['par'].map(lambda x: x.split(' ')[1]).astype('int16')
-        df['ParScore_EW'] = -df['ParScore_NS']
-        df['ParContracts'] = df['par'].map(lambda x: x.split(' ')[2:]).astype('string')
-    if 'par' in df:
-        df.drop(['par'],axis='columns',inplace=True)
-    df['ParScore_MPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][3],axis='columns')
-    df['ParScore_MPs_EW'] = df['MP_Top']-df['ParScore_MPs_NS']
-    df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
-    df['ParScore_Pct_EW'] = 1-df['ParScore_Pct_NS']
-    df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Pair_Declarer_Direction']], axis='columns')
-    #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Pair_Declarer_Direction']], axis='columns')
-    #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Pair_Declarer_Direction']], axis='columns')
-    #df['ParScore_Diff_Declarer'] = df['Score_Declarer']-df['ParScore_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
-    #df['ParScore_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['ParScore_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
-    #df['ParScore_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['ParScore_Pct_Declarer']
-    df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks'] # adding convenience column to df. Actual Tricks vs DD Tricks
-    #df['Score_DD_Diff_Declarer'] = df['Score_Declarer']-df['DD_Score_Declarer'] # adding convenience column to df. Actual Score vs DD Score
+#     # Declarer ParScore columns
+#     # ACBL online games have no par score data. Must create it.
+#     if 'par' not in df or df['par'].eq('').all():
+#         df.rename({'ParScore_EndPlay_NS':'ParScore_NS','ParScore_EndPlay_EW':'ParScore_EW','ParContracts_EndPlay':'ParContracts'},axis='columns',inplace=True)
+#         #df['ParScore_NS'] = df['ParScore_EndPlay_NS']
+#         #df['ParScore_EW'] = df['ParScore_EndPlay_EW']
+#         #df['ParContracts'] = df['ParContracts_EndPlay']
+#         #df.drop(['ParScore_EndPlay_NS','ParScore_EndPlay_EW','ParContracts_EndPlay'],axis='columns',inplace=True)
+#     else:
+#         # parse par column and create ParScore column.
+#         df['ParScore_NS'] = df['par'].map(lambda x: x.split(' ')[1]).astype('int16')
+#         df['ParScore_EW'] = -df['ParScore_NS']
+#         df['ParContracts'] = df['par'].map(lambda x: x.split(' ')[2:]).astype('string')
+#     if 'par' in df:
+#         df.drop(['par'],axis='columns',inplace=True)
+#     df['ParScore_MPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][3],axis='columns')
+#     df['ParScore_MPs_EW'] = df['MP_Top']-df['ParScore_MPs_NS']
+#     df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
+#     df['ParScore_Pct_EW'] = 1-df['ParScore_Pct_NS']
+#     df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df['ParScore_Diff_Declarer'] = df['Score_Declarer']-df['ParScore_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
+#     #df['ParScore_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['ParScore_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
+#     #df['ParScore_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['ParScore_Pct_Declarer']
+#     df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks'] # adding convenience column to df. Actual Tricks vs DD Tricks
+#     #df['Score_DD_Diff_Declarer'] = df['Score_Declarer']-df['DD_Score_Declarer'] # adding convenience column to df. Actual Score vs DD Score
 
-    df['Declarer_Rating'] = df.groupby('Number_Declarer')['Tricks_DD_Diff_Declarer'].transform('mean').astype('float32')
-    # todo: resolve naming conflict: Defender_ParScore_GE, Defender_OnLead_Rating, Defender_NotOnLead_Rating vs ParScore_GE_Defender, OnLead_Rating_Defender, NotOnLead_Rating_Defender
-    df['Defender_ParScore_GE'] = df['Score_Declarer'].le(df['ParScore_Declarer'])
-    df['Defender_OnLead_Rating'] = df.groupby('OnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
-    df['Defender_NotOnLead_Rating'] = df.groupby('NotOnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
+#     df['Declarer_Rating'] = df.groupby('Number_Declarer')['Tricks_DD_Diff_Declarer'].transform('mean').astype('float32')
+#     # todo: resolve naming conflict: Defender_ParScore_GE, Defender_OnLead_Rating, Defender_NotOnLead_Rating vs ParScore_GE_Defender, OnLead_Rating_Defender, NotOnLead_Rating_Defender
+#     df['Defender_ParScore_GE'] = df['Score_Declarer'].le(df['ParScore_Declarer'])
+#     df['Defender_OnLead_Rating'] = df.groupby('OnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
+#     df['Defender_NotOnLead_Rating'] = df.groupby('NotOnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
 
-    # masterpoints columns
-    # note: looks like masterpoints column is no longer available so need to obsolete it. fake it with 500 for everyone.
-    for d in mlBridgeLib.NESW:
-        #df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
-        #df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].fillna(300) # unknown number of masterpoints. fill with 300.
-        df['mp_total_'+d.lower()] = 500 # todo: need to fake masterpoints because it's no longer available.
-    df['MP_Sum_NS'] = df['mp_total_n']+df['mp_total_s']
-    df['MP_Sum_EW'] = df['mp_total_e']+df['mp_total_w']
-    df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
-    df['MP_Geo_EW'] = df['mp_total_e']*df['mp_total_w']
+#     # masterpoints columns
+#     # note: looks like masterpoints column is no longer available so need to obsolete it. fake it with 500 for everyone.
+#     for d in mlBridgeLib.NESW:
+#         #df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].astype('float32')
+#         #df['mp_total_'+d.lower()] = df['mp_total_'+d.lower()].fillna(300) # unknown number of masterpoints. fill with 300.
+#         df['mp_total_'+d.lower()] = 500 # todo: need to fake masterpoints because it's no longer available.
+#     df['MP_Sum_NS'] = df['mp_total_n']+df['mp_total_s']
+#     df['MP_Sum_EW'] = df['mp_total_e']+df['mp_total_w']
+#     df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
+#     df['MP_Geo_EW'] = df['mp_total_e']*df['mp_total_w']
 
-    df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
+#     df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
 
-    # todo: check dtypes
-    # df = df.astype({'Name_Declarer':'string','Score_Declarer':'int16','ParScore_Declarer':'int16','Pct_Declarer':'float32','DDTricks':'uint8','DD_Score_Declarer':'int16','DD_Pct_Declarer':'float32','Tricks_DD_Diff_Declarer':'int8','Score_DD_Diff_Declarer':'int16','ParScore_DD_Diff_Declarer':'int16','ParScore_Pct_Declarer':'float32','Pair_Declarer':'string','Pair_Defender':'string'})
+#     # todo: check dtypes
+#     # df = df.astype({'Name_Declarer':'string','Score_Declarer':'int16','ParScore_Declarer':'int16','Pct_Declarer':'float32','DDTricks':'uint8','DD_Score_Declarer':'int16','DD_Pct_Declarer':'float32','Tricks_DD_Diff_Declarer':'int8','Score_DD_Diff_Declarer':'int16','ParScore_DD_Diff_Declarer':'int16','ParScore_Pct_Declarer':'float32','Pair_Declarer':'string','Pair_Defender':'string'})
 
-    # todo: verify every dtype is correct.
-    # todo: rename columns when there's a better name
-    df.rename({'dealer':'Dealer'},axis='columns',inplace=True)
-    assert df['Dealer'].isin(list('NESW')).all()
-    df['Dealer'] = df['Dealer'].astype('category') # todo: should this be done earlier?
-    assert df['iVul'].isin([0,1,2,3]).all() # 0 to 3
-    df['iVul'] = df['iVul'].astype('uint8') # todo: should this be done earlier?
-    df['iDate'] = df['Date'].astype('int64')
-    return df, sd_cache_d, matchpoint_ns_d
-
-
-# todo: merge into mlBridgeAugmentLib. requires converting to Polars.
-def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
-
-    sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
-    df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Pair_Declarer_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
-    df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
-    df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
-    df['SDScore_EW'] = -df['SDScore_NS']
-    df['SDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][3],axis='columns')
-    df['SDMPs_EW'] = (df['MP_Top']-df['SDMPs_NS']).astype('float32')
-    df['SDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][4],axis='columns')
-    df['SDPct_EW'] = (1-df['SDPct_NS']).astype('float32')
-    max_score_contract = df.apply(Create_SD_Score_Max,axis='columns')
-    df['SDScore_Max_NS'] = pd.Series([score for score,contract in max_score_contract],dtype='float32')
-    df['SDScore_Max_EW'] = pd.Series([-score for score,contract in max_score_contract],dtype='float32')
-    df['SDContract_Max'] = pd.Series([contract for score,contract in max_score_contract],dtype='string') # invariant
-    del max_score_contract
-    df['SDMPs_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][3],axis='columns')
-    df['SDMPs_Max_EW'] = (df['MP_Top']-df['SDMPs_Max_NS']).astype('float32')
-    df['SDPct_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][4],axis='columns')
-    df['SDPct_Max_EW'] = (1-df['SDPct_Max_NS']).astype('float32')
-    df['SDScore_Diff_NS'] = (df['Score_NS']-df['SDScore_NS']).astype('int16')
-    df['SDScore_Diff_EW'] = (df['Score_EW']-df['SDScore_EW']).astype('int16')
-    df['SDScore_Max_Diff_NS'] = (df['Score_NS']-df['SDScore_Max_NS']).astype('int16')
-    df['SDScore_Max_Diff_EW'] = (df['Score_EW']-df['SDScore_Max_EW']).astype('int16')
-    df['SDPct_Diff_NS'] = (df['Pct_NS']-df['SDPct_NS']).astype('float32')
-    df['SDPct_Diff_EW'] = (df['Pct_EW']-df['SDPct_EW']).astype('float32')
-    df['SDPct_Max_Diff_NS'] = (df['Pct_NS']-df['SDPct_Max_NS']).astype('float32')
-    df['SDPct_Max_Diff_EW'] = (df['Pct_EW']-df['SDPct_Max_EW']).astype('float32')
-    df['SDParScore_Pct_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Diff_NS']).astype('float32')
-    df['SDParScore_Pct_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Diff_EW']).astype('float32')
-    df['SDParScore_Pct_Max_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Max_Diff_NS']).astype('float32')
-    df['SDParScore_Pct_Max_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Max_Diff_EW']).astype('float32')
-    # using same df to avoid the issue with creating new columns. New columns require meta data will need to be changed too.
-    sd_df = pd.DataFrame(df['SDProbs'].values.tolist(),columns=[f'SDProbs_Taking_{i}' for i in range(14)])
-    for c in sd_df.columns:
-        df[c] = sd_df[c].astype('float32')
-    return df, sd_cache_d
+#     # todo: verify every dtype is correct.
+#     # todo: rename columns when there's a better name
+#     df.rename({'dealer':'Dealer'},axis='columns',inplace=True)
+#     assert df['Dealer'].isin(list('NESW')).all()
+#     df['Dealer'] = df['Dealer'].astype('category') # todo: should this be done earlier?
+#     assert df['iVul'].isin([0,1,2,3]).all() # 0 to 3
+#     df['iVul'] = df['iVul'].astype('uint8') # todo: should this be done earlier?
+#     df['iDate'] = df['Date'].astype('int64')
+#     return df, sd_cache_d, matchpoint_ns_d
 
 
-def Create_SD_Scores(r):
-    if r['Contract'] != 'PASS':
-        level = r['BidLvl']-1
-        suit = r['BidSuit']
-        iCDHSN = 'CDHSN'.index(suit)
-        nsew = r['Declarer_Direction']
-        iNSEW = 'NSEW'.index(nsew)
-        vul = r['Vul_Declarer']
-        double = len(r['Dbl'])
-        scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
-        return scores_l
-    else:
-        return [0]*14
+# # todo: merge into mlBridgeAugmentLib. requires converting to Polars.
+# def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
+
+#     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
+#     df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Declarer_Pair_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
+#     df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
+#     df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
+#     df['SDScore_EW'] = -df['SDScore_NS']
+#     df['SDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][3],axis='columns')
+#     df['SDMPs_EW'] = (df['MP_Top']-df['SDMPs_NS']).astype('float32')
+#     df['SDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][4],axis='columns')
+#     df['SDPct_EW'] = (1-df['SDPct_NS']).astype('float32')
+#     max_score_contract = df.apply(Create_SD_Score_Max,axis='columns')
+#     df['SDScore_Max_NS'] = pd.Series([score for score,contract in max_score_contract],dtype='float32')
+#     df['SDScore_Max_EW'] = pd.Series([-score for score,contract in max_score_contract],dtype='float32')
+#     df['SDContract_Max'] = pd.Series([contract for score,contract in max_score_contract],dtype='string') # invariant
+#     del max_score_contract
+#     df['SDMPs_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][3],axis='columns')
+#     df['SDMPs_Max_EW'] = (df['MP_Top']-df['SDMPs_Max_NS']).astype('float32')
+#     df['SDPct_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][4],axis='columns')
+#     df['SDPct_Max_EW'] = (1-df['SDPct_Max_NS']).astype('float32')
+#     df['SDScore_Diff_NS'] = (df['Score_NS']-df['SDScore_NS']).astype('int16')
+#     df['SDScore_Diff_EW'] = (df['Score_EW']-df['SDScore_EW']).astype('int16')
+#     df['SDScore_Max_Diff_NS'] = (df['Score_NS']-df['SDScore_Max_NS']).astype('int16')
+#     df['SDScore_Max_Diff_EW'] = (df['Score_EW']-df['SDScore_Max_EW']).astype('int16')
+#     df['SDPct_Diff_NS'] = (df['Pct_NS']-df['SDPct_NS']).astype('float32')
+#     df['SDPct_Diff_EW'] = (df['Pct_EW']-df['SDPct_EW']).astype('float32')
+#     df['SDPct_Max_Diff_NS'] = (df['Pct_NS']-df['SDPct_Max_NS']).astype('float32')
+#     df['SDPct_Max_Diff_EW'] = (df['Pct_EW']-df['SDPct_Max_EW']).astype('float32')
+#     df['SDParScore_Pct_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Diff_NS']).astype('float32')
+#     df['SDParScore_Pct_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Diff_EW']).astype('float32')
+#     df['SDParScore_Pct_Max_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Max_Diff_NS']).astype('float32')
+#     df['SDParScore_Pct_Max_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Max_Diff_EW']).astype('float32')
+#     # using same df to avoid the issue with creating new columns. New columns require meta data will need to be changed too.
+#     sd_df = pd.DataFrame(df['SDProbs'].values.tolist(),columns=[f'SDProbs_Taking_{i}' for i in range(14)])
+#     for c in sd_df.columns:
+#         df[c] = sd_df[c].astype('float32')
+#     return df, sd_cache_d
 
 
-#def Create_SD_Probs(r):
-#    return [r['SDProb_Take_'+str(n)] for n in range(14)] # todo: this was previously computed. can we just use that?
+# def Create_SD_Scores(r):
+#     if r['Contract'] != 'PASS':
+#         level = r['BidLvl']-1
+#         suit = r['BidSuit']
+#         iCDHSN = 'CDHSN'.index(suit)
+#         nsew = r['Declarer_Direction']
+#         iNSEW = 'NSEW'.index(nsew)
+#         vul = r['Vul_Declarer']
+#         double = len(r['Dbl'])
+#         scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
+#         return scores_l
+#     else:
+#         return [0]*14
 
 
-def Create_SD_Score(r):
-    probs = r['SDProbs']
-    scores_l = r['SDScores']
-    ps = sum(prob*score for prob,score in zip(probs,scores_l))
-    return ps if r['Declarer_Direction'] in 'NS' else -ps
+# #def Create_SD_Probs(r):
+# #    return [r['SDProb_Take_'+str(n)] for n in range(14)] # todo: this was previously computed. can we just use that?
 
 
-# Highest expected score, same suit, any level
-# Note: score_max may exceed par score when probability of making/setting contract is high.
-def Create_SD_Score_Max(r):
-    score_max = None
-    if r['Contract'] != 'PASS':
-        suit = r['BidSuit']
-        iCDHSN = 'CDHSN'.index(suit)
-        nsew = r['Declarer_Direction']
-        iNSEW = 'NSEW'.index(nsew)
-        vul = r['Vul_Declarer']
-        double = len(r['Dbl'])
-        probs = r['SDProbs']
-        for level in range(7):
-            scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
-            score = sum(prob*score for prob,score in zip(probs,scores_l))
-            # todo: do same for redoubled? or is that too rare to matter?
-            #scoresx_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, 1, iNSEW)
-            #scorex = sum(prob*score for prob,score in zip(probs,scoresx_l))
-            isdoubled = double
-            #if scorex > score:
-            #    score = scorex
-            #    if isdoubled == 0:
-            #        isdoubled = 1
-            # must be mindful that NS makes positive scores but EW makes negative scores.
-            if nsew in 'NS' and (score_max is None or score > score_max):
-                score_max = score
-                contract_max = str(level+1)+suit+['','X','XX'][isdoubled]+' '+nsew
-            elif nsew in 'EW' and (score_max is None or score < score_max):
-                score_max = score
-                contract_max = str(level+1)+suit+['','X','XX'][isdoubled]+' '+nsew
-    else:
-        score_max = 0
-        contract_max = 'PASS'
-    return (score_max, contract_max)
+# def Create_SD_Score(r):
+#     probs = r['SDProbs']
+#     scores_l = r['SDScores']
+#     ps = sum(prob*score for prob,score in zip(probs,scores_l))
+#     return ps if r['Declarer_Direction'] in 'NS' else -ps
+
+
+# # Highest expected score, same suit, any level
+# # Note: score_max may exceed par score when probability of making/setting contract is high.
+# def Create_SD_Score_Max(r):
+#     score_max = None
+#     if r['Contract'] != 'PASS':
+#         suit = r['BidSuit']
+#         iCDHSN = 'CDHSN'.index(suit)
+#         nsew = r['Declarer_Direction']
+#         iNSEW = 'NSEW'.index(nsew)
+#         vul = r['Vul_Declarer']
+#         double = len(r['Dbl'])
+#         probs = r['SDProbs']
+#         for level in range(7):
+#             scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
+#             score = sum(prob*score for prob,score in zip(probs,scores_l))
+#             # todo: do same for redoubled? or is that too rare to matter?
+#             #scoresx_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, 1, iNSEW)
+#             #scorex = sum(prob*score for prob,score in zip(probs,scoresx_l))
+#             isdoubled = double
+#             #if scorex > score:
+#             #    score = scorex
+#             #    if isdoubled == 0:
+#             #        isdoubled = 1
+#             # must be mindful that NS makes positive scores but EW makes negative scores.
+#             if nsew in 'NS' and (score_max is None or score > score_max):
+#                 score_max = score
+#                 contract_max = str(level+1)+suit+['','X','XX'][isdoubled]+' '+nsew
+#             elif nsew in 'EW' and (score_max is None or score < score_max):
+#                 score_max = score
+#                 contract_max = str(level+1)+suit+['','X','XX'][isdoubled]+' '+nsew
+#     else:
+#         score_max = 0
+#         contract_max = 'PASS'
+#     return (score_max, contract_max)

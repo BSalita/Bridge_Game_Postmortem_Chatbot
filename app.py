@@ -370,7 +370,7 @@ def create_club_dfs(player_id, event_url):
     data = acbllib.get_club_results_details_data(event_url)
     if data is None:
         return None
-    return chatlib.create_club_dfs(data)
+    return chatlib.create_club_dfs(data) # todo: fully convert to polars
 
 
 # def create_tournament_dfs(player_id, event_url):
@@ -737,16 +737,22 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
             df = df.with_columns([
                 pl.lit(st.session_state.opponent_pair_direction).alias('Opponent_Pair_Direction'),
                 (pl.col('section_name') == st.session_state.section_name).alias('My_Section'),
-                (pl.col('section_name') == st.session_state.section_name).alias('Our_Section'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('My_Pair'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Our_Pair'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Boards_I_Played'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Boards_We_Played'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('Our_Boards'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Boards_I_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.partner_id]))).alias('Boards_We_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (pl.col('Number_Declarer') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
-                ((pl.col('section_name') == st.session_state.section_name) & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number) & (~pl.col('Number_Declarer').is_in([st.session_state.player_id, st.session_state.partner_id]))).alias('Boards_Opponent_Declared')
+            ])
+            df = df.with_columns([
+                pl.col('My_Section').alias('Our_Section'),
+                (pl.col('My_Section') & (pl.col(f"Pair_Number_{st.session_state.pair_direction}") == st.session_state.pair_number)).alias('My_Pair'),
+            ])
+            df = df.with_columns([
+                (pl.col('My_Pair')).alias('Our_Pair'),
+                (pl.col('My_Pair')).alias('Boards_I_Played'),
+                (pl.col('My_Pair')).alias('Boards_We_Played'),
+                (pl.col('My_Pair')).alias('Our_Boards'),
+                (pl.col('My_Pair') & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Boards_I_Declared'),
+                (pl.col('My_Pair') & (pl.col('Number_Declarer') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
+                (pl.col('My_Pair') & ((pl.col('Declarer_Direction') == opponent_pair_direction[0]) | (pl.col('Declarer_Direction') == opponent_pair_direction[1]))).alias('Boards_Opponent_Declared')
+            ])
+            df = df.with_columns([
+                (pl.col('Boards_I_Declared') | pl.col('Boards_Partner_Declared')).alias('Boards_We_Declared'),
             ])
             break # only want to do this once.
 
@@ -763,6 +769,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'self' for duckdb discovery. SQL queries will reference this df/table.
+    
+    assert df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {[col for col, dtype in df.schema.items() if dtype == pl.Object]}"
     con.register(st.session_state.con_register_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
 
     st.session_state.df_schema_string = create_schema_string(df, con)
@@ -1116,7 +1124,7 @@ def reset_data():
 
     # sql
     #st.session_state.con = None
-    st.session_state.con_register_name = 'self'
+    st.session_state.con_register_name = 'self' # todo: this and others have duplicate initializations.
     #st.session_state.show_sql_query = None
     st.session_state.commands_sql = None
     st.session_state.df_meta = None
