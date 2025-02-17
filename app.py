@@ -1779,7 +1779,7 @@ def main():
         st.session_state.ai_api = DEFAULT_AI_MODEL
         st.session_state.con = duckdb.connect()
         st.session_state.con_register_name = 'self'
-        st.session_state.show_sql_query = True
+        st.session_state.show_sql_query = os.getenv('STREAMLIT_ENV') == 'development'
         st.session_state.sql_query_mode = False
         st.session_state.sql_queries = []
         st.session_state.player_id = None
