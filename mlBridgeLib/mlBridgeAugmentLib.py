@@ -261,6 +261,7 @@ def calculate_single_dummy_probabilities(deal, produce=100):
 
     # todo: has this been obsoleted by endplay's calc_all_tables 2nd parameter?
     ns_ew_rows = {}
+    SDTricks_df = {}
     for ns_ew in ['NS','EW']:
         s = deal[2:].split()
         if ns_ew == 'NS':
@@ -275,13 +276,13 @@ def calculate_single_dummy_probabilities(deal, produce=100):
         sd_deals, sd_dd_result_tables = generate_single_dummy_deals(predeal_string, produce, show_progress=False)
 
         #display_double_dummy_deals(sd_deals, sd_dd_result_tables, 0, 4)
-        SDTricks_df = pl.DataFrame([[sddeal.to_pbn()]+[s for d in t.to_list() for s in d] for sddeal,t in zip(sd_deals,sd_dd_result_tables)],schema={'SD_Deal':pl.String}|{'_'.join(['SDTricks',d,s]):pl.UInt8 for d in 'NESW' for s in 'SHDCN'},orient='row')
+        SDTricks_df[ns_ew] = pl.DataFrame([[sddeal.to_pbn()]+[s for d in t.to_list() for s in d] for sddeal,t in zip(sd_deals,sd_dd_result_tables)],schema={'SD_Deal':pl.String}|{'_'.join(['SDTricks',d,s]):pl.UInt8 for s in 'SHDCN' for d in 'NESW'},orient='row')
 
-        for d in 'NSEW':
+        for d in 'NESW':
             for s in 'SHDCN':
                 # always create 14 rows (0-13 tricks taken) for combo of direction and suit. fill never-happened with proper index and 0.0 prob value.
                 #ns_ew_rows[(ns_ew,d,s)] = dd_df[d+s].to_pandas().value_counts(normalize=True).reindex(range(14), fill_value=0).tolist() # ['Fixed_Direction','Direction_Declarer','Suit']+['SD_Prob_Take_'+str(n) for n in range(14)]
-                vc = {ds:p for ds,p in SDTricks_df['_'.join(['SDTricks',d,s])].value_counts(normalize=True).rows()}
+                vc = {ds:p for ds,p in SDTricks_df[ns_ew]['_'.join(['SDTricks',d,s])].value_counts(normalize=True).rows()}
                 index = {i:0.0 for i in range(14)} # fill values for missing probs
                 ns_ew_rows[(ns_ew,d,s)] = list((index|vc).values())
 
