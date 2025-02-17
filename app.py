@@ -500,6 +500,13 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
+    # if session_id is None:
+    #     if st.session_state.sql_query_mode:
+    #         return False
+    st.session_state.sql_query_mode = False
+    
+    st.session_state.main_section_container = st.container(border=True)
+
     con = st.session_state.con
 
     with st.spinner(f"Retrieving a list of games for {player_id} ..."):
@@ -514,7 +521,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(game_urls) == 0:
             st.error(f"Could not find any club games for {player_id}.")
         elif session_id is None:
-            session_id = list(game_urls.keys())[0]  # default to most recent club game
+            if player_id not in st.session_state.game_urls_d:
+                session_id = list(game_urls.keys())[0]  # default to most recent club game# default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
@@ -529,12 +537,13 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(tournament_session_urls) == 0:
             st.error(f"Could not find any tournament sessions for {player_id}.")
         elif session_id is None:
-            session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
+            if player_id not in st.session_state.game_urls_d:
+                session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
         print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
     if session_id is None:
-        st.error(f"Could not find any club or tournament sessions for {player_id}.")
+        st.error(f"Please select a valid session for {player_id} from the left sidebar.")
         return False
     
     reset_data()
@@ -551,7 +560,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
             dfs = create_club_dfs(player_id, game_urls[session_id][1])
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
                 st.error(
-                    f"Game {session_id} has missing or invalid game data. Select a different club game or tournament session from left sidebar.")
+                    f"Game {session_id} has missing or invalid game data. Must be a Mitchell movement game. Select a different club game or tournament session from left sidebar.")
                 return False
             print_to_log_info('dfs:',dfs.keys())
 
@@ -1223,12 +1232,6 @@ def create_sidebar():
     if st.session_state.session_id is None:
         st.stop()
 
-    if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
-        launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
-    else:
-        launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
-    st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
-
     # if st.sidebar.download_button(label="Download Personalized Report",
     #         data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
     #         file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
@@ -1488,21 +1491,28 @@ def process_prompt_macros(sql_query):
 def show_dfs():
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
     analyze_game_stqdm = stqdm(list(st.session_state.vetted_prompts), desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
-    with st.container(border=True):
-        report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"
+    st.session_state.main_section_container = st.container(border=True)
+    with st.session_state.main_section_container:
+        report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
         report_creator = "Created by https://acbl.postmortem.chat"
-        report_game_info = f"Game Date:{st.session_state.game_date} Session:{st.session_state.session_id} Player:{st.session_state.player_id} Partner:{st.session_state.partner_id}"
-        report_game_description = f"{st.session_state.game_description}"
+        report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
+        report_your_match_info = f"Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
-        st.markdown(f"#### {report_game_info}")
-        st.markdown(f"#### {report_game_description}")
+        st.markdown(f"#### {report_event_info}")
+        st.markdown(f"#### {report_your_match_info}")
         pdf_assets = st.session_state.pdf_assets
         pdf_assets.clear()
         pdf_assets.append(f"# {report_title}")
         pdf_assets.append(f"#### {report_creator}")
-        pdf_assets.append(f"### {report_game_info}")
-        pdf_assets.append(f"### {report_game_description}")
+        pdf_assets.append(f"### {report_event_info}")
+        pdf_assets.append(f"### {report_your_match_info}")
+        if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
+            launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
+        else:
+            launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
+        st.markdown(launch_acbl_results_page, unsafe_allow_html=True)
+        pdf_assets.append(launch_acbl_results_page)
         sql_query_count = 0
         for category in analyze_game_stqdm: #[:-3]:
             #print('category:',category)
@@ -1541,6 +1551,16 @@ def show_dfs():
         st.warning('Personalized report downloaded.')
 
 
+def ask_sql_query():
+
+    if st.session_state.show_sql_query:
+        with st.container():
+            with bottom():
+                st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
+        st.session_state.sql_query_mode = True
+        st.session_state.main_section_container = st.empty()
+
+
 def create_main_section():
 
     content = slash_about()
@@ -1565,11 +1585,7 @@ def create_main_section():
 
     show_dfs()
 
-    if st.session_state.show_sql_query:
-        with st.container():
-            with bottom():
-                st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
-
+    ask_sql_query()
 
 # def create_main_section():
 
@@ -1752,11 +1768,13 @@ def main():
             pathlib.PosixPath = pathlib.WindowsPath
         else:
             pathlib.WindowsPath = pathlib.PosixPath
+        st.session_state.main_section_container = st.empty()
         st.session_state.pdf_assets = []
         st.session_state.ai_api = DEFAULT_AI_MODEL
         st.session_state.con = duckdb.connect()
         st.session_state.con_register_name = 'self'
-        st.session_state.show_sql_query = False
+        st.session_state.show_sql_query = True
+        st.session_state.sql_query_mode = False
         st.session_state.player_id = None
         st.session_state.session_id = None
         st.session_state.game_urls_d = {}
@@ -1799,17 +1817,19 @@ def main():
             st.stop()
         st.sidebar.text_input(
             "Enter an ACBL player number", on_change=player_id_change, placeholder='2663279', key='player_id_input')
-        streamlit_chat.message(
-            "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
-        streamlit_chat.message(
-            "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
-        streamlit_chat.message(
-            "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
-        streamlit_chat.message(
-            "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
-        streamlit_chat.message(
-            "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
-        app_info()
+        st.session_state.main_section_container = st.container()
+        with st.session_state.main_section_container:
+            streamlit_chat.message(
+                "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
+            streamlit_chat.message(
+                "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
+            streamlit_chat.message(
+                "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
+            streamlit_chat.message(
+                "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
+            streamlit_chat.message(
+                "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
+            app_info()
 
     else:
          
@@ -1817,7 +1837,10 @@ def main():
 
         #create_tab_bar()
 
-        create_main_section()
+        if st.session_state.sql_query_mode:
+            ask_sql_query()
+        else:
+            create_main_section()
 
 
 if __name__ == '__main__':

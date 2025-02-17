@@ -568,14 +568,14 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
         print_to_log_info('Dropping rows:',df.filter(drop_rows))
         df = df.filter(~drop_rows)
         df = df.with_columns(pl.col('Score_NS').str.replace('PASS', '0'))
-    df = df.with_columns(pl.col('Score_NS').cast(pl.Int16).alias('Score_NS'))
-    df = df.with_columns(pl.col('Score_NS').neg().cast(pl.Int16).alias('Score_EW'))
+    df = df.with_columns(pl.col('Score_NS').cast(pl.Int16,strict=False).alias('Score_NS'))
+    df = df.with_columns(pl.col('Score_NS').neg().cast(pl.Int16,strict=False).alias('Score_EW'))
 
     df = df.with_columns([
         pl.when(pl.col('Contract') == 'PASS')
         .then(pl.lit(None))
         .otherwise(pl.col('Contract').str.slice(0, 1))
-        .cast(pl.UInt8)
+        .cast(pl.UInt8,strict=False)
         .alias('BidLvl'),
 
         pl.when(pl.col('Contract') == 'PASS')

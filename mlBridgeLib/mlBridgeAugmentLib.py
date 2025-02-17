@@ -488,19 +488,19 @@ def convert_contract_to_contract(df):
 
 # None is used instead of pl.Null because pl.Null becomes 'Null' string in pl.String columns. Not sure what's going on but the solution is to use None.
 def convert_contract_to_declarer(df):
-    return [None if c == 'PASS' else c[2] for c in df['Contract']] # extract declarer from contract
+    return [None if c is None or c == 'PASS' else c[2] for c in df['Contract']] # extract declarer from contract
 
 
 def convert_contract_to_level(df):
-    return [None if c == 'PASS' else c[0] for c in df['Contract']] # extract level from contract
+    return [None if c is None or c == 'PASS' else c[0] for c in df['Contract']] # extract level from contract
 
 
 def convert_contract_to_strain(df):
-    return [None if c == 'PASS' else c[1] for c in df['Contract']] # extract strain from contract
+    return [None if c is None or c == 'PASS' else c[1] for c in df['Contract']] # extract strain from contract
 
 
 def convert_contract_to_dbl(df):
-    return [None if c == 'PASS' else c[3:] for c in df['Contract']] # extract dbl from contract
+    return [None if c is None or c == 'PASS' else c[3:] for c in df['Contract']] # extract dbl from contract
 
 
 def convert_declarer_to_DeclarerName(df):
@@ -512,19 +512,19 @@ def convert_declarer_to_DeclarerID(df):
 
 
 def convert_contract_to_result(df):
-    return [None if c == 'PASS' else 0 if c[-1] in ['=','0'] else int(c[-1]) if c[-2] == '+' else -int(c[-1]) for c in df['Contract']] # create result from contract
+    return [None if c is None or c == 'PASS' else 0 if c[-1] in ['=','0'] else int(c[-1]) if c[-2] == '+' else -int(c[-1]) for c in df['Contract']] # create result from contract
 
 
 def convert_contract_to_tricks(df):
-    return [None if c == 'PASS' else int(c[0])+6+r for c,r in zip(df['Contract'],df['Result'])] # create tricks from contract and result
+    return [None if c is None or c == 'PASS' else int(c[0])+6+r for c,r in zip(df['Contract'],df['Result'])] # create tricks from contract and result
 
 
 def convert_contract_to_DDTricks(df):
-    return [None if c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Declarer_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
+    return [None if c is None or c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Declarer_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
 
 
 def convert_contract_to_DDTricks_Dummy(df):
-    return [None if c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Dummy_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
+    return [None if c is None or c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Dummy_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
 
 
 def convert_contract_to_DDScore_Ref(df):
@@ -1664,7 +1664,7 @@ class DDSDAugmenter:
                     .alias('Computed_Score_Declarer'),
 
                 pl.struct(['Contract', 'Result', 'Score_NS', 'BidLvl', 'BidSuit', 'Dbl','Declarer_Direction', 'Vul_Declarer']).map_elements(
-                    lambda r: 0 if r['Contract'] == 'PASS' else r['Score_NS'] if r['Result'] is None else mlBridgeLib.score(
+                    lambda r: None if r['Contract'] is None else 0 if r['Contract'] == 'PASS' else r['Score_NS'] if r['Result'] is None else mlBridgeLib.score(
                         r['BidLvl'] - 1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), 'NESW'.index(r['Declarer_Direction']),
                         r['Vul_Declarer'], r['Result'], True),return_dtype=pl.Int16).alias('Computed_Score_Declarer2'),
             ]),
