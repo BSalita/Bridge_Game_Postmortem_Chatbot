@@ -158,6 +158,7 @@ def calc_double_dummy_deals(deals, batch_size=40, output_progress=False, progres
 
         if progress:
             progress.progress(100,f"100%: Double dummies calculated for {len(deals)} unique deals.")
+            progress.empty() # hmmm, this removes the progress bar so fast that 100% message won't be seen.
         else:
             print(f"100%: Double dummies calculated for {len(deals)} unique deals.")
     return all_result_tables
@@ -304,7 +305,7 @@ def calculate_sd_probs(df, hrs_d, sd_productions=100, progress=None):
     for i,pbn in enumerate(unique_pbns):
         if progress:
             percent_complete = int(i*100/len(unique_pbns))
-            progress.progress(percent_complete,f"{percent_complete}%: Single dummies calculated for {i} of {len(unique_pbns)} unique deals using {sd_productions} samples per deal.")
+            progress.progress(percent_complete,f"{percent_complete}%: Single dummies calculated for {i} of {len(unique_pbns)} unique deals using {sd_productions} samples per deal. Takes 1 minute...")
         else:
             if i < 10 or i % 10000 == 0:
                 percent_complete = int(i*100/len(unique_pbns))
@@ -334,6 +335,8 @@ def calculate_sd_probs(df, hrs_d, sd_productions=100, progress=None):
                 sd_probs_d['_'.join(['Probs',pair_direction,declarer_direction,suit,str(i)])].append(t)
     # st.write(sd_probs_d)
     sd_probs_df = pl.DataFrame(sd_probs_d,orient='row')
+    if progress:
+        progress.empty()
     return sd_dfs_d, sd_probs_df
 
 

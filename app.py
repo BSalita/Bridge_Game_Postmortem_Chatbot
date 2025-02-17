@@ -476,7 +476,7 @@ def perform_hand_augmentations(df, sd_productions):
 def augment_df(df):
     #with st.spinner('Creating ffbridge data to dataframe...'):
     #    df = ffbridgelib.convert_ffdf_to_mldf(df) # warning: drops columns from df.
-    with st.spinner('Creating hand data. Takes 1 to 2 minutes...'):
+    with st.spinner('Creating hand data...'):
         # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
         #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
         #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
@@ -504,7 +504,10 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     with st.spinner(f"Retrieving a list of games for {player_id} ..."):
         t = time.time()
-        game_urls = get_club_results_from_acbl_number(player_id)
+        if player_id in st.session_state.game_urls_d:
+            game_urls = st.session_state.game_urls_d[player_id]
+        else:
+            game_urls = get_club_results_from_acbl_number(player_id)
         if game_urls is None:
             st.error(f"Player number {player_id} not found.")
             return False
@@ -516,7 +519,10 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
         t = time.time()
-        tournament_session_urls = get_tournament_sessions_from_acbl_number(player_id, acbl_api_key) # returns [url, url, description, dfs]
+        if player_id in st.session_state.tournament_session_urls_d:
+            tournament_session_urls = st.session_state.tournament_session_urls_d[player_id]
+        else:
+            tournament_session_urls = get_tournament_sessions_from_acbl_number(player_id, acbl_api_key) # returns [url, url, description, dfs]
         if tournament_session_urls is None:
             st.error(f"Player number {player_id} not found.")
             return False
@@ -533,11 +539,13 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
     
     reset_data()
     st.session_state.player_id = player_id
-    st.session_state.game_urls = game_urls
-    st.session_state.tournament_session_urls = tournament_session_urls
+    st.session_state.game_urls_d[player_id] = game_urls
+    st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
 
     if session_id in game_urls:
         with st.spinner(f"Collecting data for club game {session_id} and player {player_id}."):
+            st.session_state.game_description = game_urls[session_id][2]
+            st.text(f"{st.session_state.game_description}")
             t = time.time()
             # game_urls[session_id][1] is detail_url
             dfs = create_club_dfs(player_id, game_urls[session_id][1])
@@ -570,7 +578,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 return False
             print_to_log_info('create_club_dfs time:', time.time()-t) # takes 3s
 
-        with st.spinner(f"Processing data for club game: {session_id} and player {player_id}. Takes 1 minute ..."):
+        with st.spinner(f"Processing data for club game: {session_id} and player {player_id}."):
         # todo: show descriptions similar to the tournament session descriptions below
         #with st.spinner(f"Processing data for club game: {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
@@ -603,6 +611,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     f.write(col+'\n')
 
     elif session_id in tournament_session_urls:
+        st.session_state.game_description = tournament_session_urls[session_id][2]
+        st.text(f"{st.session_state.game_description}")
         dfs = tournament_session_urls[session_id][3]
         #dfs = create_tournament_dfs(player_id, tournament_session_urls[session_id][3])
         if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
@@ -623,7 +633,6 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
         with st.spinner(f"Collecting data for tournament {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
-
 
             response = get_tournament_session_results(session_id, acbl_api_key)
             assert response.status_code == 200, response.status_code
@@ -657,7 +666,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     return False
             print_to_log_info('get_tournament_session_results time:', time.time()-t)
 
-        with st.spinner(f"Processing data for tournament session {session_id} for player {player_id}. Takes 1 minute ..."):
+        with st.spinner(f"Processing data for tournament session {session_id} for player {player_id}."):
             t = time.time()
             #with Profiler():
 
@@ -1104,9 +1113,6 @@ def reset_data():
     st.session_state.release_notes = None
 
     # game
-    st.session_state.game_urls = {}
-    st.session_state.tournament_session_urls = {}
-    st.session_state.tournament_sessions = {}
     st.session_state.game_date = None
     st.session_state.session_id = None
     st.session_state.json_results_d = None
@@ -1208,19 +1214,19 @@ def create_sidebar():
     st.sidebar.text_input(
         "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id, key='player_id_input')
 
-    st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls.items(
+    st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
     )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
 
-    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls.items(
+    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls_d[st.session_state.player_id].items(
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
     if st.session_state.session_id is None:
         st.stop()
 
-    if st.session_state.session_id in st.session_state.game_urls:
-        launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls[st.session_state.session_id][1]})"
+    if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
+        launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
     else:
-        launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls[st.session_state.session_id][1]})"
+        launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
     st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
 
     # if st.sidebar.download_button(label="Download Personalized Report",
@@ -1323,7 +1329,7 @@ def create_sidebar():
                                         on_change=debug_player_id_names_change, key='debug_player_id_names_selectbox')
 
         st.checkbox(
-            "Ninja Coder Mode (Show SQL Queries)", on_change=show_sql_query_change, key='sql_query_checkbox')
+            "Show SQL Queries", on_change=show_sql_query_change, key='sql_query_checkbox')
 
         # favorite prompts selectboxes
         if len(st.session_state.vetted_prompts):
@@ -1389,9 +1395,9 @@ def create_tab_bar():
                 f"Player number is {st.session_state.player_id}")
             st.divider()
             st.write('Club Game URLs')
-            st.write(st.session_state.game_urls.values())
+            st.write(st.session_state.game_urls_d[st.session_state.player_id].values())
             st.write('Tournament Sessions')
-            st.write(st.session_state.tournament_session_urls.values())
+            st.write(st.session_state.tournament_session_urls_d[st.session_state.player_id].values())
 
         with system_prompt_tab:
             st.header('System Prompt')
@@ -1479,28 +1485,52 @@ def process_prompt_macros(sql_query):
     return sql_query
 
 
-def show_dfs(vetted_prompts, pdf_assets):
-    sql_query_count = 0
-
+def show_dfs():
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
-    for category in stqdm(list(vetted_prompts), desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}'): #[:-3]:
-        #print('category:',category)
-        if "prompts" in category:
-            for i,prompt in enumerate(category["prompts"]):
-                #print('prompt:',prompt) 
-                if "sql" in prompt and prompt["sql"]:
-                    if i == 0:
-                        streamlit_chat.message(f"Morty: {category['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
-                        pdf_assets.append(f"## {category['help']}")
-                    #print('sql:',prompt["sql"])
-                    prompt_sql = prompt['sql']
-                    sql_query = process_prompt_macros(prompt_sql)
-                    query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
-                    if query_df is not None:
-                        pdf_assets.append(query_df)
-                    sql_query_count += 1
-                    #break
-        #break
+    analyze_game_stqdm = stqdm(list(st.session_state.vetted_prompts), desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
+    with st.container(border=True):
+        report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"
+        report_creator = "Created by https://acbl.postmortem.chat"
+        report_game_info = f"Game Date:{st.session_state.game_date} Session:{st.session_state.session_id} Player:{st.session_state.player_id} Partner:{st.session_state.partner_id}"
+        report_game_description = f"{st.session_state.game_description}"
+        st.markdown(f"### {report_title}")
+        st.markdown(f"##### {report_creator}")
+        st.markdown(f"#### {report_game_info}")
+        st.markdown(f"#### {report_game_description}")
+        pdf_assets = st.session_state.pdf_assets
+        pdf_assets.clear()
+        pdf_assets.append(f"# {report_title}")
+        pdf_assets.append(f"#### {report_creator}")
+        pdf_assets.append(f"### {report_game_info}")
+        pdf_assets.append(f"### {report_game_description}")
+        sql_query_count = 0
+        for category in analyze_game_stqdm: #[:-3]:
+            #print('category:',category)
+            if "prompts" in category:
+                for i,prompt in enumerate(category["prompts"]):
+                    #print('prompt:',prompt) 
+                    if "sql" in prompt and prompt["sql"]:
+                        if i == 0:
+                            streamlit_chat.message(f"Morty: {category['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
+                            pdf_assets.append(f"### {category['help']}")
+                        #print('sql:',prompt["sql"])
+                        prompt_sql = prompt['sql']
+                        sql_query = process_prompt_macros(prompt_sql)
+                        query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
+                        if query_df is not None:
+                            pdf_assets.append(query_df)
+                        sql_query_count += 1
+                        #break
+            #break
+
+        # As a text link
+        #st.markdown('[Back to Top](#your-personalized-report)')
+
+        # As an html button (needs styling added)
+        # can't use link_button() restarts page rendering. markdown() will correctly jump to href.
+        # st.link_button('Go to top of report',url='#your-personalized-report')\
+        report_title_anchor = report_title.replace(' ','-').lower()
+        st.markdown(f'<a target="_self" href="#{report_title_anchor}"><button>Go to top of report</button></a>', unsafe_allow_html=True)
 
     if st.session_state.pdf_link.download_button(label="Download Personalized Report",
             data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
@@ -1531,31 +1561,9 @@ def create_main_section():
     read_favorites()
     st.session_state.vetted_prompts = load_vetted_prompts(st.session_state.default_favorites_file)
 
-    pdf_assets = st.session_state.pdf_assets
-    pdf_assets.clear()
-    pdf_assets.append(f"# Bridge Game Postmortem Report Personalized for {st.session_state.player_id}")
-    pdf_assets.append(f"### Created by http://postmortem.chat")
-    pdf_assets.append(f"## Game Date: {st.session_state.game_date} Game ID: {st.session_state.session_id}")
-
     print_to_log_info('messages: len:', len(st.session_state.messages))
 
-    with st.container(border=True):
-        st.markdown('### Your Personalized Report')
-        st.text(f'Game Date:{st.session_state.game_date} Session:{st.session_state.session_id} Player:{st.session_state.player_id} Partner:{st.session_state.partner_id}')
-        show_dfs(st.session_state.vetted_prompts, pdf_assets)
-
-        # As a text link
-        #st.markdown('[Back to Top](#your-personalized-report)')
-
-        # As an html button (needs styling added)
-        # can't use link_button() restarts page rendering. markdown() will correctly jump to href.
-        # st.link_button('Go to top of report',url='#your-personalized-report')
-        st.markdown(''' <a target="_self" href="#your-personalized-report">
-                            <button>
-                                Go to top of report
-                            </button>
-                        </a>''', unsafe_allow_html=True)
-
+    show_dfs()
 
     if st.session_state.show_sql_query:
         with st.container():
@@ -1751,7 +1759,8 @@ def main():
         st.session_state.show_sql_query = False
         st.session_state.player_id = None
         st.session_state.session_id = None
-        st.session_state_tournament_session_id = None
+        st.session_state.game_urls_d = {}
+        st.session_state.tournament_session_urls_d = {}
         st.session_state.single_dummy_sample_count = 10
         st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
         #st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
