@@ -1,3 +1,4 @@
+
 # todo:
 # we're reading just one url which contains only the player's results. Need to read all urls to get all board results.
 # rename columns
@@ -211,25 +212,25 @@ def calculate_ddtricks_par_scores(df, hrs_d, scores_d, output_progress=True, pro
         # convert endplay's dd table to df by flattening each dd table into rows.
         flattened_row = [item for sublist in zip(*rt.to_list()) for item in sublist]
         flattened_dd_rows.append(flattened_row)
-    par_df = pl.DataFrame({'ParScore_NS': par_scores_ns, 'ParScore_EW': par_scores_ew, 'ParContract': par_contracts},orient='row')
+    par_df = pl.DataFrame({'Par_NS': par_scores_ns, 'Par_EW': par_scores_ew, 'ParContract': par_contracts},orient='row')
 
     # Create column names
     columns = {f'DD_{direction}_{suit}':pl.UInt8 for direction in 'NESW' for suit in 'SHDCN'}
 
     # Create the DataFrame
-    DDTricks_df = pl.DataFrame(flattened_dd_rows, schema=columns, orient='row')
+    DD_Tricks_df = pl.DataFrame(flattened_dd_rows, schema=columns, orient='row')
 
     dd_ns_ew_columns = [
         pl.max_horizontal(f"DD_{pair[0]}_{strain}",f"DD_{pair[1]}_{strain}").alias(f"DD_{pair}_{strain}")
         for pair in ['NS','EW']
         for strain in "SHDCN"
     ]
-    DDTricks_df = DDTricks_df.with_columns(dd_ns_ew_columns)
+    DD_Tricks_df = DD_Tricks_df.with_columns(dd_ns_ew_columns)
 
-    dd_score_cols = [[scores_d[(level,suit,tricks,vul == 'Both' or (vul != 'None' and direction in vul))] for tricks,vul in zip(DDTricks_df['_'.join(['DD',direction,suit])],df['Vul'])] for direction in 'NESW' for suit in 'SHDCN' for level in range(1, 8)]
-    dd_score_df = pl.DataFrame(dd_score_cols, schema=['_'.join(['DDScore', str(l) + s, d]) for d in 'NESW' for s in 'SHDCN' for l in range(1, 8)])
+    dd_score_cols = [[scores_d[(level,suit,tricks,vul == 'Both' or (vul != 'None' and direction in vul))] for tricks,vul in zip(DD_Tricks_df['_'.join(['DD',direction,suit])],df['Vul'])] for direction in 'NESW' for suit in 'SHDCN' for level in range(1, 8)]
+    dd_score_df = pl.DataFrame(dd_score_cols, schema=['_'.join(['DD_Score', str(l) + s, d]) for d in 'NESW' for s in 'SHDCN' for l in range(1, 8)])
     
-    return DDTricks_df, par_df, dd_score_df
+    return DD_Tricks_df, par_df, dd_score_df
 
 
 def constraints(deal):
@@ -261,7 +262,7 @@ def calculate_single_dummy_probabilities(deal, produce=100):
 
     # todo: has this been obsoleted by endplay's calc_all_tables 2nd parameter?
     ns_ew_rows = {}
-    SDTricks_df = {}
+    SD_Tricks_df = {}
     for ns_ew in ['NS','EW']:
         s = deal[2:].split()
         if ns_ew == 'NS':
@@ -276,17 +277,17 @@ def calculate_single_dummy_probabilities(deal, produce=100):
         sd_deals, sd_dd_result_tables = generate_single_dummy_deals(predeal_string, produce, show_progress=False)
 
         #display_double_dummy_deals(sd_deals, sd_dd_result_tables, 0, 4)
-        SDTricks_df[ns_ew] = pl.DataFrame([[sddeal.to_pbn()]+[s for d in t.to_list() for s in d] for sddeal,t in zip(sd_deals,sd_dd_result_tables)],schema={'SD_Deal':pl.String}|{'_'.join(['SDTricks',d,s]):pl.UInt8 for s in 'SHDCN' for d in 'NESW'},orient='row')
+        SD_Tricks_df[ns_ew] = pl.DataFrame([[sddeal.to_pbn()]+[s for d in t.to_list() for s in d] for sddeal,t in zip(sd_deals,sd_dd_result_tables)],schema={'SD_Deal':pl.String}|{'_'.join(['SD_Tricks',d,s]):pl.UInt8 for s in 'SHDCN' for d in 'NESW'},orient='row')
 
         for d in 'NESW':
             for s in 'SHDCN':
                 # always create 14 rows (0-13 tricks taken) for combo of direction and suit. fill never-happened with proper index and 0.0 prob value.
                 #ns_ew_rows[(ns_ew,d,s)] = dd_df[d+s].to_pandas().value_counts(normalize=True).reindex(range(14), fill_value=0).tolist() # ['Fixed_Direction','Direction_Declarer','Suit']+['SD_Prob_Take_'+str(n) for n in range(14)]
-                vc = {ds:p for ds,p in SDTricks_df[ns_ew]['_'.join(['SDTricks',d,s])].value_counts(normalize=True).rows()}
+                vc = {ds:p for ds,p in SD_Tricks_df[ns_ew]['_'.join(['SD_Tricks',d,s])].value_counts(normalize=True).rows()}
                 index = {i:0.0 for i in range(14)} # fill values for missing probs
                 ns_ew_rows[(ns_ew,d,s)] = list((index|vc).values())
 
-    return SDTricks_df, (produce, ns_ew_rows)
+    return SD_Tricks_df, (produce, ns_ew_rows)
 
 
 # def append_single_dummy_results(pbns,sd_cache_d,produce=100):
@@ -440,34 +441,34 @@ def create_best_contracts(df):
 
     # all EV columns are already calculated. just need to get the max.
 
-    # Single loop handles all EV Max, MaxCol combinations
+    # Single loop handles all EV Max, Max_Col combinations
     for v in vulnerabilities:
         # Level 4: Overall Max EV for each vulnerability
         ev_columns = f'^EV_(NS|EW)_[NESW]_[SHDCN]_[1-7]_{v}$'
         max_expr, col_expr = max_and_col(df, ev_columns)
         max_ev_dict[f'EV_{v}_Max'] = max_expr
-        max_ev_dict[f'EV_{v}_MaxCol'] = col_expr
+        max_ev_dict[f'EV_{v}_Max_Col'] = col_expr
 
         for pd in pair_directions:
             # Level 3: Max EV for each pair direction and vulnerability
             ev_columns = f'^EV_{pd}_[NESW]_[SHDCN]_[1-7]_{v}$'
             max_expr, col_expr = max_and_col(df, ev_columns)
             max_ev_dict[f'EV_{pd}_{v}_Max'] = max_expr
-            max_ev_dict[f'EV_{pd}_{v}_MaxCol'] = col_expr
+            max_ev_dict[f'EV_{pd}_{v}_Max_Col'] = col_expr
 
             for dd in pd: #declarer_directions:
                 # Level 2: Max EV for each pair direction, declarer direction, and vulnerability
                 ev_columns = f'^EV_{pd}_{dd}_[SHDCN]_[1-7]_{v}$'
                 max_expr, col_expr = max_and_col(df, ev_columns)
                 max_ev_dict[f'EV_{pd}_{dd}_{v}_Max'] = max_expr
-                max_ev_dict[f'EV_{pd}_{dd}_{v}_MaxCol'] = col_expr
+                max_ev_dict[f'EV_{pd}_{dd}_{v}_Max_Col'] = col_expr
 
                 for s in strains:
                     # Level 1: Max EV for each combination
                     ev_columns = f'^EV_{pd}_{dd}_{s}_[1-7]_{v}$'
                     max_expr, col_expr = max_and_col(df, ev_columns)
                     max_ev_dict[f'EV_{pd}_{dd}_{s}_{v}_Max'] = max_expr
-                    max_ev_dict[f'EV_{pd}_{dd}_{s}_{v}_MaxCol'] = col_expr
+                    max_ev_dict[f'EV_{pd}_{dd}_{s}_{v}_Max_Col'] = col_expr
 
     # Create expressions list from dictionary
     t = time.time()
@@ -520,27 +521,27 @@ def convert_contract_to_tricks(df):
     return [None if c is None or c == 'PASS' else int(c[0])+6+r for c,r in zip(df['Contract'],df['Result'])] # create tricks from contract and result
 
 
-def convert_contract_to_DDTricks(df):
+def convert_contract_to_DD_Tricks(df):
     return [None if c is None or c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Declarer_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
 
 
-def convert_contract_to_DDTricks_Dummy(df):
+def convert_contract_to_DD_Tricks_Dummy(df):
     return [None if c is None or c == 'PASS' else df['_'.join(['DD',d,c[1]])][i] for i,(c,d) in enumerate(zip(df['Contract'],df['Dummy_Direction']))] # extract double dummy tricks using contract and declarer as the lookup keys
 
 
-def convert_contract_to_DDScore_Ref(df):
+def convert_contract_to_DD_Score_Ref(df):
     # could use pl.str_concat() instead
     df = df.with_columns(
-        (pl.lit('DDScore_')+pl.col('BidLvl').cast(pl.String)+pl.col('BidSuit')+pl.lit('_')+pl.col('Declarer_Direction')).alias('DDScore_Refs'),
+        (pl.lit('DD_Score_')+pl.col('BidLvl').cast(pl.String)+pl.col('BidSuit')+pl.lit('_')+pl.col('Declarer_Direction')).alias('DD_Score_Refs'),
     )
     ddscore_ns = []
-    for i,(d,ref) in enumerate(zip(df['Declarer_Direction'],df['DDScore_Refs'])):
+    for i,(d,ref) in enumerate(zip(df['Declarer_Direction'],df['DD_Score_Refs'])):
         if ref is None:
             ddscore_ns.append(0)
         else:
             ddscore_ns.append(df[ref][i] if d in 'NS' else -df[ref][i])
-    df = df.with_columns(pl.Series('DDScore_NS',ddscore_ns,pl.Int16))
-    df = df.with_columns(pl.col('DDScore_NS').neg().alias('DDScore_EW'))
+    df = df.with_columns(pl.Series('DD_Score_NS',ddscore_ns,pl.Int16))
+    df = df.with_columns(pl.col('DD_Score_NS').neg().alias('DD_Score_EW'))
     return df
 
 
@@ -579,7 +580,7 @@ class HandAugmenter:
 
     def _process_scores_and_tricks(self):
         all_scores_d, scores_d, scores_df = self._time_operation("calculate_scores", calculate_scores)
-        DDTricks_df, par_df, dd_score_df = self._time_operation(
+        DD_Tricks_df, par_df, dd_score_df = self._time_operation(
             "calculate_ddtricks_par_scores", 
             calculate_ddtricks_par_scores, 
             self.df, self.hrs_d, scores_d, progress=self.progress
@@ -597,7 +598,7 @@ class HandAugmenter:
         best_contracts_df = self._time_operation("create_best_contracts", create_best_contracts, sd_ev_df)
         
         self.df = pl.concat(
-            [self.df, DDTricks_df, par_df, dd_score_df, sd_probs_df, sd_ev_df, best_contracts_df],
+            [self.df, DD_Tricks_df, par_df, dd_score_df, sd_probs_df, sd_ev_df, best_contracts_df],
             how='horizontal'
         )
         return scores_df
@@ -687,20 +688,20 @@ class HandAugmenter:
             )
 
     def _create_dd_columns(self):
-        if 'DDTricks' not in self.df.columns:
+        if 'DD_Tricks' not in self.df.columns:
             self.df = self._time_operation(
-                "convert_contract_to_DDTricks",
+                "convert_contract_to_DD_Tricks",
                 lambda df: df.with_columns([
-                    pl.Series('DDTricks', convert_contract_to_DDTricks(df), pl.UInt8, strict=False),
-                    pl.Series('DDTricks_Dummy', convert_contract_to_DDTricks_Dummy(df), pl.UInt8, strict=False),
+                    pl.Series('DD_Tricks', convert_contract_to_DD_Tricks(df), pl.UInt8, strict=False),
+                    pl.Series('DD_Tricks_Dummy', convert_contract_to_DD_Tricks_Dummy(df), pl.UInt8, strict=False),
                 ]),
                 self.df
             )
 
-        if 'DDScore_NS' not in self.df.columns:
+        if 'DD_Score_NS' not in self.df.columns:
             self.df = self._time_operation(
-                "convert_contract_to_DDScore_Ref",
-                convert_contract_to_DDScore_Ref,
+                "convert_contract_to_DD_Score_Ref",
+                convert_contract_to_DD_Score_Ref,
                 self.df
             )
 
@@ -723,8 +724,8 @@ class HandAugmenter:
         self.df = self._time_operation(
             "create_ev_columns",
             lambda df: df.with_columns(max_expressions).with_columns([
-                pl.max_horizontal('EV_NS_Max','EV_EW_Max').alias('EV_Max'),
-                pl.max_horizontal('EV_NS_MaxCol','EV_EW_MaxCol').alias('EV_MaxCol')
+                pl.max_horizontal('EV_Max_NS','EV_Max_EW').alias('EV_Max'),
+                pl.max_horizontal('EV_Max_Col_NS','EV_Max_Col_EW').alias('EV_Max_Col')
             ]),
             self.df
         )
@@ -749,11 +750,11 @@ class HandAugmenter:
             pl.when(self.vul_conditions[pd])
               .then(pl.col(f'EV_{pd}_V_Max'))
               .otherwise(pl.col(f'EV_{pd}_NV_Max'))
-              .alias(f'EV_{pd}_Max'),
+              .alias(f'EV_Max_{pd}'),
             pl.when(self.vul_conditions[pd])
-              .then(pl.col(f'EV_{pd}_V_MaxCol'))
-              .otherwise(pl.col(f'EV_{pd}_NV_MaxCol'))
-              .alias(f'EV_{pd}_MaxCol')
+              .then(pl.col(f'EV_{pd}_V_Max_Col'))
+              .otherwise(pl.col(f'EV_{pd}_NV_Max_Col'))
+              .alias(f'EV_Max_Col_{pd}')
         ]
 
     def _create_declarer_ev_expressions(self, pd, dd):
@@ -763,9 +764,9 @@ class HandAugmenter:
               .otherwise(pl.col(f'EV_{pd}_{dd}_NV_Max'))
               .alias(f'EV_{pd}_{dd}_Max'),
             pl.when(self.vul_conditions[pd])
-              .then(pl.col(f'EV_{pd}_{dd}_V_MaxCol'))
-              .otherwise(pl.col(f'EV_{pd}_{dd}_NV_MaxCol'))
-              .alias(f'EV_{pd}_{dd}_MaxCol')
+              .then(pl.col(f'EV_{pd}_{dd}_V_Max_Col'))
+              .otherwise(pl.col(f'EV_{pd}_{dd}_NV_Max_Col'))
+              .alias(f'EV_{pd}_{dd}_Max_Col')
         ]
 
     def _create_strain_ev_expressions(self, pd, dd, s):
@@ -775,9 +776,9 @@ class HandAugmenter:
               .otherwise(pl.col(f'EV_{pd}_{dd}_{s}_NV_Max'))
               .alias(f'EV_{pd}_{dd}_{s}_Max'),
             pl.when(self.vul_conditions[pd])
-              .then(pl.col(f'EV_{pd}_{dd}_{s}_V_MaxCol'))
-              .otherwise(pl.col(f'EV_{pd}_{dd}_{s}_NV_MaxCol'))
-              .alias(f'EV_{pd}_{dd}_{s}_MaxCol')
+              .then(pl.col(f'EV_{pd}_{dd}_{s}_V_Max_Col'))
+              .otherwise(pl.col(f'EV_{pd}_{dd}_{s}_NV_Max_Col'))
+              .alias(f'EV_{pd}_{dd}_{s}_Max_Col')
         ]
 
     def _create_level_ev_expressions(self, pd, dd, s, l):
@@ -793,20 +794,20 @@ class HandAugmenter:
         self.df = self._time_operation(
             "create_initial_diff_columns",
             lambda df: df.with_columns([
-                pl.Series('ParScore_Diff_NS', (df['Score_NS']-df['ParScore_NS']), pl.Int16),
-                pl.Series('ParScore_Diff_EW', (df['Score_EW']-df['ParScore_EW']), pl.Int16),
-                pl.Series('DDTricks_Diff', (df['Tricks'].cast(pl.Int8)-df['DDTricks'].cast(pl.Int8)), pl.Int8, strict=False),
-                pl.Series('EV_MaxScore_Diff_NS', df['Score_NS'] - df['EV_NS_Max'], pl.Float32),
-                pl.Series('EV_MaxScore_Diff_EW', -df['Score_NS'] - df['EV_EW_Max'], pl.Float32),
+                pl.Series('Par_Diff_NS', (df['Score_NS']-df['Par_NS']), pl.Int16),
+                pl.Series('Par_Diff_EW', (df['Score_EW']-df['Par_EW']), pl.Int16),
+                pl.Series('DD_Tricks_Diff', (df['Tricks'].cast(pl.Int8)-df['DD_Tricks'].cast(pl.Int8)), pl.Int8, strict=False),
+                pl.Series('EV_Max_Diff_NS', df['Score_NS'] - df['EV_Max_NS'], pl.Float32),
+                pl.Series('EV_Max_Diff_EW', df['Score_EW'] - df['EV_Max_EW'], pl.Float32),
             ]),
             self.df
         )
 
-        # Then create ParScore_Diff_EW using the now-existing ParScore_Diff_NS
+        # Then create Par_Diff_EW using the now-existing Par_Diff_NS
         self.df = self._time_operation(
             "create_parscore_diff_ew",
             lambda df: df.with_columns([
-                pl.Series('ParScore_Diff_EW', -df['ParScore_Diff_NS'], pl.Int16)
+                pl.Series('Par_Diff_EW', -df['Par_Diff_NS'], pl.Int16)
             ]),
             self.df
         )
@@ -829,8 +830,8 @@ class HandAugmenter:
 # example of working ranking code. but column must contain all scores.
 # scores = pl.col('Score_NS')
 # df = df.with_columns(
-#     scores.rank(method='average', descending=False).sub(1).over(['session_id', 'Board']).alias('ParScore_MP_NS'),
-#     scores.rank(method='average', descending=True).sub(1).over(['session_id', 'Board']).alias('ParScore_MP_EW')
+#     scores.rank(method='average', descending=False).sub(1).over(['session_id', 'Board']).alias('Par_MP_NS'),
+#     scores.rank(method='average', descending=True).sub(1).over(['session_id', 'Board']).alias('Par_MP_EW')
 # )
 
 
@@ -870,8 +871,8 @@ def calculate_matchpoint_scores_ns(df,score_columns):
 class MatchPointAugmenter:
     def __init__(self, df):
         self.df = df
-        self.discrete_score_columns = ['DDScore_NS', 'ParScore_NS', 'EV_NS_Max']
-        self.dd_score_columns = [f'DDScore_{l}{s}_{d}' for d in 'NESW' for s in 'SHDCN' for l in range(1,8)]
+        self.discrete_score_columns = ['DD_Score_NS', 'Par_NS', 'EV_Max_NS']
+        self.dd_score_columns = [f'DD_Score_{l}{s}_{d}' for d in 'NESW' for s in 'SHDCN' for l in range(1,8)]
         self.ev_score_columns = [f'EV_{pd}_{d}_{s}_{l}' for pd in ['NS','EW'] for d in pd for s in 'SHDCN' for l in range(1,8)]
         self.all_score_columns = self.discrete_score_columns + self.dd_score_columns + self.ev_score_columns
 
@@ -958,32 +959,34 @@ class MatchPointAugmenter:
 
         # Calculate remaining scores and percentages
         operations = [
-            lambda df: df.with_columns((1-pl.col('ParScore_Pct_NS')).alias('ParScore_Pct_EW')),
-            lambda df: df.with_columns(pl.max_horizontal(f'^MP_DDScore_[1-7][SHDCN]_[NS]$').alias(f'MP_DDScore_NS_Max')),
-            lambda df: df.with_columns(pl.max_horizontal(f'^MP_DDScore_[1-7][SHDCN]_[EW]$').alias(f'MP_DDScore_EW_Max')),
-            lambda df: df.with_columns(pl.max_horizontal(f'^MP_EV_NS_[NS]_[SHDCN]_[1-7]$').alias(f'MP_EV_NS_Max')),
-            lambda df: df.with_columns(pl.max_horizontal(f'^MP_EV_EW_[EW]_[SHDCN]_[1-7]$').alias(f'MP_EV_EW_Max')),
+            lambda df: df.with_columns((1-pl.col('Par_Pct_NS')).alias('Par_Pct_EW')),
+            lambda df: df.with_columns(pl.max_horizontal(f'^MP_DD_Score_[1-7][SHDCN]_[NS]$').alias(f'MP_DD_Score_NS_Max')),
+            lambda df: df.with_columns(pl.max_horizontal(f'^MP_DD_Score_[1-7][SHDCN]_[EW]$').alias(f'MP_DD_Score_EW_Max')),
+            lambda df: df.with_columns(pl.max_horizontal(f'^MP_EV_NS_[NS]_[SHDCN]_[1-7]$').alias(f'MP_EV_Max_NS')),
+            lambda df: df.with_columns(pl.max_horizontal(f'^MP_EV_EW_[EW]_[SHDCN]_[1-7]$').alias(f'MP_EV_Max_EW')),
             lambda df: df.with_columns([
-                (pl.col('MP_DDScore_NS_Max')/pl.col('MP_Top')).alias('DDScore_Pct_NS_Max'),
-                (pl.col('MP_DDScore_EW_Max')/pl.col('MP_Top')).alias('DDScore_Pct_EW_Max'),
-                (pl.col('MP_EV_NS_Max')/pl.col('MP_Top')).alias('EV_Pct_NS_Max'),
-                (pl.col('MP_EV_EW_Max')/pl.col('MP_Top')).alias('EV_Pct_EW_Max'),
-                pl.col('DDScore_Pct_NS').alias('DDPct_NS'),
-                pl.col('DDScore_Pct_EW').alias('DDPct_EW'),
+                (pl.col('MP_DD_Score_NS_Max')/pl.col('MP_Top')).alias('DD_Score_Pct_NS_Max'),
+                (pl.col('MP_DD_Score_EW_Max')/pl.col('MP_Top')).alias('DD_Score_Pct_EW_Max'),
+                (pl.col('MP_EV_Max_NS')/pl.col('MP_Top')).alias('EV_Pct_Max_NS'),
+                (pl.col('MP_EV_Max_EW')/pl.col('MP_Top')).alias('EV_Pct_Max_EW'),
+                pl.col('DD_Score_Pct_NS').alias('DD_Pct_NS'),
+                pl.col('DD_Score_Pct_EW').alias('DD_Pct_EW'),
                 pl.col('MP_NS').alias('Matchpoints_NS'),
                 pl.col('MP_EW').alias('Matchpoints_EW'),
-                pl.col('MP_EV_NS_Max').alias('SDMPs_Max_NS'),
-                pl.col('MP_Top').sub(pl.col('MP_EV_NS_Max')).alias('SDMPs_Max_EW'),
-                pl.col('EV_Pct_NS_Max').alias('SDPct_NS'),
-                pl.col('EV_Pct_EW_Max').alias('SDPct_EW'),
-                pl.col('EV_Pct_NS_Max').alias('SDPct_Max_NS'),
-                pl.col('EV_Pct_EW_Max').alias('SDPct_Max_EW'),
-                (pl.col('EV_Pct_NS_Max')-pl.col('Pct_NS')).alias('SDPct_Max_Diff_NS'),
-                (pl.col('EV_Pct_EW_Max')-pl.col('Pct_EW')).alias('SDPct_Max_Diff_EW'),
-                (pl.col('ParScore_Pct_NS')-pl.col('Pct_NS')).alias('SDParScore_Pct_Diff_NS'),
-                (pl.col('ParScore_Pct_EW')-pl.col('Pct_EW')).alias('SDParScore_Pct_Diff_EW'),
-                (pl.col('ParScore_Pct_NS')-pl.col('Pct_NS')).alias('SDParScore_Pct_Max_Diff_NS'),
-                (pl.col('ParScore_Pct_EW')-pl.col('Pct_EW')).alias('SDParScore_Pct_Max_Diff_EW'),
+                pl.col('MP_EV_Max_NS').alias('SD_MP_Max_NS'),
+                pl.col('MP_Top').sub(pl.col('MP_EV_Max_NS')).alias('SD_MP_Max_EW'),
+            ]),
+            lambda df: df.with_columns([
+                #pl.col('EV_Pct_Max_NS').alias('SD_Pct_NS'),
+                #pl.col('EV_Pct_Max_EW').alias('SD_Pct_EW'),
+                #pl.col('EV_Pct_Max_NS').alias('SD_Pct_Max_NS'),
+                #pl.col('EV_Pct_Max_EW').alias('SD_Pct_Max_EW'),
+                (pl.col('EV_Pct_Max_NS')-pl.col('Pct_NS')).alias('EV_Pct_Max_Diff_NS'),
+                (pl.col('EV_Pct_Max_EW')-pl.col('Pct_EW')).alias('EV_Pct_Max_Diff_EW'),
+                (pl.col('Par_Pct_NS')-pl.col('Pct_NS')).alias('EV_Par_Pct_Diff_NS'),
+                (pl.col('Par_Pct_EW')-pl.col('Pct_EW')).alias('EV_Par_Pct_Diff_EW'),
+                (pl.col('Par_Pct_NS')-pl.col('Pct_NS')).alias('EV_Par_Pct_Max_Diff_NS'),
+                (pl.col('Par_Pct_EW')-pl.col('Pct_EW')).alias('EV_Par_Pct_Max_Diff_EW'),
             ])
         ]
 
@@ -1497,17 +1500,17 @@ def Perform_Legacy_Renames(df):
         pl.col('Declarer_Direction').replace_strict(mlBridgeLib.PlayerDirectionToPairDirection).alias('Declarer_Pair_Direction'),
 
         # EV legacy renames
-        pl.col('EV_MaxCol').alias('SDContract_Max'), # Pair direction invariant.
-        pl.col('EV_NS_Max').alias('SDScore_NS'),
-        pl.col('EV_EW_Max').alias('SDScore_EW'),
-        pl.col('EV_NS_Max').alias('SDScore_Max_NS'),
-        pl.col('EV_EW_Max').alias('SDScore_Max_EW'),
-        (pl.col('EV_NS_Max')-pl.col('Score_NS')).alias('SDScore_Diff_NS'),
-        (pl.col('EV_EW_Max')-pl.col('Score_EW')).alias('SDScore_Diff_EW'),
-        (pl.col('EV_NS_Max')-pl.col('Score_NS')).alias('SDScore_Max_Diff_NS'),
-        (pl.col('EV_EW_Max')-pl.col('Score_EW')).alias('SDScore_Max_Diff_EW'),
-        (pl.col('EV_NS_Max')-pl.col('Pct_NS')).alias('SDPct_Diff_NS'),
-        (pl.col('EV_EW_Max')-pl.col('Pct_EW')).alias('SDPct_Diff_EW'),
+        pl.col('EV_Max_Col').alias('SD_Contract_Max'), # Pair direction invariant.
+        pl.col('EV_Max_NS').alias('SD_Score_NS'),
+        pl.col('EV_Max_EW').alias('SD_Score_EW'),
+        pl.col('EV_Max_NS').alias('SD_Score_Max_NS'),
+        pl.col('EV_Max_EW').alias('SD_Score_Max_EW'),
+        (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Diff_NS'),
+        (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Diff_EW'),
+        (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Max_Diff_NS'),
+        (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Max_Diff_EW'),
+        (pl.col('EV_Max_NS')-pl.col('Pct_NS')).alias('SD_Pct_Diff_NS'),
+        (pl.col('EV_Max_EW')-pl.col('Pct_EW')).alias('SD_Pct_Diff_EW'),
         ])
     return df
 
@@ -1563,7 +1566,7 @@ class DDSDAugmenter:
                     pl.col('Declarer_Direction'),
                     pl.col('BidSuit'),
                     pl.col('BidLvl').cast(pl.String),
-                ], separator='_').alias('Declarer_SDContract'),
+                ], separator='_').alias('Declarer_SD_Contract'),
                 
                 pl.when(pl.col('Declarer_Pair_Direction').eq(pl.lit('NS')))
                 .then(pl.col('Score_NS'))
@@ -1571,9 +1574,9 @@ class DDSDAugmenter:
                 .alias('Score_Declarer'),
                 
                 pl.when(pl.col('Declarer_Pair_Direction').eq(pl.lit('NS')))
-                .then(pl.col('ParScore_NS'))
-                .otherwise(pl.col('ParScore_EW'))
-                .alias('ParScore_Declarer'),
+                .then(pl.col('Par_NS'))
+                .otherwise(pl.col('Par_EW'))
+                .alias('Par_Declarer'),
                 
                 ((pl.col('Declarer_Pair_Direction').eq('NS') & pl.col('Vul_NS')) | 
                  (pl.col('Declarer_Pair_Direction').eq('EW') & pl.col('Vul_EW')))
@@ -1594,7 +1597,7 @@ class DDSDAugmenter:
                         lambda row, current_t=t: None if row["BidSuit"] is None 
                                                   else row[f'Probs_{row["Declarer_Pair_Direction"]}_{row["Declarer_Direction"]}_{row["BidSuit"]}_{current_t}'],
                         return_dtype=pl.Float32
-                    ).alias(f'SDProbs_Taking_{t}') # todo: short form of 'Declarer_SDProbs_Taking_{t}'
+                    ).alias(f'Prob_Taking_{t}') # todo: short form of 'Declarer_SD_Probs_Taking_{t}'
                     for t in range(14)
                 ]
             ]),
@@ -1625,7 +1628,7 @@ class DDSDAugmenter:
                     lambda r: None if r['Direction_Dummy'] is None else r[f'Player_ID_{r["Direction_Dummy"]}'],
                     return_dtype=pl.String
                 ).alias('Dummy'),
-                pl.col('Score_Declarer').le(pl.col('ParScore_Declarer')).alias('Defender_ParScore_GE')
+                pl.col('Score_Declarer').le(pl.col('Par_Declarer')).alias('Defender_Par_GE')
             ]),
             self.df
         )
@@ -1656,9 +1659,9 @@ class DDSDAugmenter:
         self.df = self._time_operation(
             "create board result columns",
             lambda df: df.with_columns([
-                pl.struct(['Declarer_SDContract','^EV_(NS|EW)_[NESW]_[SHDCN]_[1-7]$'])
-                    .map_elements(lambda x: None if x['Declarer_SDContract'] is None else x[x['Declarer_SDContract']],
-                                return_dtype=pl.Float32).alias('SDScore'),
+                pl.struct(['Declarer_SD_Contract','^EV_(NS|EW)_[NESW]_[SHDCN]_[1-7]$'])
+                    .map_elements(lambda x: None if x['Declarer_SD_Contract'] is None else x[x['Declarer_SD_Contract']],
+                                return_dtype=pl.Float32).alias('SD_Score'),
                 pl.struct(['BidLvl', 'BidSuit', 'Tricks', 'Vul_Declarer', 'Dbl'])
                     .map_elements(lambda x: all_scores_d.get(tuple(x.values()),None),
                                 return_dtype=pl.Int16)
@@ -1683,7 +1686,7 @@ class DDSDAugmenter:
                 (pl.col('Result') == 0).alias('JustMade'),
                 (pl.col('Result') < 0).alias('UnderTricks'),
                 pl.col('Tricks').alias('Tricks_Declarer'),
-                (pl.col('Tricks') - pl.col('DDTricks')).alias('Tricks_DD_Diff_Declarer'),
+                (pl.col('Tricks') - pl.col('DD_Tricks')).alias('Tricks_DD_Diff_Declarer'),
             ]),
             self.df
         )
@@ -1697,13 +1700,13 @@ class DDSDAugmenter:
                     .over('Number_Declarer')
                     .alias('Declarer_Rating'),
 
-                pl.col('Defender_ParScore_GE')
+                pl.col('Defender_Par_GE')
                     .cast(pl.Float32)
                     .mean()
                     .over('OnLead')
                     .alias('Defender_OnLead_Rating'),
 
-                pl.col('Defender_ParScore_GE')
+                pl.col('Defender_Par_GE')
                     .cast(pl.Float32)
                     .mean()
                     .over('NotOnLead')

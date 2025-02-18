@@ -839,49 +839,49 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 #         print_to_log(logging.WARNING, 'Invalid Scores:\n',df[df['Score_Declarer'].ne(df['Computed_Score_Declarer'])|df['Score_NS'].ne(-df['Score_EW'])][['Board','Contract','BidLvl','BidSuit','Dbl','Declarer_Direction','Vul_Declarer','Score_Declarer','Computed_Score_Declarer','Score_NS','Score_EW','Result']])
 #     df['MPs_Declarer'] = df.apply(lambda r: r['MatchPoints_'+r['Declarer_Pair_Direction']], axis='columns')
 
-#     df['DDTricks'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
-#     df['DDTricks_Dummy'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
-#     # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['DDTricks']-r['SL_'+r['Declarer_Pair_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
-#     df['DDScore_NS'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DDTricks']-r['BidLvl']-6), axis='columns')
-#     df['DDScore_EW'] = -df['DDScore_NS']
-#     df['DDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][3],axis='columns')
-#     df['DDMPs_EW'] = df['MP_Top']-df['DDMPs_NS']
-#     df['DDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DDScore_NS'],matchpoint_ns_d[r['Board']])[r['DDScore_NS']][4],axis='columns')
-#     df['DDPct_EW'] = 1-df['DDPct_NS']
+#     df['DD_Tricks'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Declarer_Direction'],r['BidSuit']])], axis='columns') # invariant
+#     df['DD_Tricks_Dummy'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['_'.join(['DD',r['Direction_Dummy'],r['BidSuit']])], axis='columns') # invariant
+#     # NA for NT. df['DDSLDiff'] = df.apply(lambda r: pd.NA if r['Contract'] == 'PASS' else r['DD_Tricks']-r['SL_'+r['Declarer_Pair_Direction']+'_'+r['BidSuit']], axis='columns') # pd.NA or zero?
+#     df['DD_Score_NS'] = df.apply(lambda r: 0 if r['Contract'] == 'PASS' else mlBridgeLib.score(r['BidLvl']-1, 'CDHSN'.index(r['BidSuit']), len(r['Dbl']), ('NSEW').index(r['Declarer_Direction']), r['Vul_Declarer'], r['DD_Tricks']-r['BidLvl']-6), axis='columns')
+#     df['DD_Score_EW'] = -df['DD_Score_NS']
+#     df['DD_MP_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DD_Score_NS'],matchpoint_ns_d[r['Board']])[r['DD_Score_NS']][3],axis='columns')
+#     df['DD_MP_EW'] = df['MP_Top']-df['DD_MP_NS']
+#     df['DD_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['DD_Score_NS'],matchpoint_ns_d[r['Board']])[r['DD_Score_NS']][4],axis='columns')
+#     df['DD_Pct_EW'] = 1-df['DD_Pct_NS']
 
-#     # Declarer ParScore columns
+#     # Declarer Par columns
 #     # ACBL online games have no par score data. Must create it.
 #     if 'par' not in df or df['par'].eq('').all():
-#         df.rename({'ParScore_EndPlay_NS':'ParScore_NS','ParScore_EndPlay_EW':'ParScore_EW','ParContracts_EndPlay':'ParContracts'},axis='columns',inplace=True)
-#         #df['ParScore_NS'] = df['ParScore_EndPlay_NS']
-#         #df['ParScore_EW'] = df['ParScore_EndPlay_EW']
-#         #df['ParContracts'] = df['ParContracts_EndPlay']
-#         #df.drop(['ParScore_EndPlay_NS','ParScore_EndPlay_EW','ParContracts_EndPlay'],axis='columns',inplace=True)
+#         df.rename({'Par_EndPlay_NS':'Par_NS','Par_EndPlay_EW':'Par_EW','Par_Contracts_EndPlay':'Par_Contracts'},axis='columns',inplace=True)
+#         #df['Par_NS'] = df['Par_EndPlay_NS']
+#         #df['Par_EW'] = df['Par_EndPlay_EW']
+#         #df['Par_Contracts'] = df['Par_Contracts_EndPlay']
+#         #df.drop(['Par_EndPlay_NS','Par_EndPlay_EW','Par_Contracts_EndPlay'],axis='columns',inplace=True)
 #     else:
-#         # parse par column and create ParScore column.
-#         df['ParScore_NS'] = df['par'].map(lambda x: x.split(' ')[1]).astype('int16')
-#         df['ParScore_EW'] = -df['ParScore_NS']
-#         df['ParContracts'] = df['par'].map(lambda x: x.split(' ')[2:]).astype('string')
+#         # parse par column and create Par column.
+#         df['Par_NS'] = df['par'].map(lambda x: x.split(' ')[1]).astype('int16')
+#         df['Par_EW'] = -df['Par_NS']
+#         df['Par_Contracts'] = df['par'].map(lambda x: x.split(' ')[2:]).astype('string')
 #     if 'par' in df:
 #         df.drop(['par'],axis='columns',inplace=True)
-#     df['ParScore_MPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][3],axis='columns')
-#     df['ParScore_MPs_EW'] = df['MP_Top']-df['ParScore_MPs_NS']
-#     df['ParScore_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['ParScore_NS'],matchpoint_ns_d[r['Board']])[r['ParScore_NS']][4],axis='columns')
-#     df['ParScore_Pct_EW'] = 1-df['ParScore_Pct_NS']
-#     df["ParScore_Declarer"] = df.apply(lambda r: r['ParScore_'+r['Declarer_Pair_Direction']], axis='columns')
-#     #df["ParScore_MPs_Declarer"] = df.apply(lambda r: r['ParScore_MPs_'+r['Declarer_Pair_Direction']], axis='columns')
-#     #df["ParScore_Pct_Declarer"] = df.apply(lambda r: r['ParScore_Pct_'+r['Declarer_Pair_Direction']], axis='columns')
-#     #df['ParScore_Diff_Declarer'] = df['Score_Declarer']-df['ParScore_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
-#     #df['ParScore_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['ParScore_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
-#     #df['ParScore_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['ParScore_Pct_Declarer']
-#     df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DDTricks'] # adding convenience column to df. Actual Tricks vs DD Tricks
+#     df['Par_MPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['Par_NS'],matchpoint_ns_d[r['Board']])[r['Par_NS']][3],axis='columns')
+#     df['Par_MPs_EW'] = df['MP_Top']-df['Par_MPs_NS']
+#     df['Par_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['Par_NS'],matchpoint_ns_d[r['Board']])[r['Par_NS']][4],axis='columns')
+#     df['Par_Pct_EW'] = 1-df['Par_Pct_NS']
+#     df["Par_Declarer"] = df.apply(lambda r: r['Par_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df["Par_MPs_Declarer"] = df.apply(lambda r: r['Par_MPs_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df["Par_Pct_Declarer"] = df.apply(lambda r: r['Par_Pct_'+r['Declarer_Pair_Direction']], axis='columns')
+#     #df['Par_Diff_Declarer'] = df['Score_Declarer']-df['Par_Declarer'] # adding convenience column to df. Actual Par Score vs DD Score
+#     #df['Par_MPs_Diff_Declarer'] = df['MPs_Declarer'].astype('float32')-df['Par_MPs'] # forcing MPs_Declarer to float32. It is still string because it might originally have AVG+ or AVG- etc.
+#     #df['Par_Pct_Diff_Declarer'] = df['Pct_Declarer']-df['Par_Pct_Declarer']
+#     df['Tricks_DD_Diff_Declarer'] = df['Tricks_Declarer']-df['DD_Tricks'] # adding convenience column to df. Actual Tricks vs DD Tricks
 #     #df['Score_DD_Diff_Declarer'] = df['Score_Declarer']-df['DD_Score_Declarer'] # adding convenience column to df. Actual Score vs DD Score
 
 #     df['Declarer_Rating'] = df.groupby('Number_Declarer')['Tricks_DD_Diff_Declarer'].transform('mean').astype('float32')
-#     # todo: resolve naming conflict: Defender_ParScore_GE, Defender_OnLead_Rating, Defender_NotOnLead_Rating vs ParScore_GE_Defender, OnLead_Rating_Defender, NotOnLead_Rating_Defender
-#     df['Defender_ParScore_GE'] = df['Score_Declarer'].le(df['ParScore_Declarer'])
-#     df['Defender_OnLead_Rating'] = df.groupby('OnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
-#     df['Defender_NotOnLead_Rating'] = df.groupby('NotOnLead')['Defender_ParScore_GE'].transform('mean').astype('float32')
+#     # todo: resolve naming conflict: Defender_Par_GE, Defender_OnLead_Rating, Defender_NotOnLead_Rating vs Par_GE_Defender, OnLead_Rating_Defender, NotOnLead_Rating_Defender
+#     df['Defender_Par_GE'] = df['Score_Declarer'].le(df['Par_Declarer'])
+#     df['Defender_OnLead_Rating'] = df.groupby('OnLead')['Defender_Par_GE'].transform('mean').astype('float32')
+#     df['Defender_NotOnLead_Rating'] = df.groupby('NotOnLead')['Defender_Par_GE'].transform('mean').astype('float32')
 
 #     # masterpoints columns
 #     # note: looks like masterpoints column is no longer available so need to obsolete it. fake it with 500 for everyone.
@@ -897,7 +897,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 #     df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
 
 #     # todo: check dtypes
-#     # df = df.astype({'Name_Declarer':'string','Score_Declarer':'int16','ParScore_Declarer':'int16','Pct_Declarer':'float32','DDTricks':'uint8','DD_Score_Declarer':'int16','DD_Pct_Declarer':'float32','Tricks_DD_Diff_Declarer':'int8','Score_DD_Diff_Declarer':'int16','ParScore_DD_Diff_Declarer':'int16','ParScore_Pct_Declarer':'float32','Pair_Declarer':'string','Pair_Defender':'string'})
+#     # df = df.astype({'Name_Declarer':'string','Score_Declarer':'int16','Par_Declarer':'int16','Pct_Declarer':'float32','DD_Tricks':'uint8','DD_Score_Declarer':'int16','DD_Pct_Declarer':'float32','Tricks_DD_Diff_Declarer':'int8','Score_DD_Diff_Declarer':'int16','Par_DD_Diff_Declarer':'int16','Par_Pct_Declarer':'float32','Pair_Declarer':'string','Pair_Defender':'string'})
 
 #     # todo: verify every dtype is correct.
 #     # todo: rename columns when there's a better name
@@ -914,37 +914,37 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 # def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
 #     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
-#     df['SDProbs'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Declarer_Pair_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
-#     df['SDScores'] = df.apply(Create_SD_Scores,axis='columns')
-#     df['SDScore_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
-#     df['SDScore_EW'] = -df['SDScore_NS']
-#     df['SDMPs_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][3],axis='columns')
-#     df['SDMPs_EW'] = (df['MP_Top']-df['SDMPs_NS']).astype('float32')
-#     df['SDPct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_NS']][4],axis='columns')
-#     df['SDPct_EW'] = (1-df['SDPct_NS']).astype('float32')
+#     df['SD_Prob'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Declarer_Pair_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
+#     df['SD_Scores'] = df.apply(Create_SD_Scores,axis='columns')
+#     df['SD_Score_NS'] = df.apply(Create_SD_Score,axis='columns').astype('int16') # Declarer's direction
+#     df['SD_Score_EW'] = -df['SD_Score_NS']
+#     df['SD_MP_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SD_Score_NS'],matchpoint_ns_d[r['Board']])[r['SD_Score_NS']][3],axis='columns')
+#     df['SD_MP_EW'] = (df['MP_Top']-df['SD_MP_NS']).astype('float32')
+#     df['SD_Pct_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SD_Score_NS'],matchpoint_ns_d[r['Board']])[r['SD_Score_NS']][4],axis='columns')
+#     df['SD_Pct_EW'] = (1-df['SD_Pct_NS']).astype('float32')
 #     max_score_contract = df.apply(Create_SD_Score_Max,axis='columns')
-#     df['SDScore_Max_NS'] = pd.Series([score for score,contract in max_score_contract],dtype='float32')
-#     df['SDScore_Max_EW'] = pd.Series([-score for score,contract in max_score_contract],dtype='float32')
-#     df['SDContract_Max'] = pd.Series([contract for score,contract in max_score_contract],dtype='string') # invariant
+#     df['SD_Score_Max_NS'] = pd.Series([score for score,contract in max_score_contract],dtype='float32')
+#     df['SD_Score_Max_EW'] = pd.Series([-score for score,contract in max_score_contract],dtype='float32')
+#     df['SD_Contract_Max'] = pd.Series([contract for score,contract in max_score_contract],dtype='string') # invariant
 #     del max_score_contract
-#     df['SDMPs_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][3],axis='columns')
-#     df['SDMPs_Max_EW'] = (df['MP_Top']-df['SDMPs_Max_NS']).astype('float32')
-#     df['SDPct_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SDScore_Max_NS'],matchpoint_ns_d[r['Board']])[r['SDScore_Max_NS']][4],axis='columns')
-#     df['SDPct_Max_EW'] = (1-df['SDPct_Max_NS']).astype('float32')
-#     df['SDScore_Diff_NS'] = (df['Score_NS']-df['SDScore_NS']).astype('int16')
-#     df['SDScore_Diff_EW'] = (df['Score_EW']-df['SDScore_EW']).astype('int16')
-#     df['SDScore_Max_Diff_NS'] = (df['Score_NS']-df['SDScore_Max_NS']).astype('int16')
-#     df['SDScore_Max_Diff_EW'] = (df['Score_EW']-df['SDScore_Max_EW']).astype('int16')
-#     df['SDPct_Diff_NS'] = (df['Pct_NS']-df['SDPct_NS']).astype('float32')
-#     df['SDPct_Diff_EW'] = (df['Pct_EW']-df['SDPct_EW']).astype('float32')
-#     df['SDPct_Max_Diff_NS'] = (df['Pct_NS']-df['SDPct_Max_NS']).astype('float32')
-#     df['SDPct_Max_Diff_EW'] = (df['Pct_EW']-df['SDPct_Max_EW']).astype('float32')
-#     df['SDParScore_Pct_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Diff_NS']).astype('float32')
-#     df['SDParScore_Pct_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Diff_EW']).astype('float32')
-#     df['SDParScore_Pct_Max_Diff_NS'] = (df['ParScore_Pct_NS']-df['SDPct_Max_Diff_NS']).astype('float32')
-#     df['SDParScore_Pct_Max_Diff_EW'] = (df['ParScore_Pct_EW']-df['SDPct_Max_Diff_EW']).astype('float32')
+#     df['SD_MP_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SD_Score_Max_NS'],matchpoint_ns_d[r['Board']])[r['SD_Score_Max_NS']][3],axis='columns')
+#     df['SD_MP_Max_EW'] = (df['MP_Top']-df['SD_MP_Max_NS']).astype('float32')
+#     df['SD_Pct_Max_NS'] = df.apply(lambda r: mlBridgeLib.MatchPointScoreUpdate(r['SD_Score_Max_NS'],matchpoint_ns_d[r['Board']])[r['SD_Score_Max_NS']][4],axis='columns')
+#     df['SD_Pct_Max_EW'] = (1-df['SD_Pct_Max_NS']).astype('float32')
+#     df['SD_Score_Diff_NS'] = (df['Score_NS']-df['SD_Score_NS']).astype('int16')
+#     df['SD_Score_Diff_EW'] = (df['Score_EW']-df['SD_Score_EW']).astype('int16')
+#     df['SD_Score_Max_Diff_NS'] = (df['Score_NS']-df['SD_Score_Max_NS']).astype('int16')
+#     df['SD_Score_Max_Diff_EW'] = (df['Score_EW']-df['SD_Score_Max_EW']).astype('int16')
+#     df['SD_Pct_Diff_NS'] = (df['Pct_NS']-df['SD_Pct_NS']).astype('float32')
+#     df['SD_Pct_Diff_EW'] = (df['Pct_EW']-df['SD_Pct_EW']).astype('float32')
+#     df['SD_Pct_Max_Diff_NS'] = (df['Pct_NS']-df['SD_Pct_Max_NS']).astype('float32')
+#     df['SD_Pct_Max_Diff_EW'] = (df['Pct_EW']-df['SD_Pct_Max_EW']).astype('float32')
+#     df['SD_Par_Pct_Diff_NS'] = (df['Par_Pct_NS']-df['SD_Pct_Diff_NS']).astype('float32')
+#     df['SD_Par_Pct_Diff_EW'] = (df['Par_Pct_EW']-df['SD_Pct_Diff_EW']).astype('float32')
+#     df['SD_Par_Pct_Max_Diff_NS'] = (df['Par_Pct_NS']-df['SD_Pct_Max_Diff_NS']).astype('float32')
+#     df['SD_Par_Pct_Max_Diff_EW'] = (df['Par_Pct_EW']-df['SD_Pct_Max_Diff_EW']).astype('float32')
 #     # using same df to avoid the issue with creating new columns. New columns require meta data will need to be changed too.
-#     sd_df = pd.DataFrame(df['SDProbs'].values.tolist(),columns=[f'SDProbs_Taking_{i}' for i in range(14)])
+#     sd_df = pd.DataFrame(df['SD_Prob'].values.tolist(),columns=[f'SD_Prob_Taking_{i}' for i in range(14)])
 #     for c in sd_df.columns:
 #         df[c] = sd_df[c].astype('float32')
 #     return df, sd_cache_d
@@ -966,12 +966,12 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 
 
 # #def Create_SD_Probs(r):
-# #    return [r['SDProb_Take_'+str(n)] for n in range(14)] # todo: this was previously computed. can we just use that?
+# #    return [r['Prob_Take_'+str(n)] for n in range(14)] # todo: this was previously computed. can we just use that?
 
 
 # def Create_SD_Score(r):
-#     probs = r['SDProbs']
-#     scores_l = r['SDScores']
+#     probs = r['SD_Prob']
+#     scores_l = r['SD_Scores']
 #     ps = sum(prob*score for prob,score in zip(probs,scores_l))
 #     return ps if r['Declarer_Direction'] in 'NS' else -ps
 
@@ -987,7 +987,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 #         iNSEW = 'NSEW'.index(nsew)
 #         vul = r['Vul_Declarer']
 #         double = len(r['Dbl'])
-#         probs = r['SDProbs']
+#         probs = r['SD_Prob']
 #         for level in range(7):
 #             scores_l = mlBridgeLib.ScoreDoubledSets(level, iCDHSN, vul, double, iNSEW)
 #             score = sum(prob*score for prob,score in zip(probs,scores_l))

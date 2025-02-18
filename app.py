@@ -706,7 +706,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         #df = results.pl()  # update df with results of SQL query.
         assert df is not None
         # List of columns to move to the front of df.
-        move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS', 'Pct_NS', 'ParScore_NS']
+        move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS', 'Pct_NS', 'Par_NS']
         # Reorder columns
         new_column_order = move_to_front + [col for col in df.columns if col not in move_to_front]
         df = df[new_column_order]
@@ -832,7 +832,7 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         #streamlit_chat.message(
         #    f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
         # todo: replace query string with query from json file.
-        #ShowDataFrameTable(df, query='SELECT Board, Contract, Result, Tricks, Score_NS, Pct_NS, ParScore_NS', key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
+        #ShowDataFrameTable(df, query='SELECT Board, Contract, Result, Tricks, Score_NS, Pct_NS, Par_NS', key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
         #print_to_log_info('ShowDataFrameTable time:', time.time()-t)
 
     return True
@@ -1028,7 +1028,7 @@ def chat_input_on_submit():
 #     if not predicted_contracts_model_file.exists():
 #         st.error(f"Oops. {predicted_contracts_model_filename} not found.")
 #         return None
-#     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
+#     # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
 #     learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
 #     print_to_log_debug('isna:',df.isna().sum())
 #     contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
@@ -1055,7 +1055,7 @@ def chat_input_on_submit():
 #     if not predicted_directions_model_file.exists():
 #         st.error(f"Oops. {predicted_directions_model_file} not found.")
 #         return None
-#     # todo: not needed right now. However, need to change *_augment.ipynb to output ParScore_MPs_(NS|EW) df['ParScore_MPs'] = df['ParScore_MPs_NS']
+#     # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
 #     learn = mlBridgeAiLib.load_model(predicted_directions_model_file)
 #     print_to_log_debug('isna:',df.isna().sum())
 #     #df['Tricks'].fillna(.5,inplace=True)
