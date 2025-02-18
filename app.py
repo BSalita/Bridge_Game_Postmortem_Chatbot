@@ -495,7 +495,6 @@ def augment_df(df):
     return df
 
         
-        
 def chat_initialize(player_id, session_id): # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
@@ -521,8 +520,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(game_urls) == 0:
             st.error(f"Could not find any club games for {player_id}.")
         elif session_id is None:
-            if player_id not in st.session_state.game_urls_d:
-                session_id = list(game_urls.keys())[0]  # default to most recent club game# default to most recent club game
+            #if player_id in st.session_state.game_urls_d:
+            session_id = list(game_urls.keys())[0]  # default to most recent club game# default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
@@ -537,8 +536,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(tournament_session_urls) == 0:
             st.error(f"Could not find any tournament sessions for {player_id}.")
         elif session_id is None:
-            if player_id not in st.session_state.game_urls_d:
-                session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
+            #if player_id not in st.session_state.game_urls_d:
+            session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
         print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
