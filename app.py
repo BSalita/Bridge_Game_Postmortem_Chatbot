@@ -542,11 +542,12 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
+    reset_data()
+
     if session_id is None:
-        st.error(f"Please select a valid session for {player_id} from the left sidebar.")
+        st.error(f"Please make sure {player_id} is a valid player number.")
         return False
     
-    reset_data()
     st.session_state.player_id = player_id
     st.session_state.game_urls_d[player_id] = game_urls
     st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
