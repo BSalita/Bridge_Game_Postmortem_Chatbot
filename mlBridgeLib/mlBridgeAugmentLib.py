@@ -1498,7 +1498,8 @@ def Perform_Legacy_Renames(df):
         pl.col('Declarer_Name').alias('Name_Declarer'),
         pl.col('Declarer_ID').alias('Number_Declarer'), #  todo: rename to 'Declarer_ID'?
         pl.col('Declarer_Direction').replace_strict(mlBridgeLib.PlayerDirectionToPairDirection).alias('Declarer_Pair_Direction'),
-
+        pl.concat_list(['N', 'S']).alias('Player_Names_NS'),
+        pl.concat_list(['E', 'W']).alias('Player_Names_EW'),
         # EV legacy renames
         pl.col('EV_Max_Col').alias('SD_Contract_Max'), # Pair direction invariant.
         pl.col('EV_Max_NS').alias('SD_Score_NS'),

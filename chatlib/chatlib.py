@@ -363,13 +363,11 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
     ns_df = ns_df.rename({
         'match_points': 'match_points_ns',
         'percentage': 'percentage_ns',
-        'pair_number': 'pair_number_ns',
     })
     print_to_log_info(ns_df.head(1))
     ew_df = ew_df.rename({
         'match_points': 'match_points_ew',
         'percentage': 'percentage_ew',
-        'pair_number': 'pair_number_ew',
     })
     print_to_log_info(ew_df.head(1))
 
@@ -399,9 +397,10 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
         'opponent_pair_name_e','opponent_pair_name_w',
         'match_points_ew',
         'percentage_ew',
-        'pair_number_ew',
+        'pair_number',
+        'opponent_pair_number',
         ]
-    df = pl.concat([ns_df,ew_df[ew_cols]],how='horizontal')
+    df = ns_df.join(ew_df[ew_cols],left_on=['pair_number','opponent_pair_number'],right_on=['opponent_pair_number','pair_number'],how='left')
     print_to_log_info(df.head(1))
 
     # using df['section_results'].to_frame() because explode() creates a duplicate field 'session_id' unless selected.
@@ -431,8 +430,8 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
         #'game_date': 'Date',
         'match_points_ns': 'MP_NS',
         'match_points_ew': 'MP_EW',
-        'pair_number_ns': 'Pair_Number_NS',
-        'pair_number_ew': 'Pair_Number_EW',
+        'pair_number': 'Pair_Number_NS',
+        'opponent_pair_number': 'Pair_Number_EW',
         #'percentage_ns': 'Final_Standing_NS', # percentage_ns is not a column in the data. use percentage instead?
         #'percentage_ew': 'Final_Standing_EW', # percentage_ew is not a column in the data. use percentage instead?
         #'result': 'Result',

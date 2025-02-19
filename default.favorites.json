@@ -402,10 +402,11 @@
 			"Pct_Per_Round": {
 				"title": "Pct per Round",
 				"help": "**Showing your matchpoint percentage per round.**",
+				"comment": "SELECT CONCAT(section_name, Pair_Number_{Opponent_Pair_Direction}, ' - ', (SELECT STRING_AGG(value.unnest, ' - ') FROM UNNEST(Player_Names_{Opponent_Pair_Direction}) as value)) as Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board, ', ') AS Boards, STRING_AGG(ROUND(Pct_{Pair_Direction},2), ', ') AS Pcts_{Pair_Direction} FROM self WHERE Boards_We_Played = True GROUP BY section_name, Pair_Number_{Opponent_Pair_Direction}, Player_Names_{Opponent_Pair_Direction} ORDER BY section_name, Pair_Number_{Opponent_Pair_Direction}",
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board, ', ') AS Boards, STRING_AGG(ROUND(Pct_{Pair_Direction},2), ', ') AS Pcts_{Pair_Direction} FROM self WHERE Boards_We_Played = True GROUP BY Opponents ORDER BY Opponents"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', (SELECT STRING_AGG(value.unnest, ' - ') FROM UNNEST(Player_Names_EW) as value)) as Opponents, AVG(Pct_NS) AS Avg_Pct_NS, Board, ROUND(Pct_NS,2) AS Pcts_NS FROM self WHERE Boards_We_Played = True GROUP BY section_name, Pair_Number_EW, Player_Names_EW, Board, Pcts_NS ORDER BY section_name, Pair_Number_EW, Board"
 					}
 				]
 			},
@@ -511,7 +512,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Board, Contract, Score, Declarer_Pct, Declarer_Pct_Pred, Declarer_Direction_Pred, Opponent_Pair_Number, boards_we_played FROM self WHERE boards_we_played=TRUE ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score, Declarer_Pct, Declarer_Pct_Pred, Declarer_Direction_Pred, Pair_Number_{Opponent_Pair_Direction}, boards_we_played FROM self WHERE boards_we_played=TRUE ORDER BY Board"
 					}
 				]
 			},

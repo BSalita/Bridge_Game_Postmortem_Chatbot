@@ -157,6 +157,7 @@ def ask_database(query):
 #     return results
 
 
+# todo: similar to process_prompt_macros
 def prompt_keyword_replacements(s):
     replacement_strings = [
         # todo: generalize {} replacements by using df.columns lookup?
@@ -1340,7 +1341,7 @@ def create_sidebar():
                                         on_change=debug_player_id_names_change, key='debug_player_id_names_selectbox')
 
         st.checkbox(
-            "Show SQL Queries", on_change=show_sql_query_change, key='sql_query_checkbox')
+            "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
 
         # favorite prompts selectboxes
         if len(st.session_state.vetted_prompts):
@@ -1484,6 +1485,7 @@ def load_vetted_prompts(json_file, category='Summarize'):
     return vetted_prompts
 
 
+# todo: similar to prompt_keyword_replacements
 def process_prompt_macros(sql_query):
     replacements = {
         '{Player_Direction}': st.session_state.player_direction,
