@@ -1,4 +1,3 @@
-
 # todo:
 # we're reading just one url which contains only the player's results. Need to read all urls to get all board results.
 # rename columns
@@ -871,7 +870,7 @@ def calculate_matchpoint_scores_ns(df,score_columns):
 class MatchPointAugmenter:
     def __init__(self, df):
         self.df = df
-        self.discrete_score_columns = ['DD_Score_NS', 'Par_NS', 'EV_Max_NS']
+        self.discrete_score_columns = ['EV_Max_NS'] # calculate matchpoints for these columns which change with each row's Score_NS
         self.dd_score_columns = [f'DD_Score_{l}{s}_{d}' for d in 'NESW' for s in 'SHDCN' for l in range(1,8)]
         self.ev_score_columns = [f'EV_{pd}_{d}_{s}_{l}' for pd in ['NS','EW'] for d in pd for s in 'SHDCN' for l in range(1,8)]
         self.all_score_columns = self.discrete_score_columns + self.dd_score_columns + self.ev_score_columns
@@ -936,19 +935,37 @@ class MatchPointAugmenter:
             self.df = calculate_matchpoint_scores_ns(self.df, self.all_score_columns)
         else:
             print('Calculate matchpoints for session, PBN, and Board.')
+            # calc matchpoints on row-by-row basis
             for col in self.all_score_columns:
                 if 'MP_'+col not in self.df.columns:
+                    # self.df.select(pl.col('Score_NS').rank(method='average', descending=False))
                     self.df = self.df.with_columns([
                         pl.col('Score_NS').rank(method='average', descending=False)
                         .sub(1).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
                     ])
+            # calc matchpoints for columns with constant score across all grouped rows (Par_NS, Par_EW)
+            self.df = self.df.with_columns([
+                (pl.col('DD_Score_NS').gt(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board']).add(
+                    pl.col('DD_Score_NS').eq(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board'])/2
+                )).alias('MP_DD_Score_NS')
+            ])
+            self.df = self.df.with_columns([
+                (pl.col('Par_NS').gt(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board']).add(
+                    pl.col('Par_NS').eq(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board'])/2
+                )).alias('MP_Par_NS')
+            ])
+            self.df = self.df.with_columns([
+                (pl.col('EV_Score').gt(pl.col('Score_Declarer')).sum().over(['session_id', 'PBN', 'Board']).add(
+                    pl.col('EV_Score').eq(pl.col('Score_Declarer')).sum().over(['session_id', 'PBN', 'Board'])/2
+                )).alias('MP_EV')
+            ])
         print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
 
     def _calculate_final_scores(self):
         t = time.time()
         
         # Calculate MP and percentages for discrete scores
-        for col_ns in self.discrete_score_columns:
+        for col_ns in self.discrete_score_columns+['DD_Score_NS', 'Par_NS']:
             col_ew = col_ns.replace('NS','EW')
             self.df = self.df.with_columns(
                 (pl.col('MP_Top')-pl.col(f'MP_{col_ns}')).alias(f'MP_{col_ew}')
@@ -956,6 +973,9 @@ class MatchPointAugmenter:
                 (pl.col(f'MP_{col_ns}')/pl.col('MP_Top')).alias(col_ns.replace('_NS','_Pct_NS')),
                 (pl.col(f'MP_{col_ew}')/pl.col('MP_Top')).alias(col_ew.replace('_EW','_Pct_EW')),
             ])
+        self.df = self.df.with_columns(
+            (pl.col(f'MP_EV')/pl.col('MP_Top')).alias('EV_Pct')
+        )
 
         # Calculate remaining scores and percentages
         operations = [
@@ -971,10 +991,10 @@ class MatchPointAugmenter:
                 (pl.col('MP_EV_Max_EW')/pl.col('MP_Top')).alias('EV_Pct_Max_EW'),
                 pl.col('DD_Score_Pct_NS').alias('DD_Pct_NS'),
                 pl.col('DD_Score_Pct_EW').alias('DD_Pct_EW'),
-                pl.col('MP_NS').alias('Matchpoints_NS'),
-                pl.col('MP_EW').alias('Matchpoints_EW'),
-                pl.col('MP_EV_Max_NS').alias('SD_MP_Max_NS'),
-                pl.col('MP_Top').sub(pl.col('MP_EV_Max_NS')).alias('SD_MP_Max_EW'),
+                #pl.col('MP_NS').alias('Matchpoints_NS'),
+                #pl.col('MP_EW').alias('Matchpoints_EW'),
+                #pl.col('MP_EV_Max_NS').alias('SD_MP_Max_NS'),
+                #pl.col('MP_Top').sub(pl.col('MP_EV_Max_NS')).alias('SD_MP_Max_EW'),
             ]),
             lambda df: df.with_columns([
                 #pl.col('EV_Pct_Max_NS').alias('SD_Pct_NS'),
@@ -1501,17 +1521,17 @@ def Perform_Legacy_Renames(df):
         pl.concat_list(['N', 'S']).alias('Player_Names_NS'),
         pl.concat_list(['E', 'W']).alias('Player_Names_EW'),
         # EV legacy renames
-        pl.col('EV_Max_Col').alias('SD_Contract_Max'), # Pair direction invariant.
-        pl.col('EV_Max_NS').alias('SD_Score_NS'),
-        pl.col('EV_Max_EW').alias('SD_Score_EW'),
-        pl.col('EV_Max_NS').alias('SD_Score_Max_NS'),
-        pl.col('EV_Max_EW').alias('SD_Score_Max_EW'),
-        (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Diff_NS'),
-        (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Diff_EW'),
-        (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Max_Diff_NS'),
-        (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Max_Diff_EW'),
-        (pl.col('EV_Max_NS')-pl.col('Pct_NS')).alias('SD_Pct_Diff_NS'),
-        (pl.col('EV_Max_EW')-pl.col('Pct_EW')).alias('SD_Pct_Diff_EW'),
+        # pl.col('EV_Max_Col').alias('SD_Contract_Max'), # Pair direction invariant.
+        # pl.col('EV_Max_NS').alias('SD_Score_NS'),
+        # pl.col('EV_Max_EW').alias('SD_Score_EW'),
+        # pl.col('EV_Max_NS').alias('SD_Score_Max_NS'),
+        # pl.col('EV_Max_EW').alias('SD_Score_Max_EW'),
+        # (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Diff_NS'),
+        # (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Diff_EW'),
+        # (pl.col('EV_Max_NS')-pl.col('Score_NS')).alias('SD_Score_Max_Diff_NS'),
+        # (pl.col('EV_Max_EW')-pl.col('Score_EW')).alias('SD_Score_Max_Diff_EW'),
+        # (pl.col('EV_Max_NS')-pl.col('Pct_NS')).alias('SD_Pct_Diff_NS'),
+        # (pl.col('EV_Max_EW')-pl.col('Pct_EW')).alias('SD_Pct_Diff_EW'),
         ])
     return df
 
@@ -1567,7 +1587,7 @@ class DDSDAugmenter:
                     pl.col('Declarer_Direction'),
                     pl.col('BidSuit'),
                     pl.col('BidLvl').cast(pl.String),
-                ], separator='_').alias('Declarer_SD_Contract'),
+                ], separator='_').alias('EV_Score_Col'),
                 
                 pl.when(pl.col('Declarer_Pair_Direction').eq(pl.lit('NS')))
                 .then(pl.col('Score_NS'))
@@ -1660,9 +1680,9 @@ class DDSDAugmenter:
         self.df = self._time_operation(
             "create board result columns",
             lambda df: df.with_columns([
-                pl.struct(['Declarer_SD_Contract','^EV_(NS|EW)_[NESW]_[SHDCN]_[1-7]$'])
-                    .map_elements(lambda x: None if x['Declarer_SD_Contract'] is None else x[x['Declarer_SD_Contract']],
-                                return_dtype=pl.Float32).alias('SD_Score'),
+                pl.struct(['EV_Score_Col','^EV_(NS|EW)_[NESW]_[SHDCN]_[1-7]$'])
+                    .map_elements(lambda x: None if x['EV_Score_Col'] is None else x[x['EV_Score_Col']],
+                                return_dtype=pl.Float32).alias('EV_Score'),
                 pl.struct(['BidLvl', 'BidSuit', 'Tricks', 'Vul_Declarer', 'Dbl'])
                     .map_elements(lambda x: all_scores_d.get(tuple(x.values()),None),
                                 return_dtype=pl.Int16)

@@ -484,15 +484,15 @@ def augment_df(df):
         #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
         #     df = augmenter.perform_hand_augmentations()
         df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
-    with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
-        df = augmenter.perform_matchpoint_augmentations()
     with st.spinner('Augmenting with result data...'):
         augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
         df = augmenter.perform_result_augmentations()
     with st.spinner('Augmenting with DD and SD data...'):
         augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
         df = augmenter.perform_dd_sd_augmentations()
+    with st.spinner('Augmenting with matchpoints and percentages data...'):
+        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        df = augmenter.perform_matchpoint_augmentations()
     return df
 
         

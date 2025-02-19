@@ -1,4 +1,5 @@
 {
+	"temp": "SELECT Board, Contract, Score_NS, Pct_NS, DD_N_H, DD_Pct_NS, Par_NS, Par_Pct_NS, EV_Max_NS, EV_Max_EW, EV_Max_Col_NS, EV_Max_Col_EW ORDER BY Board",
 	"Buttons": {
 		"Summarize": {
 			"title": "**Summarize**",
@@ -197,7 +198,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, Par, pct, Par pct, sd contract, sd score, sd pct, sd mps max, sd pct max, sd score diff, sd score max diff, sd pct diff, sd pct max diff, sd Par pct diff, sd Par pct max diff. Show those boards we declared.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Par_{Pair_Direction}, Pct_{Pair_Direction}, Par_Pct_{Pair_Direction}, SD_Contract_Max, EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, SD_MP_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, SD_Par_Pct_Max_Diff_{Pair_Direction} FROM self WHERE Boards_We_Declared = True ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Par_{Pair_Direction}, Pct_{Pair_Direction}, Par_Pct_{Pair_Direction}, EV_Max_Col, EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, SD_MP_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, SD_Par_Pct_Max_Diff_{Pair_Direction} FROM self WHERE Boards_We_Declared = True ORDER BY Board"
 					}
 				]
 			},
@@ -207,7 +208,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, pct, Par, tricks, dd tricks, sd score, sd score max, sd contract max. Show those boards we declared and score > Par and score > sd score.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, SD_Contract_Max FROM self WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > Par_{Pair_Direction} AND Score_{Pair_Direction} > EV_Max_{Pair_Direction} ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_Col FROM self WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > Par_{Pair_Direction} AND Score_{Pair_Direction} > EV_Max_{Pair_Direction} ORDER BY Board"
 					}
 				]
 			},
@@ -231,7 +232,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, pct, Par, tricks, dd tricks, sd score, sd score max, sd contract max. Show those boards we played and score < Par and pct > .70.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, SD_Contract_Max FROM self WHERE Boards_We_Played = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Pct_{Pair_Direction} > .70 ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_Col FROM self WHERE Boards_We_Played = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Pct_{Pair_Direction} > .70 ORDER BY Board"
 					}
 				]
 			},
@@ -242,7 +243,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, pct, Par, tricks, dd tricks, sd score, sd score max, sd contract max. Show those boards we played and score < Par and pct < .30.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, SD_Contract_Max FROM self WHERE Boards_We_Played = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Pct_{Pair_Direction} < 0.30 ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Pct_{Pair_Direction}, Par_{Pair_Direction}, Tricks, DD_Tricks, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_Col FROM self WHERE Boards_We_Played = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Pct_{Pair_Direction} < 0.30 ORDER BY Board"
 					}
 				]
 			},
@@ -252,7 +253,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, pct, score, tricks, dd tricks, Par, sd score, sd score max, sd contract max. Show those boards opponent declared and score < Par and score < sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Pair_Direction}, Score_{Pair_Direction}, Tricks, DD_Tricks, Par_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, SD_Contract_Max FROM self WHERE Boards_Opponent_Declared = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Score_{Pair_Direction} < EV_Max_{Pair_Direction} ORDER BY Board"
+						"sql": "SELECT Board, Contract, Pct_{Pair_Direction}, Score_{Pair_Direction}, Tricks, DD_Tricks, Par_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_{Pair_Direction}, EV_Max_Col FROM self WHERE Boards_Opponent_Declared = True AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Score_{Pair_Direction} < EV_Max_{Pair_Direction} ORDER BY Board"
 					}
 				]
 			},
@@ -262,7 +263,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, pct, score, tricks, dd tricks, Par, sd score, sd score max, sd contract max. Show those boards we declared and score > 0 and score < Par and score < sd score.",
-						"sql": "SELECT Board, Contract, Pct_{Pair_Direction} AS Pct, Score_{Pair_Direction} AS Score, Tricks, DD_Tricks, Par_{Pair_Direction} AS Par, EV_Max_{Pair_Direction} AS SD_Score, EV_Max_{Pair_Direction} AS EV_Max, SD_Contract_Max FROM self WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > 0 AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Score_{Pair_Direction} < EV_Max_{Pair_Direction} ORDER BY Board"
+						"sql": "SELECT Board, Contract, Pct_{Pair_Direction} AS Pct, Score_{Pair_Direction} AS Score, Tricks, DD_Tricks, Par_{Pair_Direction} AS Par, EV_Max_{Pair_Direction} AS SD_Score, EV_Max_{Pair_Direction} AS EV_Max, EV_Max_Col FROM self WHERE Boards_We_Declared = True AND Score_{Pair_Direction} > 0 AND Score_{Pair_Direction} < Par_{Pair_Direction} AND Score_{Pair_Direction} < EV_Max_{Pair_Direction} ORDER BY Board"
 					}
 				]
 			},
@@ -272,7 +273,7 @@
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, Par, sd score, sd score max, sd contract max. Show those boards opponent declared and score > 0 and score < Par and score < sd score.",
-						"sql": "SELECT Board, Contract, Score_{Opponent_Pair_Direction}, Par_{Opponent_Pair_Direction}, EV_Max_{Opponent_Pair_Direction}, EV_Max_{Opponent_Pair_Direction}, SD_Contract_Max FROM self WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > 0 AND Score_{Opponent_Pair_Direction} < Par_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} < EV_Max_{Opponent_Pair_Direction} ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Opponent_Pair_Direction}, Par_{Opponent_Pair_Direction}, EV_Max_{Opponent_Pair_Direction}, EV_Max_{Opponent_Pair_Direction}, EV_Max_Col FROM self WHERE Boards_Opponent_Declared = True AND Score_{Opponent_Pair_Direction} > 0 AND Score_{Opponent_Pair_Direction} < Par_{Opponent_Pair_Direction} AND Score_{Opponent_Pair_Direction} < EV_Max_{Opponent_Pair_Direction} ORDER BY Board"
 					}
 				]
 			},
@@ -332,7 +333,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN EV_Pct_Max_{Pair_Direction} ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN EV_Pct_Max_{Pair_Direction} ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN EV_Pct_Max_{Pair_Direction} ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_Partner_Declared FROM self"
+						"sql": "SELECT AVG(CASE WHEN Boards_We_Declared THEN EV_Pct ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_We_Declared, AVG(CASE WHEN Boards_I_Declared THEN EV_Pct ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_I_Declared, AVG(CASE WHEN Boards_Partner_Declared THEN EV_Pct ELSE NULL END) AS Avg_EV_Pct_Max_Of_Boards_Partner_Declared FROM self"
 					}
 				]
 			},
