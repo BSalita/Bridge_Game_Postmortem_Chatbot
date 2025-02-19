@@ -397,11 +397,13 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
         'opponent_pair_name_e','opponent_pair_name_w',
         'match_points_ew',
         'percentage_ew',
+        'board_number',
         'pair_number',
         'opponent_pair_number',
         ]
-    df = ns_df.join(ew_df[ew_cols],left_on=['pair_number','opponent_pair_number'],right_on=['opponent_pair_number','pair_number'],how='left')
+    df = ns_df.join(ew_df[ew_cols],left_on=['pair_number','opponent_pair_number','board_number'],right_on=['opponent_pair_number','pair_number','board_number'],how='left')
     print_to_log_info(df.head(1))
+    assert df.height == ns_df.height == ew_df.height # todo: pro tip. always assert heights after joins. it can save hours of debugging.
 
     # using df['section_results'].to_frame() because explode() creates a duplicate field 'session_id' unless selected.
     # section_results columns:

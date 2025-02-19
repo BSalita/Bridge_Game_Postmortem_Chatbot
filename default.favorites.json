@@ -402,11 +402,11 @@
 			"Pct_Per_Round": {
 				"title": "Pct per Round",
 				"help": "**Showing your matchpoint percentage per round.**",
-				"comment": "This complex query is the only one which works on both Club and Tournament. Not sure why but something must be duplicated.",
+				"comment": "",
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "WITH dedup AS (SELECT DISTINCT section_name, Pair_Number_EW, Player_Names_EW, Board, ROUND(Pct_NS, 2) AS Pcts_NS, Pct_NS FROM self WHERE Boards_We_Played = True) SELECT CONCAT(section_name, Pair_Number_EW, ' - ', (SELECT STRING_AGG(value.unnest, ' - ') FROM UNNEST(Player_Names_EW) AS value)) AS Opponents, AVG(Pct_NS) AS Avg_Pct_NS, STRING_AGG(CAST(Board AS VARCHAR), ', ' ORDER BY CAST(Board AS VARCHAR)) AS Boards, STRING_AGG(CAST(Pcts_NS AS VARCHAR), ', ' ORDER BY CAST(Board AS VARCHAR)) AS Pcts_NS FROM dedup GROUP BY section_name, Pair_Number_EW, Player_Names_EW ORDER BY section_name, Pair_Number_EW"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_{Opponent_Pair_Direction}, ' - ', (SELECT STRING_AGG(value.unnest, ' - ') FROM UNNEST(Player_Names_{Opponent_Pair_Direction}) as value)) as Opponents, AVG(Pct_{Pair_Direction}) AS Avg_Pct_{Pair_Direction}, STRING_AGG(Board), STRING_AGG(ROUND(Pct_{Pair_Direction},2)) AS Pcts_{Pair_Direction} FROM self WHERE Boards_We_Played = True GROUP BY section_name, Pair_Number_{Opponent_Pair_Direction}, Player_Names_{Opponent_Pair_Direction} ORDER BY section_name, Pair_Number_{Opponent_Pair_Direction}"
 					}
 				]
 			},
