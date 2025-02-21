@@ -826,12 +826,6 @@ class HandAugmenter:
         self._create_ev_columns()
         self._create_diff_columns()
         return self.df
-# example of working ranking code. but column must contain all scores.
-# scores = pl.col('Score_NS')
-# df = df.with_columns(
-#     scores.rank(method='average', descending=False).sub(1).over(['session_id', 'Board']).alias('Par_MP_NS'),
-#     scores.rank(method='average', descending=True).sub(1).over(['session_id', 'Board']).alias('Par_MP_EW')
-# )
 
 
 def calculate_matchpoint_scores_ns(df,score_columns):
@@ -870,7 +864,7 @@ def calculate_matchpoint_scores_ns(df,score_columns):
 class MatchPointAugmenter:
     def __init__(self, df):
         self.df = df
-        self.discrete_score_columns = ['EV_Max_NS'] # calculate matchpoints for these columns which change with each row's Score_NS
+        self.discrete_score_columns = [] # ['DD_Score_NS', 'EV_Max_NS'] # calculate matchpoints for these columns which change with each row's Score_NS
         self.dd_score_columns = [f'DD_Score_{l}{s}_{d}' for d in 'NESW' for s in 'SHDCN' for l in range(1,8)]
         self.ev_score_columns = [f'EV_{pd}_{d}_{s}_{l}' for pd in ['NS','EW'] for d in pd for s in 'SHDCN' for l in range(1,8)]
         self.all_score_columns = self.discrete_score_columns + self.dd_score_columns + self.ev_score_columns
@@ -928,44 +922,46 @@ class MatchPointAugmenter:
                 self.df
             )
 
+
+    def process_group(self, series_list: list[pl.Series]) -> pl.Series:
+        col_values = series_list[0]
+        score_ns_values = series_list[1]
+        if col_values.is_null().sum() > 0:
+            print(f"Warning: Null values in col_values: {col_values.is_null().sum()}")
+        if score_ns_values.is_null().sum() > 0:
+            print(f"Warning: Null values in score_ns_values: {score_ns_values.is_null().sum()}")
+        # todo: handle null values in col_values and score_ns_values
+        return pl.Series([
+            sum(0.5 if val is None or score is None else 1.0 if val > score else 0.5 if val == score else 0.0 
+                for score in score_ns_values)
+            for val in col_values
+        ])
+
+
     def _calculate_all_score_matchpoints(self):
         t = time.time()
-        if 'Expanded_Scores_List' in self.df.columns:
+        if 'Expanded_Scores_List' in self.df.columns: # todo: obsolete?
             print('Calculate matchpoints for existing Expanded_Scores_List column.')
             self.df = calculate_matchpoint_scores_ns(self.df, self.all_score_columns)
         else:
-            print('Calculate matchpoints for session, PBN, and Board.')
+            print('Calculate matchpoints over session, PBN, and Board.')
             # calc matchpoints on row-by-row basis
-            for col in self.all_score_columns:
-                if 'MP_'+col not in self.df.columns:
-                    # self.df.select(pl.col('Score_NS').rank(method='average', descending=False))
-                    self.df = self.df.with_columns([
-                        pl.col('Score_NS').rank(method='average', descending=False)
-                        .sub(1).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
+            for col in self.all_score_columns + ['DD_Score_NS','Par_NS','EV_Score']:
+                assert 'MP_'+col not in self.df.columns, f"Column 'MP_{col}' already exists in DataFrame"
+                self.df = self.df.with_columns([
+                        pl.map_groups(
+                            exprs=[col, 'Score_Declarer'],
+                            function=self.process_group,
+                            return_dtype=pl.Float64,
+                        ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
                     ])
-            # calc matchpoints for columns with constant score across all grouped rows (Par_NS, Par_EW)
-            self.df = self.df.with_columns([
-                (pl.col('DD_Score_NS').gt(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board']).add(
-                    pl.col('DD_Score_NS').eq(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board'])/2
-                )).alias('MP_DD_Score_NS')
-            ])
-            self.df = self.df.with_columns([
-                (pl.col('Par_NS').gt(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board']).add(
-                    pl.col('Par_NS').eq(pl.col('Score_NS')).sum().over(['session_id', 'PBN', 'Board'])/2
-                )).alias('MP_Par_NS')
-            ])
-            self.df = self.df.with_columns([
-                (pl.col('EV_Score').gt(pl.col('Score_Declarer')).sum().over(['session_id', 'PBN', 'Board']).add(
-                    pl.col('EV_Score').eq(pl.col('Score_Declarer')).sum().over(['session_id', 'PBN', 'Board'])/2
-                )).alias('MP_EV')
-            ])
-        print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
+            print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
 
     def _calculate_final_scores(self):
         t = time.time()
         
         # Calculate MP and percentages for discrete scores
-        for col_ns in self.discrete_score_columns+['DD_Score_NS', 'Par_NS']:
+        for col_ns in ['DD_Score_NS','Par_NS']:
             col_ew = col_ns.replace('NS','EW')
             self.df = self.df.with_columns(
                 (pl.col('MP_Top')-pl.col(f'MP_{col_ns}')).alias(f'MP_{col_ew}')
@@ -973,8 +969,9 @@ class MatchPointAugmenter:
                 (pl.col(f'MP_{col_ns}')/pl.col('MP_Top')).alias(col_ns.replace('_NS','_Pct_NS')),
                 (pl.col(f'MP_{col_ew}')/pl.col('MP_Top')).alias(col_ew.replace('_EW','_Pct_EW')),
             ])
+        # for directionless scores
         self.df = self.df.with_columns(
-            (pl.col(f'MP_EV')/pl.col('MP_Top')).alias('EV_Pct')
+            (pl.col(f'MP_EV_Score')/pl.col('MP_Top')).alias('EV_Pct')
         )
 
         # Calculate remaining scores and percentages

@@ -1289,6 +1289,7 @@ def create_sidebar():
         for k, button in st.session_state.favorites['Buttons'].items():
             if st.sidebar.button(button['title'], help=button['help'], key=k):
                 # temp - re-read for every button click for realtime debugging.
+                st.session_state.sql_query_mode = False
                 read_favorites()
                 ups = []
                 for up in st.session_state.favorites['Buttons'][k]['prompts']:
