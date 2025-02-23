@@ -931,8 +931,10 @@ class MatchPointAugmenter:
         if score_ns_values.is_null().sum() > 0:
             print(f"Warning: Null values in score_ns_values: {score_ns_values.is_null().sum()}")
         # todo: handle null values in col_values and score_ns_values
+        score_ns_values = score_ns_values.fill_null(0.0) # todo: always passes?
+        col_values = col_values.fill_null(0.0) # todo: always passes?
         return pl.Series([
-            sum(0.5 if val is None or score is None else 1.0 if val > score else 0.5 if val == score else 0.0 
+            sum(1.0 if val > score else 0.5 if val == score else 0.0 
                 for score in score_ns_values)
             for val in col_values
         ])

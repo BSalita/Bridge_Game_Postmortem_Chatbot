@@ -28,7 +28,7 @@ import streamlit_chat
 from streamlit_extras.bottom_container import bottom
 from stqdm import stqdm
 import openai
-from openai import AsyncOpenAI
+#from openai import AsyncOpenAI
 #from openai import openai_object  # used to suppress vscode type checking errors
 import pandas as pd
 import duckdb
@@ -36,7 +36,7 @@ import json
 import os
 from datetime import datetime, timezone 
 from dotenv import load_dotenv
-import asyncio
+#import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
 
 # Only declared to display version information
@@ -55,14 +55,14 @@ print('acbl_api_key:',acbl_api_key)
 assert 'Bearer' not in acbl_api_key, "ACBL_API_KEY must not contain 'Bearer' or it will be rejected by ACBL."
 assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Authorization' or it will be rejected by ACBL."
 openai_api_key = os.getenv("OPENAI_API_KEY")
-assert openai_api_key is not None, "OPENAI_API_KEY environment variable not set. See README.md for instructions."
-openai_async_client = AsyncOpenAI(api_key=openai_api_key)
-DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
-DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
-DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
-DEFAULT_GPT4_AI_MODEL = "gpt-4-turbo-preview" # preview is always newest
+#assert openai_api_key is not None, "OPENAI_API_KEY environment variable not set. See README.md for instructions."
+#openai_async_client = AsyncOpenAI(api_key=openai_api_key)
+#DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
+#DEFAULT_LARGE_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. now cheapest "gpt-3.5-turbo-16k" # might not be needed now that schema size is reduced.
+#DEFAULT_AI_MODEL = DEFAULT_LARGE_AI_MODEL
+#DEFAULT_GPT4_AI_MODEL = "gpt-4-turbo-preview" # preview is always newest
 #DEFAULT_AI_MODEL = DEFAULT_GPT4_AI_MODEL
-DEFAULT_AI_MODEL_TEMPERATURE = 0.0
+#DEFAULT_AI_MODEL_TEMPERATURE = 0.0
 
 # todo: doesn't some variation of import chatlib.chatlib work instead of using sys.path.append such as exporting via __init__.py?
 #import acbllib.acbllib
@@ -131,20 +131,20 @@ def ShowDataFrameTable(df, key, query=None, show_sql_query=True, color_column=No
 
 # todo: obsolete in favor of complete_messages
 
-async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE, response_format={"type":"json_object"}):
-    return await openai_async_client.chat.completions.create(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
+# async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE, response_format={"type":"json_object"}):
+#     return await openai_async_client.chat.completions.create(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
 
 
-def ask_database(query):
-    print_to_log_info('ask_database query:', query)
-    con = st.session_state.con
-    #"""Function to query duckdb database with a provided SQL query."""
-    try:
-        results = con.execute(query)
-    except Exception as e:
-        results = f"query failed with error: {e}"
-    print_to_log_info('ask_database: results:', results)
-    return results
+# def ask_database(query):
+#     print_to_log_info('ask_database query:', query)
+#     con = st.session_state.con
+#     #"""Function to query duckdb database with a provided SQL query."""
+#     try:
+#         results = con.execute(query)
+#     except Exception as e:
+#         results = f"query failed with error: {e}"
+#     print_to_log_info('ask_database: results:', results)
+#     return results
 
 
 # def execute_function_call(message):
@@ -158,201 +158,201 @@ def ask_database(query):
 
 
 # todo: similar to process_prompt_macros
-def prompt_keyword_replacements(s):
-    replacement_strings = [
-        # todo: generalize {} replacements by using df.columns lookup?
-        (r'\{Pair_Direction\}', st.session_state.pair_direction),
-        (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
-    ]
-    for original, new in replacement_strings:
-        s = re.sub(original, new, s.replace(
-            '  ', ' '), flags=re.IGNORECASE)
-    return s
+# def prompt_keyword_replacements(s):
+#     replacement_strings = [
+#         # todo: generalize {} replacements by using df.columns lookup?
+#         (r'\{Pair_Direction\}', st.session_state.pair_direction),
+#         (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
+#     ]
+#     for original, new in replacement_strings:
+#         s = re.sub(original, new, s.replace(
+#             '  ', ' '), flags=re.IGNORECASE)
+#     return s
 
 
-def chat_up_user(up, messages, function_calls, model=None):
-    return asyncio.run(async_chat_up_user({'prompt':up}, messages, function_calls, model))
+# def chat_up_user(up, messages, function_calls, model=None):
+#     return asyncio.run(async_chat_up_user({'prompt':up}, messages, function_calls, model))
 
-async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
+# async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
 
-    if model is None:
-        model = st.session_state.ai_api
-    up = prompt_sql['prompt']
-    # internal commands
-    if up == '/about':
-        content = slash_about()
-        messages.append({"role": "assistant", "content": up+' '+content})
-        prompt_sql['sql'] = content # will always return same sql for same query from now on. Is this what we want?
-        return True
+#     if model is None:
+#         model = st.session_state.ai_api
+#     up = prompt_sql['prompt']
+#     # internal commands
+#     if up == '/about':
+#         content = slash_about()
+#         messages.append({"role": "assistant", "content": up+' '+content})
+#         prompt_sql['sql'] = content # will always return same sql for same query from now on. Is this what we want?
+#         return True
 
-    if 'sql' in prompt_sql and prompt_sql['sql']: # already has sql. no need for chat-to-sql call.
-        sql_query = prompt_sql['sql']
-        sql_query = prompt_keyword_replacements(sql_query)
-        if up == '':
-            up = sql_query
-        else:
-            up = prompt_keyword_replacements(up)
-        messages.append({"role": "user", "content": up})
-        # fake message
-        assistant_message = {'function_call':{'name':'ask_database'}}
+#     if 'sql' in prompt_sql and prompt_sql['sql']: # already has sql. no need for chat-to-sql call.
+#         sql_query = prompt_sql['sql']
+#         sql_query = prompt_keyword_replacements(sql_query)
+#         if up == '':
+#             up = sql_query
+#         else:
+#             up = prompt_keyword_replacements(up)
+#         messages.append({"role": "user", "content": up})
+#         # fake message
+#         assistant_message = {'function_call':{'name':'ask_database'}}
 
-    else:
+#     else:
 
-        i = len(messages)
+#         i = len(messages)
 
-        # help out AI by enhancing prompt before calling. Replace undesired characters or replace common phrases with actual column names.
-        if up[0] == '"': # escape 'Prefer ...' appending
-            enhanced_prompt = ''
-        else:
-            if 'opponent' in up.lower():  # assumes any prompt containing 'opponent' is a prompt requesting opponent_pair_direction
-                enhanced_prompt = f"Prefer appending {st.session_state.opponent_pair_direction} instead of {st.session_state.pair_direction}. "
-            else:
-                enhanced_prompt = f"Prefer appending {st.session_state.pair_direction} instead of {st.session_state.opponent_pair_direction}. "
-            #enhanced_prompt = f"Try appending _Declarer or "+enhanced_prompt+up.replace("'", "").replace('"', '')
-        enhanced_prompt += up.replace("'", "").replace('"', '')
-        # todo: put this into config file.
-        replacement_strings = [
-            (r'boards i declared', 'Boards_I_Declared = True'),
-            (r'boards i played', 'Boards_I_Played = True'),
-            (r'boards we played', 'Boards_We_Played = True'),
-            (r'boards we declared', 'Boards_We_Declared = True'),
-            (r'my boards', 'Boards_I_Played = True'),
-            (r'boards partner declared', 'Boards_Partner_Declared = True'),
-            (r'boards my partner declared', 'Boards_Partner_Declared = True'),
-            (r'boards opponent declared', 'Boards_Opponent_Declared = True'),
-            # todo: generalize {} replacements by columnn lookup?
-            (r'\{Pair_Direction\}', st.session_state.pair_direction),
-            (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
-        ]
-        for original, new in replacement_strings:
-            enhanced_prompt = re.sub(original, new, enhanced_prompt.replace(
-                '  ', ' '), flags=re.IGNORECASE)
-        print_to_log_info('enhanced_prompt:', enhanced_prompt)
-        # add enhanced prompt to messages
-        messages.append({"role": "user", "content": enhanced_prompt})
+#         # help out AI by enhancing prompt before calling. Replace undesired characters or replace common phrases with actual column names.
+#         if up[0] == '"': # escape 'Prefer ...' appending
+#             enhanced_prompt = ''
+#         else:
+#             if 'opponent' in up.lower():  # assumes any prompt containing 'opponent' is a prompt requesting opponent_pair_direction
+#                 enhanced_prompt = f"Prefer appending {st.session_state.opponent_pair_direction} instead of {st.session_state.pair_direction}. "
+#             else:
+#                 enhanced_prompt = f"Prefer appending {st.session_state.pair_direction} instead of {st.session_state.opponent_pair_direction}. "
+#             #enhanced_prompt = f"Try appending _Declarer or "+enhanced_prompt+up.replace("'", "").replace('"', '')
+#         enhanced_prompt += up.replace("'", "").replace('"', '')
+#         # todo: put this into config file.
+#         replacement_strings = [
+#             (r'boards i declared', 'Boards_I_Declared = True'),
+#             (r'boards i played', 'Boards_I_Played = True'),
+#             (r'boards we played', 'Boards_We_Played = True'),
+#             (r'boards we declared', 'Boards_We_Declared = True'),
+#             (r'my boards', 'Boards_I_Played = True'),
+#             (r'boards partner declared', 'Boards_Partner_Declared = True'),
+#             (r'boards my partner declared', 'Boards_Partner_Declared = True'),
+#             (r'boards opponent declared', 'Boards_Opponent_Declared = True'),
+#             # todo: generalize {} replacements by columnn lookup?
+#             (r'\{Pair_Direction\}', st.session_state.pair_direction),
+#             (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
+#         ]
+#         for original, new in replacement_strings:
+#             enhanced_prompt = re.sub(original, new, enhanced_prompt.replace(
+#                 '  ', ' '), flags=re.IGNORECASE)
+#         print_to_log_info('enhanced_prompt:', enhanced_prompt)
+#         # add enhanced prompt to messages
+#         messages.append({"role": "user", "content": enhanced_prompt})
 
-        # request chat completion of user message
-        chat_response = await create_chat_completion( # chat_completion_request(
-            messages, model, function_calls)  # chat's response from user input
-        print_to_log_info('chat_response status:', type(chat_response), chat_response)
-        chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
-        print_to_log_info('chat_response_json:', type(chat_response_json), chat_response_json)
-        print_to_log_info('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
-        print_to_log_info('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
+#         # request chat completion of user message
+#         chat_response = await create_chat_completion( # chat_completion_request(
+#             messages, model, function_calls)  # chat's response from user input
+#         print_to_log_info('chat_response status:', type(chat_response), chat_response)
+#         chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
+#         print_to_log_info('chat_response_json:', type(chat_response_json), chat_response_json)
+#         print_to_log_info('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
+#         print_to_log_info('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
 
-        # restore original user prompt
-        messages[-1] = {"role": "user", "content": up}
+#         # restore original user prompt
+#         messages[-1] = {"role": "user", "content": up}
 
-        if "choices" not in chat_response_json or not isinstance(chat_response_json['choices'], list) or len(chat_response_json['choices']) == 0:
-            # fake message
-            if 'error' in chat_response_json and 'message' in chat_response_json['error']:
-                messages.append(
-                    {"role": "assistant", "content": chat_response_json['error']['message']})
-            else:
-                messages.append(
-                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices or zero length choices). Try again later."})
-            return False
-        # chat's first and best response message.
-        first_choice = chat_response_json["choices"][0]
-        if 'message' not in first_choice:
-            # fake message
-            messages.append(
-                {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
-            return False
-        assistant_message = first_choice['message']
-        print_to_log_info('assistant_message:', assistant_message)
-        if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
-            # fake message
-            messages.append(
-                {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later."})
-            return False
-        if 'content' not in assistant_message:  # content of None is ok
-            # fake message
-            messages.append(
-                {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].content). Try again later."})
-            return False
-        if "function_call" not in assistant_message:
-            assert first_choice['finish_reason'] == 'stop'
-            if assistant_message["message"]['content'][0] == '{': # added for 1106 response_format={"type":"json_object"}
-                try:
-                    function_call_json = json.loads(
-                        assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
-                except Exception as e:
-                    print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
-                    # fake message
-                    messages.append(
-                        {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
-                    return False
-                assert 'query' in function_call_json
-                sql_query = function_call_json['query']
-            else:
-                # ?="} is a lookahead assertion
-                # must remove newlines for regex to work
-                match = re.search(r'SELECT .*(?="})?$',
-                                assistant_message['content'].replace('\n', ''))
-                if match is None:
-                    messages.append(
-                        {"role": "assistant", "content": assistant_message['content']})
-                    # fake message
-                    messages.append(
-                        {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
-                    return False
-                sql_query = match[0]
-        else:
-            if first_choice['finish_reason'] == 'length':
-                # fake message
-                messages.append(
-                    {"role": "assistant", "content": f"Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later."})
-                return False
-            assert first_choice['finish_reason'] == 'function_call'
-            if 'name' not in assistant_message["function_call"] or assistant_message["function_call"]['name'] != 'ask_database':
-                # fake message
-                messages.append(
-                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later."})
-                return False
-            if 'arguments' not in assistant_message["function_call"]:
-                # fake message
-                messages.append(
-                    {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later."})
-                return False
-            if assistant_message["function_call"]['arguments'][0] == '{':
-                try:
-                    function_call_json = json.loads(
-                        assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
-                except Exception as e:
-                    print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
-                    # fake message
-                    messages.append(
-                        {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
-                    return False
-                assert 'query' in function_call_json
-                sql_query = function_call_json['query']
-            else:
-                # here's hoping it's a SELECT or other SQL statement
-                sql_query = assistant_message["function_call"]['arguments']
+#         if "choices" not in chat_response_json or not isinstance(chat_response_json['choices'], list) or len(chat_response_json['choices']) == 0:
+#             # fake message
+#             if 'error' in chat_response_json and 'message' in chat_response_json['error']:
+#                 messages.append(
+#                     {"role": "assistant", "content": chat_response_json['error']['message']})
+#             else:
+#                 messages.append(
+#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices or zero length choices). Try again later."})
+#             return False
+#         # chat's first and best response message.
+#         first_choice = chat_response_json["choices"][0]
+#         if 'message' not in first_choice:
+#             # fake message
+#             messages.append(
+#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
+#             return False
+#         assistant_message = first_choice['message']
+#         print_to_log_info('assistant_message:', assistant_message)
+#         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
+#             # fake message
+#             messages.append(
+#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later."})
+#             return False
+#         if 'content' not in assistant_message:  # content of None is ok
+#             # fake message
+#             messages.append(
+#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].content). Try again later."})
+#             return False
+#         if "function_call" not in assistant_message:
+#             assert first_choice['finish_reason'] == 'stop'
+#             if assistant_message["message"]['content'][0] == '{': # added for 1106 response_format={"type":"json_object"}
+#                 try:
+#                     function_call_json = json.loads(
+#                         assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
+#                 except Exception as e:
+#                     print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
+#                     # fake message
+#                     messages.append(
+#                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
+#                     return False
+#                 assert 'query' in function_call_json
+#                 sql_query = function_call_json['query']
+#             else:
+#                 # ?="} is a lookahead assertion
+#                 # must remove newlines for regex to work
+#                 match = re.search(r'SELECT .*(?="})?$',
+#                                 assistant_message['content'].replace('\n', ''))
+#                 if match is None:
+#                     messages.append(
+#                         {"role": "assistant", "content": assistant_message['content']})
+#                     # fake message
+#                     messages.append(
+#                         {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
+#                     return False
+#                 sql_query = match[0]
+#         else:
+#             if first_choice['finish_reason'] == 'length':
+#                 # fake message
+#                 messages.append(
+#                     {"role": "assistant", "content": f"Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later."})
+#                 return False
+#             assert first_choice['finish_reason'] == 'function_call'
+#             if 'name' not in assistant_message["function_call"] or assistant_message["function_call"]['name'] != 'ask_database':
+#                 # fake message
+#                 messages.append(
+#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later."})
+#                 return False
+#             if 'arguments' not in assistant_message["function_call"]:
+#                 # fake message
+#                 messages.append(
+#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later."})
+#                 return False
+#             if assistant_message["function_call"]['arguments'][0] == '{':
+#                 try:
+#                     function_call_json = json.loads(
+#                         assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
+#                 except Exception as e:
+#                     print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
+#                     # fake message
+#                     messages.append(
+#                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
+#                     return False
+#                 assert 'query' in function_call_json
+#                 sql_query = function_call_json['query']
+#             else:
+#                 # here's hoping it's a SELECT or other SQL statement
+#                 sql_query = assistant_message["function_call"]['arguments']
 
-    # todo: execute via function call, not explicitly
-    ask_database_results = ask_database(sql_query)
-    print_to_log_info('ask_database_results:', ask_database_results)
-    if not isinstance(ask_database_results, duckdb.DuckDBPyConnection):
-        # fake message
-        messages.append(
-            {"role": "assistant", "content": ask_database_results})
-        return False
-    df = ask_database_results.pl()
-    #df.index.name = 'Row'
-    st.session_state.dataframes[sql_query].append(df)
+#     # todo: execute via function call, not explicitly
+#     ask_database_results = ask_database(sql_query)
+#     print_to_log_info('ask_database_results:', ask_database_results)
+#     if not isinstance(ask_database_results, duckdb.DuckDBPyConnection):
+#         # fake message
+#         messages.append(
+#             {"role": "assistant", "content": ask_database_results})
+#         return False
+#     df = ask_database_results.pl()
+#     #df.index.name = 'Row'
+#     st.session_state.dataframes[sql_query].append(df)
 
-    if 'function_call' in assistant_message:
-        messages.append(
-            {"role": "function", "name": assistant_message["function_call"]["name"], "content": sql_query})  # todo: what is the content suppose to be? and elsewhere?
-    else:
-        messages.append({"role": "assistant", "content": sql_query})
+#     if 'function_call' in assistant_message:
+#         messages.append(
+#             {"role": "function", "name": assistant_message["function_call"]["name"], "content": sql_query})  # todo: what is the content suppose to be? and elsewhere?
+#     else:
+#         messages.append({"role": "assistant", "content": sql_query})
     
-    prompt_sql['sql'] = sql_query # will always return same sql for same query from now on. Is this what we want?
-    print_to_log_info('prompt_sql:', prompt_sql)
+#     prompt_sql['sql'] = sql_query # will always return same sql for same query from now on. Is this what we want?
+#     print_to_log_info('prompt_sql:', prompt_sql)
 
-    return True
+#     return True
 
 
 def get_club_results_from_acbl_number(acbl_number):
@@ -390,67 +390,39 @@ def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_i
 
 
 # no caching because of hashing parameter concerns
-def Augment_Single_Dummy(df, sd_cache_d, single_dummy_sample_count, match_point_ns_d):
+def augment_single_dummy(df, sd_cache_d, single_dummy_sample_count, match_point_ns_d):
     return chatlib.Augment_Single_Dummy(df, sd_cache_d, single_dummy_sample_count, match_point_ns_d)
 
 
 def create_schema_string(df, con):
 
-    if True:
-        df_dtypes_d = {}
-        dtypes_d = defaultdict(list)
-        complex_objects = []
+    df_dtypes_d = {}
+    dtypes_d = defaultdict(list)
+    complex_objects = []
 
-        for col in df.columns:
-            assert col not in df_dtypes_d, col
-            dtype_name = df[col].dtype
-            if dtype_name == pl.Object:
-                if isinstance(df[col][0], (list, dict)):
-                    complex_objects.append(col)
-                    continue
-                dtype_name = pl.String
-                df = df.with_columns(pl.col(col).cast(pl.String))
-            elif dtype_name == pl.UInt8:
-                df = df.with_columns(pl.col(col).cast(pl.Int64))
+    for col in df.columns:
+        assert col not in df_dtypes_d, col
+        dtype_name = df[col].dtype
+        if dtype_name == pl.Object:
+            if isinstance(df[col][0], (list, dict)):
+                complex_objects.append(col)
+                continue
+            dtype_name = pl.String
+            df = df.with_columns(pl.col(col).cast(pl.String))
+        elif dtype_name == pl.UInt8:
+            df = df.with_columns(pl.col(col).cast(pl.Int64))
 
-            df_dtypes_d[col] = dtype_name
-            dtypes_d[dtype_name].append(col)
+        df_dtypes_d[col] = dtype_name
+        dtypes_d[dtype_name].append(col)
 
-        for obj in complex_objects:
-            print_to_log_debug(str(obj), df[obj][0])
+    for obj in complex_objects:
+        print_to_log_debug(str(obj), df[obj][0])
 
-        df = df.drop(complex_objects)
+    df = df.drop(complex_objects)
 
-        # warning: fake sql CREATE TABLE because types are dtypes not sql types.
-        #df_schema_string = f'CREATE TABLE "results" ({",".join([n+" "+t.name for n,t in zip(df.columns,df.dtypes)])})' # using f' not f"
-        df_schema_string = 'CREATE TABLE "results" (\n'+',\n'.join(df.columns)+'\n)' # df.sort_values(key=lambda col: col.str.lower())?
-
-    else:
-
-        con.execute("CREATE TABLE my_table AS SELECT * FROM self LIMIT 1")
-
-        # show table info. must be after con.register.
-        # create df of all tables known to duckdb
-        st.session_state.df_meta = con.execute("SHOW ALL TABLES").pl()
-
-        # st.session_state.df_schema_string = '\n'.join([f"Table:{table_name}\nColumns: {', '.join(['('+table_name+'.'+n+','+t+')' for n,t in zip(column_names,column_types)])}" for table_name,
-        #                                                     column_names, column_types in zip(st.session_state.df_meta["name"], st.session_state.df_meta["column_names"], st.session_state.df_meta["column_types"])])
-        '''
-            -- example CREATE TABLE
-            CREATE TABLE "events" (
-            "id" INT NOT NULL PRIMARY KEY,
-            "created_at" VARCHAR NOT NULL,
-            "updated_at" VARCHAR NOT NULL,
-            "club_tournament_id" INT NULL,
-            -- list of VARCHAR
-            FOREIGN KEY ("rounds") REFERENCES "rounds"(id) ON DELETE NO ACTION
-            );
-        '''
-        # todo: would chatgpt be more effective passing a CREATE TABLE instead of textual description of table?
-        # st.session_state.df_schema_string = '\n'.join([f'Table:"{table_name}\nColumns: {", ".join(["("+n+","+t+")" for n,t in zip(column_names,column_types)])}' for table_name,
-        #                                                     column_names, column_types in zip(st.session_state.df_meta["name"], st.session_state.df_meta["column_names"], st.session_state.df_meta["column_types"])]) # using f' not f"
-        df_schema_string = '\n'.join([f'CREATE TABLE "{table_name}" (\n{",".join([n+" "+t for n,t in zip(column_names,column_types)])}' for table_name,
-                                            column_names, column_types in zip(st.session_state.df_meta['name'], st.session_state.df_meta['column_names'], st.session_state.df_meta['column_types'])]) # using f' not f"
+    # warning: fake sql CREATE TABLE because types are dtypes not sql types.
+    #df_schema_string = f'CREATE TABLE "results" ({",".join([n+" "+t.name for n,t in zip(df.columns,df.dtypes)])})' # using f' not f"
+    df_schema_string = 'CREATE TABLE "results" (\n'+',\n'.join(df.columns)+'\n)' # df.sort_values(key=lambda col: col.str.lower())?
 
     return df_schema_string
 
@@ -496,20 +468,13 @@ def augment_df(df):
     return df
 
         
-def chat_initialize(player_id, session_id): # todo: rename to session_id?
+def change_game_state(player_id, session_id): # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
-    # if session_id is None:
-    #     if st.session_state.sql_query_mode:
-    #         return False
-    st.session_state.sql_query_mode = False
-    
-    st.session_state.main_section_container = st.container(border=True)
-
     con = st.session_state.con
 
-    with st.spinner(f"Retrieving a list of games for {player_id} ..."):
+    with st.spinner(f"Retrieving a list of club games for {player_id} ..."):
         t = time.time()
         if player_id in st.session_state.game_urls_d:
             game_urls = st.session_state.game_urls_d[player_id]
@@ -521,7 +486,6 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(game_urls) == 0:
             st.error(f"Could not find any club games for {player_id}.")
         elif session_id is None:
-            #if player_id in st.session_state.game_urls_d:
             session_id = list(game_urls.keys())[0]  # default to most recent club game# default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
@@ -537,25 +501,18 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
         if len(tournament_session_urls) == 0:
             st.error(f"Could not find any tournament sessions for {player_id}.")
         elif session_id is None:
-            #if player_id not in st.session_state.game_urls_d:
             session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
         print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
-    reset_data()
-
     if session_id is None:
         st.error(f"Please make sure {player_id} is a valid player number.")
         return False
-    
-    st.session_state.player_id = player_id
-    st.session_state.game_urls_d[player_id] = game_urls
-    st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
 
     if session_id in game_urls:
         with st.spinner(f"Collecting data for club game {session_id} and player {player_id}."):
-            st.session_state.game_description = game_urls[session_id][2]
-            st.text(f"{st.session_state.game_description}")
+            game_description = game_urls[session_id][2]
+            st.text(f"{game_description}")
             t = time.time()
             # game_urls[session_id][1] is detail_url
             dfs = create_club_dfs(player_id, game_urls[session_id][1])
@@ -621,8 +578,8 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                     f.write(col+'\n')
 
     elif session_id in tournament_session_urls:
-        st.session_state.game_description = tournament_session_urls[session_id][2]
-        st.text(f"{st.session_state.game_description}")
+        game_description = tournament_session_urls[session_id][2]
+        st.text(f"{game_description}")
         dfs = tournament_session_urls[session_id][3]
         #dfs = create_tournament_dfs(player_id, tournament_session_urls[session_id][3])
         if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
@@ -692,19 +649,22 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
                 for col in sorted(df.columns):
                     f.write(col+'\n')
 
-        st.session_state.json_results_d = json_results_d
     else:
-        assert False, f"session_id not found: {session_id}"
+        st.error(f"player {player_id} not found")
+        return False
 
-    # session appears valid. Save it.
+    # No more user errors possible. Everything checks out so it's safe to update the session state with new data.
+    reset_data() # wipe out all game state data
+    st.session_state.player_id = player_id
     st.session_state.session_id = session_id
+    st.session_state.game_description = game_description
+    st.session_state.game_urls_d[player_id] = game_urls
+    st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
+    st.session_state.sql_query_mode = False
+    st.session_state.main_section_container = st.container(border=True)
 
     with st.spinner(f"Creating everything data table."):
         t = time.time()
-        #con.register('self', df) # todo: takes 25s! not acceptable. make sure df is registered for sql queries
-        #results = ask_database(st.session_state.commands_sql)
-        #assert isinstance(results, duckdb.DuckDBPyConnection), results
-        #df = results.pl()  # update df with results of SQL query.
         assert df is not None
         # List of columns to move to the front of df.
         move_to_front = ['Board', 'Contract', 'Result', 'Tricks', 'Score_NS', 'Pct_NS', 'Par_NS']
@@ -797,46 +757,37 @@ def chat_initialize(player_id, session_id): # todo: rename to session_id?
     with open('df_schema.sql','w') as f:
         f.write(st.session_state.df_schema_string)
 
-    function_calls = [
-        {
-            "name": "ask_database",
-            # from: https://github.com/openai/openai-cookbook/blob/main/examples/How_to_call_functions_with_chat_models.ipynb
-            # Needs to explictly be told to return a SQL string otherwise returns json.
-            "description": "Use this function to answer user questions about duplicate bridge statistics. Output should be a fully formed SQL query.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": f"""
-                                SQL query for extracting info to answer the user"s question.
-                                SQL should be written using this database schema:
-                                {st.session_state.df_schema_string}
-                                The schema contains table name, column name and column type.
-                                The returned value should be a plain text SQL query embedded in JSON.
-                                """,
-                    }
-                },
-                "required": ["query"],
-            },
-        }
-    ]
-    st.session_state.function_calls = function_calls
-    reset_messages()
+    # function_calls = [
+    #     {
+    #         "name": "ask_database",
+    #         # from: https://github.com/openai/openai-cookbook/blob/main/examples/How_to_call_functions_with_chat_models.ipynb
+    #         # Needs to explictly be told to return a SQL string otherwise returns json.
+    #         "description": "Use this function to answer user questions about duplicate bridge statistics. Output should be a fully formed SQL query.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "query": {
+    #                     "type": "string",
+    #                     "description": f"""
+    #                             SQL query for extracting info to answer the user"s question.
+    #                             SQL should be written using this database schema:
+    #                             {st.session_state.df_schema_string}
+    #                             The schema contains table name, column name and column type.
+    #                             The returned value should be a plain text SQL query embedded in JSON.
+    #                             """,
+    #                 }
+    #             },
+    #             "required": ["query"],
+    #         },
+    #     }
+    # ]
+    # st.session_state.function_calls = function_calls
+    # reset_messages()
 
     #content = slash_about()
     #streamlit_chat.message(f"Morty: {content}", logo=st.session_state.assistant_logo)
 
-    if st.session_state.show_sql_query:
-        pass
-        #t = time.time()
-        #streamlit_chat.message(
-        #    f"Morty: Here's a dataframe of game results. There's {len(df)} rows and {len(df.columns)} columns.", logo=st.session_state.assistant_logo)
-        # todo: replace query string with query from json file.
-        #ShowDataFrameTable(df, query='SELECT Board, Contract, Result, Tricks, Score_NS, Pct_NS, Par_NS', key='clear_conversation_game_data_df', tooltips=st.session_state.dataframe_tooltips)
-        #print_to_log_info('ShowDataFrameTable time:', time.time()-t)
-
-    return True
+    return True # no errors
 
 
 def slash_about():
@@ -844,99 +795,99 @@ def slash_about():
     return content
 
 
-def ask_questions_without_context(ups, model=None):
-    # pandasai doesn't work. context length is limited to 4100 tokens. need 8k?
-    # llm = OpenAI(api_token=openai.api_key)
-    # df = st.session_state.df
-    # sdf = SmartDataframe(df, config={"llm": llm})
-    # #sdf = SmartDataframe(df)
-    # qdf = sdf.chat("Show board, contract")
-    # print_to_log('qdf:', qdf)
+# def ask_questions_without_context(ups, model=None):
+#     # pandasai doesn't work. context length is limited to 4100 tokens. need 8k?
+#     # llm = OpenAI(api_token=openai.api_key)
+#     # df = st.session_state.df
+#     # sdf = SmartDataframe(df, config={"llm": llm})
+#     # #sdf = SmartDataframe(df)
+#     # qdf = sdf.chat("Show board, contract")
+#     # print_to_log('qdf:', qdf)
 
-    if model is None:
-        model = st.session_state.ai_api
-    function_calls = st.session_state.function_calls
-    # ups can be a string, list of strings, or list of lists of strings.
-    assert isinstance(ups, list), ups
-    with st.spinner(f"Morty is judging you ..."): # {len(ups)} responses from {model}."):
-        tasks = []
-        list_of_new_messages = []
-        for i, up in enumerate(ups):
-            # pass system prompt only
-            new_messages = [st.session_state.messages[0]]
-            list_of_new_messages.append(new_messages)
-            tasks.append(async_chat_up_user(up, new_messages, function_calls, model))
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            results = loop.run_until_complete(asyncio.gather(*tasks))
-            #for result in results:
-            #    print_to_log(result)
-        finally:
-            loop.close()
-        for messages in list_of_new_messages:
-            # append all new messages to list except for system prompt
-            st.session_state.messages.extend(messages[1:])
-
-
-def ask_a_question_with_context(ups, model=None):
-    t = time.time()
-    if model is None:
-        model = st.session_state.ai_api
-    messages = st.session_state.messages
-    # removed because no longer an issue?
-    #if model != DEFAULT_LARGE_AI_MODEL:
-    #    if len(messages) > 12:
-    #        messages = messages[:1+3]+messages[1+3-10:]
-    function_calls = st.session_state.function_calls
-    if isinstance(ups, list):
-        for i, up in enumerate(ups):
-            with st.spinner(f"Waiting for response {i} of {len(ups)} from {model}."):
-                chat_up_user(up, messages, function_calls, model)
-    else:
-        with st.spinner(f"Waiting for response from {model}."):
-            chat_up_user(ups, messages, function_calls, model)
-    st.session_state.messages = messages
-    print_to_log_info('ask_a_question_with_context time:', time.time()-t)
+#     if model is None:
+#         model = st.session_state.ai_api
+#     function_calls = st.session_state.function_calls
+#     # ups can be a string, list of strings, or list of lists of strings.
+#     assert isinstance(ups, list), ups
+#     with st.spinner(f"Morty is judging you ..."): # {len(ups)} responses from {model}."):
+#         tasks = []
+#         list_of_new_messages = []
+#         for i, up in enumerate(ups):
+#             # pass system prompt only
+#             new_messages = [st.session_state.messages[0]]
+#             list_of_new_messages.append(new_messages)
+#             tasks.append(async_chat_up_user(up, new_messages, function_calls, model))
+#         loop = asyncio.new_event_loop()
+#         asyncio.set_event_loop(loop)
+#         try:
+#             results = loop.run_until_complete(asyncio.gather(*tasks))
+#             #for result in results:
+#             #    print_to_log(result)
+#         finally:
+#             loop.close()
+#         for messages in list_of_new_messages:
+#             # append all new messages to list except for system prompt
+#             st.session_state.messages.extend(messages[1:])
 
 
-def reset_messages():
-    assert st.session_state.player_id is not None, "Oops. Player number is None."
-    assert st.session_state.system_prompt is not None, "Oops. System prompt is None."
-    augmented_system_prompt = st.session_state.system_prompt
-    #augmented_system_prompt += f" Player Number is '{st.session_state.player_id}'."
-    #augmented_system_prompt += f" Player Name is '{st.session_state.player_name}'."
-    # todo: howell, individual, team not implemented!
-    #augmented_system_prompt += f" Game Date is always {st.session_state.game_date}."
-    #augmented_system_prompt += f" Event ID is always {st.session_state.session_id}."
-    #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
-    #augmented_system_prompt += f" My Player Direction is always {st.session_state.player_direction[0]}."
-    #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
-    #augmented_system_prompt += f" My partner's Player Number is always '{st.session_state.player_id}'."
-    #augmented_system_prompt += f" My partner's Player Name is always '{st.session_state.partner_name}'."
-    #augmented_system_prompt += f" My Pair Direction is always {st.session_state.pair_direction}."
-    #augmented_system_prompt += f" My 'Pair Number {st.session_state.opponent_pair_direction}' is always {st.session_state.pair_number}."
-    #augmented_system_prompt += f" Opponent Pair Direction is always {st.session_state.opponent_pair_direction}."
-    #augmented_system_prompt += f" My Session Id is always {st.session_state.session_id}."
-    #augmented_system_prompt += f" My Section Name is always {st.session_state.section_name}."
-    #augmented_system_prompt += f" \"My boards means\" boards having a Declarer Number of always {st.session_state.player_id}."
-    #augmented_system_prompt += f" \"Our boards\" means boards having a Pair Number always {st.session_state.pair_direction} of {st.session_state.pair_number}."
-    #augmented_system_prompt += f" \"Boards I declared\" means boards having my Declarer Number of always {st.session_state.player_id}."
-    #augmented_system_prompt += f" \"Boards my partner declared\" means boards having my Declarer Number of always {st.session_state.player_id}"
-    #augmented_system_prompt += f" \"Boards we declared\" means boards having a Declarer Number of always {st.session_state.player_id} of {st.session_state.player_id}."
-    #augmented_system_prompt += f" \"Boards we played\" means boards having a Pair Number always {st.session_state.pair_direction} of {st.session_state.pair_number}."
-    st.session_state.augmented_system_prompt = augmented_system_prompt
-    system_message = {"role": "system",
-                      "content": st.session_state.augmented_system_prompt}
-    messages = [system_message]
-    st.session_state.messages = messages
+# def ask_a_question_with_context(ups, model=None):
+#     t = time.time()
+#     if model is None:
+#         model = st.session_state.ai_api
+#     messages = st.session_state.messages
+#     # removed because no longer an issue?
+#     #if model != DEFAULT_LARGE_AI_MODEL:
+#     #    if len(messages) > 12:
+#     #        messages = messages[:1+3]+messages[1+3-10:]
+#     function_calls = st.session_state.function_calls
+#     if isinstance(ups, list):
+#         for i, up in enumerate(ups):
+#             with st.spinner(f"Waiting for response {i} of {len(ups)} from {model}."):
+#                 chat_up_user(up, messages, function_calls, model)
+#     else:
+#         with st.spinner(f"Waiting for response from {model}."):
+#             chat_up_user(ups, messages, function_calls, model)
+#     st.session_state.messages = messages
+#     print_to_log_info('ask_a_question_with_context time:', time.time()-t)
+
+
+# def reset_messages():
+#     assert st.session_state.player_id is not None, "Oops. Player number is None."
+#     assert st.session_state.system_prompt is not None, "Oops. System prompt is None."
+#     augmented_system_prompt = st.session_state.system_prompt
+#     #augmented_system_prompt += f" Player Number is '{st.session_state.player_id}'."
+#     #augmented_system_prompt += f" Player Name is '{st.session_state.player_name}'."
+#     # todo: howell, individual, team not implemented!
+#     #augmented_system_prompt += f" Game Date is always {st.session_state.game_date}."
+#     #augmented_system_prompt += f" Event ID is always {st.session_state.session_id}."
+#     #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
+#     #augmented_system_prompt += f" My Player Direction is always {st.session_state.player_direction[0]}."
+#     #augmented_system_prompt += f" My partner's Player Direction is always {st.session_state.partner_direction[0]}."
+#     #augmented_system_prompt += f" My partner's Player Number is always '{st.session_state.player_id}'."
+#     #augmented_system_prompt += f" My partner's Player Name is always '{st.session_state.partner_name}'."
+#     #augmented_system_prompt += f" My Pair Direction is always {st.session_state.pair_direction}."
+#     #augmented_system_prompt += f" My 'Pair Number {st.session_state.opponent_pair_direction}' is always {st.session_state.pair_number}."
+#     #augmented_system_prompt += f" Opponent Pair Direction is always {st.session_state.opponent_pair_direction}."
+#     #augmented_system_prompt += f" My Session Id is always {st.session_state.session_id}."
+#     #augmented_system_prompt += f" My Section Name is always {st.session_state.section_name}."
+#     #augmented_system_prompt += f" \"My boards means\" boards having a Declarer Number of always {st.session_state.player_id}."
+#     #augmented_system_prompt += f" \"Our boards\" means boards having a Pair Number always {st.session_state.pair_direction} of {st.session_state.pair_number}."
+#     #augmented_system_prompt += f" \"Boards I declared\" means boards having my Declarer Number of always {st.session_state.player_id}."
+#     #augmented_system_prompt += f" \"Boards my partner declared\" means boards having my Declarer Number of always {st.session_state.player_id}"
+#     #augmented_system_prompt += f" \"Boards we declared\" means boards having a Declarer Number of always {st.session_state.player_id} of {st.session_state.player_id}."
+#     #augmented_system_prompt += f" \"Boards we played\" means boards having a Pair Number always {st.session_state.pair_direction} of {st.session_state.pair_number}."
+#     st.session_state.augmented_system_prompt = augmented_system_prompt
+#     system_message = {"role": "system",
+#                       "content": st.session_state.augmented_system_prompt}
+#     messages = [system_message]
+#     st.session_state.messages = messages
 
 
 def player_id_change():
     # assign changed textbox value (player_id_input) to player_id
     player_id = st.session_state.player_id_input
-    if not chat_initialize(player_id, None):
-        pass
+    if not change_game_state(player_id, None):
+        st.session_state.player_id = None
 
 
 def debug_player_id_names_change():
@@ -944,21 +895,25 @@ def debug_player_id_names_change():
     player_id_name = st.session_state.debug_player_id_names_selectbox
     #if not chat_initialize(player_id_name[0], None):  # grab player number
     #    chat_initialize(st.session_state.player_id, None)
-    chat_initialize(player_id_name[0], None)
+    change_game_state(player_id_name[0], None)
 
 
 def club_session_id_change():
     #st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
-    session_id = int(st.session_state.club_session_ids_selectbox.split(',')[0]) # split selectbox item on commas. only want first split.
-    if not chat_initialize(st.session_state.player_id, session_id):
-        chat_initialize(st.session_state.player_id, None)
+    selection = st.session_state.club_session_ids_selectbox
+    if selection is not None:
+        session_id = int(selection.split(',')[0]) # split selectbox item on commas. only want first split.
+        if not change_game_state(st.session_state.player_id, session_id):
+            st.session_state.session_id = None
 
 
 def tournament_session_id_change():
     #st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
-    tournament_session_id = st.session_state.tournament_session_ids_selectbox.split(',')[0] # split selectbox item on commas. only want first split.
-    if not chat_initialize(st.session_state.player_id, tournament_session_id):
-        chat_initialize(st.session_state.player_id, None)
+    selection = st.session_state.tournament_session_ids_selectbox
+    if selection is not None:
+        session_id = selection.split(',')[0] # split selectbox item on commas. only want first split.
+        if not change_game_state(st.session_state.player_id, session_id):
+            st.session_state.session_id = None
 
 
 def show_sql_query_change():
@@ -966,9 +921,10 @@ def show_sql_query_change():
     st.session_state.show_sql_query = st.session_state.sql_query_checkbox
 
 
-def ai_api_selectbox_change():
-    # assign changed selectbox value (ai_api_selectbox) to ai_api
-    st.session_state.ai_api = st.session_state.ai_api_selectbox
+# todo: feature removed
+# def ai_api_selectbox_change():
+#     # assign changed selectbox value (ai_api_selectbox) to ai_api
+#     st.session_state.ai_api = st.session_state.ai_api_selectbox
 
 
 def prompts_selectbox_change():
@@ -977,22 +933,14 @@ def prompts_selectbox_change():
         if st.session_state.vetted_prompt_titles is not None: # this fixes the situation when an unsupported game event is selected.
             box = st.session_state.vetted_prompt_titles[title]
             ups = box['prompts']
-            if len(ups):
-                ask_questions_without_context(ups, st.session_state.ai_api)
-            read_favorites()
+            # if len(ups):
+            #     ask_questions_without_context(ups, st.session_state.ai_api)
+            read_configs()
 
 
 def single_dummy_sample_count_changed():
     st.session_state.single_dummy_sample_count = st.session_state.single_dummy_sample_count_number_input
-    with st.spinner(f"Calculating single dummy probabilities using {st.session_state.single_dummy_sample_count} trials per board. {st.session_state.df['Board'].nunique()} boards. Please wait..."):
-        #with Profiler():
-        st.session_state.df, st.session_state.sd_cache_d = Augment_Single_Dummy(
-            st.session_state.df, {}, st.session_state.single_dummy_sample_count, st.session_state.matchpoint_ns_d) # using {} to disable cache
-        # must reregister if df is changed!
-        st.session_state.con.register(st.session_state.con_register_name, st.session_state.df)
-        # todo: experimenting with outputing a dataframe of some SD relevant columns
-        ShowDataFrameTable(st.session_state.df[['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']+st.session_state.df.filter(regex=r'^SD').columns.to_list(
-        )].sort_values(['Board'], tooltips=st.session_state.dataframe_tooltips).drop_duplicates(subset=['Board', 'PBN', 'Pair_Direction_Declarer', 'Direction_Declarer', 'BidSuit']), key='single_dummy_sample_count_changed_sd_df')
+    change_game_state(st.session_state.player_id, st.session_state.session_id)
 
 
 def chat_input_on_submit():
@@ -1007,7 +955,6 @@ def chat_input_on_submit():
     with st.session_state.main_section_container:
         for i, (prompt,sql_query) in enumerate(st.session_state.sql_queries):
             ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'user_query_main_doit_{i}')
-
 
 
 # import mlBridgeAiLib
@@ -1101,22 +1048,30 @@ def chat_input_on_submit():
 
 #     return df # return newly created df. created by df = pd.concat().
 
-def read_favorites():
+def read_configs():
+
+    st.session_state.default_favorites_file = pathlib.Path(
+        'default.favorites.json')
+    st.session_state.player_id_custom_favorites_file = pathlib.Path(
+        f'favorites/{st.session_state.player_id}.favorites.json')
+    st.session_state.debug_favorites_file = pathlib.Path(
+        'favorites/debug.favorites.json')
 
     if st.session_state.default_favorites_file.exists():
         with open(st.session_state.default_favorites_file, 'r') as f:
             favorites = json.load(f)
-            st.session_state.favorites = favorites
+        st.session_state.favorites = favorites
+        #st.session_state.vetted_prompts = get_vetted_prompts_from_favorites(favorites)
 
     if st.session_state.player_id_custom_favorites_file.exists():
         with open(st.session_state.player_id_custom_favorites_file, 'r') as f:
             player_id_favorites = json.load(f)
-            st.session_state.player_id_favorites = player_id_favorites
+        st.session_state.player_id_favorites = player_id_favorites
 
     if st.session_state.debug_favorites_file.exists():
         with open(st.session_state.debug_favorites_file, 'r') as f:
             debug_favorites = json.load(f)
-            st.session_state.debug_favorites = debug_favorites
+        st.session_state.debug_favorites = debug_favorites
 
 
 def reset_data():
@@ -1133,24 +1088,27 @@ def reset_data():
     # game
     st.session_state.game_date = None
     st.session_state.session_id = None
+    st.session_state.acbl_results_page = None
     st.session_state.json_results_d = None
 
     # chat
     #st.session_state.ai_api = None
-    st.session_state.system_prompt = None
-    st.session_state.augmented_system_prompt = None
-    st.session_state.messages = []
-    st.session_state.dataframes = defaultdict(list)
+    #st.session_state.system_prompt = None
+    #st.session_state.augmented_system_prompt = None
+    #st.session_state.messages = []
+    #st.session_state.dataframes = defaultdict(list)
+    #st.session_state.matchpoint_ns_d = None
+    #st.session_state.function_calls = None
+
+    # data
     st.session_state.df = None
-    st.session_state.matchpoint_ns_d = None
-    st.session_state.function_calls = None
     st.session_state.do_not_cache_df = True
 
     # sql
     #st.session_state.con = None
     st.session_state.con_register_name = 'self' # todo: this and others have duplicate initializations.
     #st.session_state.show_sql_query = None
-    st.session_state.commands_sql = None
+    #st.session_state.commands_sql = None
     st.session_state.df_meta = None
     st.session_state.df_schema_string = None
 
@@ -1180,47 +1138,48 @@ def reset_data():
     st.session_state.session_id = None
     st.session_state.section_name = None
 
-    main_message_df_count = 0
-    for k, v in st.session_state.items():
-        print_to_log_info('session_state:',k)
-        if k.startswith('main_messages_df_'):
-            # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
-            #del st.session_state[k] # delete the key. This is a hack. It's not clear why the key is not being deleted when the container is destroyed.
-            main_message_df_count += 1
-    print_to_log_info('main_message_df_: count:',main_message_df_count,st.session_state.df_unique_id)
+    # main_message_df_count = 0
+    # for k, v in st.session_state.items():
+    #     print_to_log_info('session_state:',k)
+    #     if k.startswith('main_messages_df_'):
+    #         # assert st.session_state[k] is None # This happened once on 29-Sep-2023. Not sure why. Maybe there's a timing issue with st.session_state and st.container being destroyed?
+    #         #del st.session_state[k] # delete the key. This is a hack. It's not clear why the key is not being deleted when the container is destroyed.
+    #         main_message_df_count += 1
+    # print_to_log_info('main_message_df_: count:',main_message_df_count,st.session_state.df_unique_id)
 
-    # These files are repeatedly reloaded for development purposes. Only takes a second.
+    # # These files are repeatedly reloaded for development purposes. Only takes a second.
 
-    system_prompt_file = pathlib.Path('system_prompt.txt')
-    if not system_prompt_file.exists():
-        st.write(f"Oops. {system_prompt_file} file does not exist.")
-        st.stop()
-    with open(system_prompt_file, 'r') as f:
-        system_prompt = f.read()  # text string
-        st.session_state.system_prompt = system_prompt
+    # system_prompt_file = pathlib.Path('system_prompt.txt')
+    # if not system_prompt_file.exists():
+    #     st.write(f"Oops. {system_prompt_file} file does not exist.")
+    #     st.stop()
+    # with open(system_prompt_file, 'r') as f:
+    #     system_prompt = f.read()  # text string
+    #     st.session_state.system_prompt = system_prompt
 
-    commands_sql_file = pathlib.Path('commands.sql')
-    if commands_sql_file.exists():
-        with open(commands_sql_file, 'r') as f:
-            commands_sql = f.read()  # text string
-            st.session_state.commands_sql = commands_sql
+    # commands_sql_file = pathlib.Path('commands.sql')
+    # if commands_sql_file.exists():
+    #     with open(commands_sql_file, 'r') as f:
+    #         commands_sql = f.read()  # text string
+    #         st.session_state.commands_sql = commands_sql
 
-    ai_apis_file = pathlib.Path('ai_apis.json')
-    if ai_apis_file.exists():
-        with open(ai_apis_file, 'r') as f:
-            ai_apis = json.load(f)  # dict
-            st.session_state.ai_apis = ai_apis['AI_APIs']['Models']
-            assert len(st.session_state.ai_apis) > 0 and DEFAULT_AI_MODEL in st.session_state.ai_apis, f"Oops. {DEFAULT_AI_MODEL} not in {st.session_state.ai_apis}."
-    else:
-        st.session_state.ai_apis = [DEFAULT_AI_MODEL]
-    st.session_state.ai_api = DEFAULT_AI_MODEL
+    # todo: feature removed
+    # ai_apis_file = pathlib.Path('ai_apis.json')
+    # if ai_apis_file.exists():
+    #     with open(ai_apis_file, 'r') as f:
+    #         ai_apis = json.load(f)  # dict
+    #         st.session_state.ai_apis = ai_apis['AI_APIs']['Models']
+    #         assert len(st.session_state.ai_apis) > 0 and DEFAULT_AI_MODEL in st.session_state.ai_apis, f"Oops. {DEFAULT_AI_MODEL} not in {st.session_state.ai_apis}."
+    # else:
+    #     st.session_state.ai_apis = [DEFAULT_AI_MODEL]
+    # st.session_state.ai_api = DEFAULT_AI_MODEL
 
 
 def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
-    # fastai:{fastai.__version__} pytorch:{torch.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__}
+    # obsolete when chat was removed: Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__}
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__} numpy:{np.__version__} polars:{pl.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} Query Params:{st.query_params.to_dict()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} numpy:{np.__version__} polars:{pl.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} Query Params:{st.query_params.to_dict()}")
 
 
 def create_sidebar():
@@ -1232,6 +1191,9 @@ def create_sidebar():
     st.sidebar.text_input(
         "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id, key='player_id_input')
 
+    if st.session_state.player_id is None:
+        return
+
     st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
     )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
 
@@ -1239,6 +1201,7 @@ def create_sidebar():
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
     if st.session_state.session_id is None:
+        st.error(f'Please choose a new game or tournament session from the left sidebar.')
         st.stop()
 
     # if st.sidebar.download_button(label="Download Personalized Report",
@@ -1256,7 +1219,7 @@ def create_sidebar():
         'favorites/'+st.session_state.player_id+'.favorites.json')
     st.session_state.debug_favorites_file = pathlib.Path(
         'favorites/debug.favorites.json')
-    read_favorites()
+    read_configs()
 
     help_file = pathlib.Path('help.md')
     if help_file.exists():
@@ -1270,64 +1233,72 @@ def create_sidebar():
 
     st.session_state.pdf_link = st.sidebar.empty()
 
+    if st.session_state.session_id is not None:
+        if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
+            st.session_state.acbl_results_page = st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]
+            markdown_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.acbl_results_page})"
+        else:
+            st.session_state.acbl_results_page = st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]
+            markdown_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.acbl_results_page})"
+        st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
+
     st.sidebar.divider()
+
     st.sidebar.write(
         'Below are favorite prompts. Either click a button below or enter a question in the prompt box at the bottom of the main section to the right.')
 
     if st.session_state.favorites is not None:
         st.sidebar.write('Favorite Prompts')
 
-        # create dict of vetted prompts
-        st.session_state.vetted_prompt_titles = {
-            vp['title']: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()
-        }
-        st.session_state.vetted_prompts = {
-            k: vp for k, vp in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].items()
-        }
-
         # favorite buttons
+        selected_boxes_vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+        st.session_state.vetted_prompt_titles = {prompt['title']:prompt for prompt in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].values()}
+        st.session_state.vetted_prompts = {}
         for k, button in st.session_state.favorites['Buttons'].items():
-            if st.sidebar.button(button['title'], help=button['help'], key=k):
-                # temp - re-read for every button click for realtime debugging.
-                st.session_state.sql_query_mode = False
-                read_favorites()
-                ups = []
-                for up in st.session_state.favorites['Buttons'][k]['prompts']:
-                    if up.startswith('@'):
-                        box = st.session_state.vetted_prompts[up[1:]]
-                        ups.extend(box['prompts']) # create list of lists in case prompts are dependent on previous prompts
-                    else:
-                        ups.append({'prompt':up})
-                # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
-                if len(ups) > 4:
-                    reset_messages()
-                    ask_questions_without_context(
-                        ups, st.session_state.ai_api)
-                    #st.rerun() # this caused some systems to loop. not sure why.
+            # create dict of vetted prompts
+            # default list of vetted prompts is
+            ups = []
+            for up in button['prompts']:
+                if up.startswith('@'):
+                    box = up[1:]
+                    ups.extend(selected_boxes_vetted_prompts[box]['prompts'])
                 else:
-                    ask_questions_without_context(ups, st.session_state.ai_api)
+                    ups.append({'prompt':up})
+            st.session_state.vetted_prompts[k] = ups
+            if st.sidebar.button(button['title'], help=button['help'], key=k):
+                st.session_state.sql_query_mode = False
+                
+                # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
+                # if len(ups) > 4:
+                #     reset_messages()
+                #     ask_questions_without_context(
+                #         ups, st.session_state.ai_api)
+                #     #st.rerun() # this caused some systems to loop. not sure why.
+                # else:
+                #     ask_questions_without_context(ups, st.session_state.ai_api)
             
         st.session_state.dataframe_tooltips = {
             col: tip for col, tip in st.session_state.favorites['ToolTips'].items()
         }
 
-    if st.session_state.player_id_favorites is not None:
-        st.sidebar.write(
-            f"Player Number {st.session_state.player_id} Favorites")
+    # todo: reimplement user-specific favorites
+    # if st.session_state.player_id_favorites is not None:
+    #     st.sidebar.write(
+    #         f"Player Number {st.session_state.player_id} Favorites")
 
-        # player number favorite buttons
-        for k, button in st.session_state.player_id_favorites['Buttons'].items():
-            if st.sidebar.button(button['title'], help=button['help'], key=k):
-                # temp - re-read for every button click for realtime debugging.
-                read_favorites()
-                ups = []
-                for up in st.session_state.player_id_favorites['Buttons'][k]['prompts']:
-                    if up.startswith('@'):
-                        box = st.session_state.vetted_prompts[up[1:]]
-                        ups.append(box['prompts']) # create list of lists in case prompts are dependent on previous prompts
-                    else:
-                        ups.append(up)
-                ask_questions_without_context(ups, st.session_state.ai_api)
+    #     # player number favorite buttons
+    #     for k, button in st.session_state.player_id_favorites['Buttons'].items():
+    #         if st.sidebar.button(button['title'], help=button['help'], key=k):
+    #             # temp - re-read for every button click for realtime debugging.
+    #             #read_favorites()
+    #             ups = []
+    #             for up in st.session_state.player_id_favorites['Buttons'][k]['prompts']:
+    #                 if up.startswith('@'):
+    #                     box = st.session_state.vetted_prompts[up[1:]]
+    #                     ups.append(box['prompts']) # create list of lists in case prompts are dependent on previous prompts
+    #                 else:
+    #                     ups.append(up)
+    #             # ask_questions_without_context(ups, st.session_state.ai_api)
 
     with st.sidebar.expander('Developer Settings', False):
 
@@ -1344,18 +1315,20 @@ def create_sidebar():
         st.checkbox(
             "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
 
-        # favorite prompts selectboxes
-        if len(st.session_state.vetted_prompts):
-            st.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
-                                    on_change=prompts_selectbox_change, key='prompts_selectbox')
+        # todo: reimplement ability to select individual prompts
+        # # favorite prompts selectboxes
+        # if len(st.session_state.vetted_prompt_titles):
+        #     st.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
+        #                             on_change=prompts_selectbox_change, key='prompts_selectbox')
 
-        if st.button("Clear Conversation", key='clear_chat_button'):
-            reset_messages()
-            streamlitlib.move_focus()
+        # if st.button("Clear Conversation", key='clear_chat_button'):
+        #     reset_messages()
+        #     streamlitlib.move_focus()
 
-        if len(st.session_state.ai_apis):
-            st.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
-                                    on_change=ai_api_selectbox_change, key='ai_api_selectbox')
+        # todo: feature removed
+        # if len(st.session_state.ai_apis):
+        #     st.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
+        #                             on_change=ai_api_selectbox_change, key='ai_api_selectbox')
 
         # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
         st.number_input("Single Dummy Random Trials", min_value=1, max_value=100,
@@ -1363,97 +1336,97 @@ def create_sidebar():
 
     print_to_log_info('create_sidebar time:', time.time()-t)
 
-def create_tab_bar():
+# def create_tab_bar():
 
-    t = time.time()
-    with st.container():
+#     t = time.time()
+#     with st.container():
 
-        chat_tab, data, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
-            ['Chat', 'Data', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
-        streamlitlib.stick_it_good()
+#         chat_tab, data, dtypes, schema, commands_sql, URLs, system_prompt_tab, favorites, help, release_notes, about, debug = st.tabs(
+#             ['Chat', 'Data', 'dtypes', 'Schema', 'SQL', 'URLs', 'Sys Prompt', 'Favorites', 'Help', 'Release Notes', 'About', 'Debug'])
+#         streamlitlib.stick_it_good()
 
-        with chat_tab:
-            pass
+#         with chat_tab:
+#             pass
 
-        with data:
-            pass
-            #if st.session_state.df is not None:
-                # AgGrid unreliable in displaying within tab so using st.dataframe instead
-                # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
-            #   ShowDataFrameTable(st.session_state.df, key='data_tab_df', tooltips=st.session_state.dataframe_tooltips)
-                #st.dataframe(st.session_state.df)
+#         with data:
+#             pass
+#             #if st.session_state.df is not None:
+#                 # AgGrid unreliable in displaying within tab so using st.dataframe instead
+#                 # todo: why? Neil's event 846812 causes id error. must be NaN? # .style.format({col:'{:,.2f}' for col in st.session_state.df.select_dtypes('float')}))
+#             #   ShowDataFrameTable(st.session_state.df, key='data_tab_df', tooltips=st.session_state.dataframe_tooltips)
+#                 #st.dataframe(st.session_state.df)
 
-        with dtypes:
-            pass
-            # AgGrid unreliable in displaying within tab. Also issue with Series.
-            # gave 'Serialization of dataframe to Arrow table was unsuccessful' .astype('string') was appended.
-            #st.dataframe(st.session_state.df.to_pandas().dtypes.astype('string'))
+#         with dtypes:
+#             pass
+#             # AgGrid unreliable in displaying within tab. Also issue with Series.
+#             # gave 'Serialization of dataframe to Arrow table was unsuccessful' .astype('string') was appended.
+#             #st.dataframe(st.session_state.df.to_pandas().dtypes.astype('string'))
 
-        with schema:
-            if st.session_state.df_schema_string is not None:
-                # st.dataframe(st.session_state.df_meta)
-                st.write(st.session_state.df_schema_string)
-                # todo: index column shows twice. once as index and once as column. fix.
-                # st.divider()
-                # st.dataframe(pd.concat(
-                #    [st.session_state.df.columns.to_series(), st.session_state.df.dtypes.name], axis='columns')) # gave arrow conversion error until .name was appended.
+#         with schema:
+#             if st.session_state.df_schema_string is not None:
+#                 # st.dataframe(st.session_state.df_meta)
+#                 st.write(st.session_state.df_schema_string)
+#                 # todo: index column shows twice. once as index and once as column. fix.
+#                 # st.divider()
+#                 # st.dataframe(pd.concat(
+#                 #    [st.session_state.df.columns.to_series(), st.session_state.df.dtypes.name], axis='columns')) # gave arrow conversion error until .name was appended.
 
-        with commands_sql:
-            st.header('SQL Commands')
-            #st.write('SQL commands are not yet editable. Use the SQL commands to explore the data.')
-            st.write(st.session_state.commands_sql)
+#         with commands_sql:
+#             st.header('SQL Commands')
+#             #st.write('SQL commands are not yet editable. Use the SQL commands to explore the data.')
+#             st.write(st.session_state.commands_sql)
 
-        with URLs:
-            st.write(
-                f"Player number is {st.session_state.player_id}")
-            st.divider()
-            st.write('Club Game URLs')
-            st.write(st.session_state.game_urls_d[st.session_state.player_id].values())
-            st.write('Tournament Sessions')
-            st.write(st.session_state.tournament_session_urls_d[st.session_state.player_id].values())
+#         with URLs:
+#             st.write(
+#                 f"Player number is {st.session_state.player_id}")
+#             st.divider()
+#             st.write('Club Game URLs')
+#             st.write(st.session_state.game_urls_d[st.session_state.player_id].values())
+#             st.write('Tournament Sessions')
+#             st.write(st.session_state.tournament_session_urls_d[st.session_state.player_id].values())
 
-        with system_prompt_tab:
-            st.header('System Prompt')
-            # todo: make system prompt editable. useful for experimenting.
-            #st.write('The system prompt is not yet editable.')
-            st.write(st.session_state.augmented_system_prompt)
+#         with system_prompt_tab:
+#             st.header('System Prompt')
+#             # todo: make system prompt editable. useful for experimenting.
+#             #st.write('The system prompt is not yet editable.')
+#             st.write(st.session_state.augmented_system_prompt)
 
-        with favorites:
-            read_favorites()  # todo: update each time for debugging
-            st.header(
-                f"Default Favorites:{st.session_state.default_favorites_file}")
-            if st.session_state.favorites is not None:
-                st.write(st.session_state.favorites)
-            st.divider()
-            st.header(
-                f"Player Number Custom Favorites:{st.session_state.player_id_custom_favorites_file}")
-            if st.session_state.player_id_favorites is not None:
-                st.write(st.session_state.player_id_favorites)
-            if st.session_state.debug_favorites is not None:
-                st.write(st.session_state.debug_favorites)
+#         with favorites:
+#             read_favorites()  # todo: update each time for debugging
+#             st.header(
+#                 f"Default Favorites:{st.session_state.default_favorites_file}")
+#             if st.session_state.favorites is not None:
+#                 st.write(st.session_state.favorites)
+#             st.divider()
+#             st.header(
+#                 f"Player Number Custom Favorites:{st.session_state.player_id_custom_favorites_file}")
+#             if st.session_state.player_id_favorites is not None:
+#                 st.write(st.session_state.player_id_favorites)
+#             if st.session_state.debug_favorites is not None:
+#                 st.write(st.session_state.debug_favorites)
 
-        with help:
-            if st.session_state.help is None:
-                st.write('Help not available.')
-            else:
-                st.markdown(st.session_state.help)
+#         with help:
+#             if st.session_state.help is None:
+#                 st.write('Help not available.')
+#             else:
+#                 st.markdown(st.session_state.help)
 
-        with release_notes:
-            if st.session_state.release_notes is None:
-                st.write('No release notes available.')
-            else:
-                st.markdown(st.session_state.release_notes)
+#         with release_notes:
+#             if st.session_state.release_notes is None:
+#                 st.write('No release notes available.')
+#             else:
+#                 st.markdown(st.session_state.release_notes)
 
-        with about:
-            content = slash_about()
-            st.write(content)
-            app_info()
+#         with about:
+#             content = slash_about()
+#             st.write(content)
+#             app_info()
 
-        with debug:
-            st.header('Debug')
-            st.write('Not yet implemented.')
+#         with debug:
+#             st.header('Debug')
+#             st.write('Not yet implemented.')
 
-    print_to_log_info('create_tab_bar time:', time.time()-t)
+#     print_to_log_info('create_tab_bar time:', time.time()-t)
 
 
 # def read_favorites():
@@ -1474,16 +1447,11 @@ def create_tab_bar():
 #             st.session_state.debug_favorites = debug_favorites
 
 
-def load_vetted_prompts(json_file, category='Summarize'):
-    sql_queries = []
-    if json_file.exists():
-        with open(json_file) as f:
-            json_data = json.load(f)
-        
-        # Navigate the JSON path to get the appropriate list of prompts
-        vetted_prompts = [json_data['SelectBoxes']['Vetted_Prompts'][p[1:]] for p in json_data["Buttons"][category]['prompts']]
+# def get_vetted_prompts_from_favorites(favorites, category='Summarize'):
+#     # Navigate the JSON path to get the appropriate list of prompts
+#     vetted_prompts = [favorites['SelectBoxes']['Vetted_Prompts'][p[1:]] for p in favorites["Buttons"][category]['prompts']]
     
-    return vetted_prompts
+#     return vetted_prompts
 
 
 # todo: similar to prompt_keyword_replacements
@@ -1499,50 +1467,41 @@ def process_prompt_macros(sql_query):
     return sql_query
 
 
-def show_dfs():
+def write_main_window():
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
-    analyze_game_stqdm = stqdm(list(st.session_state.vetted_prompts), desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
+    analyze_game_stqdm = stqdm(st.session_state.vetted_prompts['Summarize'], desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
     st.session_state.main_section_container = st.container(border=True)
     with st.session_state.main_section_container:
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
         report_creator = "Created by https://acbl.postmortem.chat"
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
+        report_acbl_results_page = f"ACBL Results Page: {st.session_state.acbl_results_page}"
         report_your_match_info = f"Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
+        st.markdown(f"##### {report_acbl_results_page}")
         st.markdown(f"#### {report_your_match_info}")
         pdf_assets = st.session_state.pdf_assets
         pdf_assets.clear()
         pdf_assets.append(f"# {report_title}")
         pdf_assets.append(f"#### {report_creator}")
         pdf_assets.append(f"### {report_event_info}")
+        pdf_assets.append(f"#### {report_acbl_results_page}")
         pdf_assets.append(f"### {report_your_match_info}")
-        if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
-            launch_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
-        else:
-            launch_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]})"
-        st.sidebar.markdown(launch_acbl_results_page, unsafe_allow_html=True)
-        pdf_assets.append(launch_acbl_results_page)
         sql_query_count = 0
-        for category in analyze_game_stqdm: #[:-3]:
-            #print('category:',category)
-            if "prompts" in category:
-                for i,prompt in enumerate(category["prompts"]):
-                    #print('prompt:',prompt) 
-                    if "sql" in prompt and prompt["sql"]:
-                        if i == 0:
-                            streamlit_chat.message(f"Morty: {category['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
-                            pdf_assets.append(f"### {category['help']}")
-                        #print('sql:',prompt["sql"])
-                        prompt_sql = prompt['sql']
-                        sql_query = process_prompt_macros(prompt_sql)
-                        query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
-                        if query_df is not None:
-                            pdf_assets.append(query_df)
-                        sql_query_count += 1
-                        #break
-            #break
+        for i,v in enumerate(analyze_game_stqdm): #[:-3]:
+            if "sql" in v and v["sql"]:
+                if i == 0:
+                    streamlit_chat.message(f"Morty: {v['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
+                    pdf_assets.append(f"### {v['help']}")
+                #print('sql:',prompt["sql"])
+                prompt_sql = v['sql']
+                sql_query = process_prompt_macros(prompt_sql)
+                query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
+                if query_df is not None:
+                    pdf_assets.append(query_df)
+                sql_query_count += 1
 
         # As a text link
         #st.markdown('[Back to Top](#your-personalized-report)')
@@ -1570,31 +1529,34 @@ def ask_sql_query():
                 st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
 
 
-def create_main_section():
-
-    content = slash_about()
-    streamlit_chat.message(f"Morty: {content}", key='create_main_section_about_message', logo=st.session_state.assistant_logo)
-    if st.session_state.show_sql_query:
-        streamlit_chat.message(
-            f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar or ask me questions using the **prompt box below**. Queries take about 10 seconds to complete.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
+def create_ui():
+    if st.session_state.sql_query_mode:
+        ask_sql_query()
     else:
-        streamlit_chat.message(
-            f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
+        create_sidebar()
+        #create_tab_bar()
+        if st.session_state.session_id is not None:
+            write_main_window()
 
-    st.session_state.default_favorites_file = pathlib.Path(
-        'default.favorites.json')
-    st.session_state.player_id_custom_favorites_file = pathlib.Path(
-        f'favorites/{st.session_state.player_id}.favorites.json')
-    st.session_state.debug_favorites_file = pathlib.Path(
-        'favorites/debug.favorites.json')
-    read_favorites()
-    st.session_state.vetted_prompts = load_vetted_prompts(st.session_state.default_favorites_file)
+# def initialize_new_player():
 
-    print_to_log_info('messages: len:', len(st.session_state.messages))
+#     content = slash_about()
+#     streamlit_chat.message(f"Morty: {content}", key='create_main_section_about_message', logo=st.session_state.assistant_logo)
+#     if st.session_state.show_sql_query:
+#         streamlit_chat.message(
+#             f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar or ask me questions using the **prompt box below**. Queries take about 10 seconds to complete.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
+#     else:
+#         streamlit_chat.message(
+#             f"Morty: Press the **Summarize** or **AI Predictions** button in the left sidebar.", key='chat_messages_user_no_messages', logo=st.session_state.assistant_logo)
 
-    show_dfs()
+#     #assert isinstance(player_id_l, list) and len(
+#     #    player_id_l) == 1, player_id_l
+#     #player_id = player_id_l[0]
+#     if not change_game_state(st.session_state.player_id, None):
+#         st.stop()
+        
+#     create_main_section()
 
-    ask_sql_query()
 
 # def create_main_section():
 
@@ -1764,11 +1726,12 @@ def main():
 #         streamlit_chat.message(
 #             f"Hi. I'm Morty. Your friendly postmortem chatbot."+a, key='vacation_message_1'+a, avatar_style=a)
 
-
+    # first time through
     if "player_id" not in st.session_state:
+
         # initialize values which will never change
         st.set_page_config(page_title="Morty", page_icon=":robot_face:", layout="wide")
-        streamlitlib.widen_scrollbars()
+        #streamlitlib.widen_scrollbars() # removed because it was causing a problem for Aggrid table height.
         st.session_state.app_datetime = datetime.fromtimestamp(pathlib.Path(
             __file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
         # in case there's no ai_apis.json file
@@ -1779,7 +1742,7 @@ def main():
             pathlib.WindowsPath = pathlib.PosixPath
         st.session_state.main_section_container = st.empty()
         st.session_state.pdf_assets = []
-        st.session_state.ai_api = DEFAULT_AI_MODEL
+        #st.session_state.ai_api = DEFAULT_AI_MODEL # feature removed
         st.session_state.con = duckdb.connect()
         st.session_state.con_register_name = 'self'
         st.session_state.show_sql_query = os.getenv('STREAMLIT_ENV') == 'development'
@@ -1790,11 +1753,14 @@ def main():
         st.session_state.game_urls_d = {}
         st.session_state.tournament_session_urls_d = {}
         st.session_state.single_dummy_sample_count = 10
-        st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
+        st.session_state.do_not_cache_df = True
+
+        #st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
         #st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
         #st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
         st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
         st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+
         # causes streamlit connection error
         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
         #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:
@@ -1802,22 +1768,16 @@ def main():
         #         if 'player_id' not in st.query_params:
         #             obsolete? st.experimental_set_query_params(player_id=2663279)
         # http://localhost:8501/?player_id=2663279
-        if 'player_id' in st.query_params:
-            player_id = st.query_params['player_id']
-            if not isinstance(player_id, str):
-                st.stop()
-            #assert isinstance(player_id_l, list) and len(
-            #    player_id_l) == 1, player_id_l
-            #player_id = player_id_l[0]
-            if not chat_initialize(player_id, None):
-                st.stop()
+
+    if 'player_id' in st.query_params:
+        player_id = st.query_params['player_id']
+        if not isinstance(player_id, str):
+            st.error(f'player_id must be a string {player_id}')
+            st.stop()
+        st.session_state.player_id = player_id
 
     if st.session_state.player_id is None:
         st.sidebar.caption(f"App:{st.session_state.app_datetime}")
-        if st.__version__ < '1.27.0':
-            st.error('Please use http://postmortem.chat')
-            st.stop()
-        # temp!
         if False:
             streamlit_chat.message(
                 "Hi. I'm Morty. Your friendly postmortem chatbot.", key='vacation_message_1', logo=st.session_state.assistant_logo)
@@ -1842,16 +1802,7 @@ def main():
             app_info()
 
     else:
-         
-        create_sidebar()
-
-        #create_tab_bar()
-
-        if st.session_state.sql_query_mode:
-            ask_sql_query()
-        else:
-            create_main_section()
-
+        create_ui()
 
 if __name__ == '__main__':
     main()
