@@ -1469,7 +1469,9 @@ def process_prompt_macros(sql_query):
 
 def write_main_window():
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
-    analyze_game_stqdm = stqdm(st.session_state.vetted_prompts['Summarize'], desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
+    # todo: need to pass the Button title to the stqdm description. this is a hack until implemented.
+    st.session_state.button_title = 'Summarize'
+    analyze_game_stqdm = stqdm(st.session_state.vetted_prompts[st.session_state.button_title], desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
     st.session_state.main_section_container = st.container(border=True)
     with st.session_state.main_section_container:
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
@@ -1530,13 +1532,13 @@ def ask_sql_query():
 
 
 def create_ui():
-    if st.session_state.sql_query_mode:
-        ask_sql_query()
-    else:
-        create_sidebar()
+    create_sidebar()
+    if not st.session_state.sql_query_mode:
         #create_tab_bar()
         if st.session_state.session_id is not None:
             write_main_window()
+    ask_sql_query()
+
 
 # def initialize_new_player():
 
