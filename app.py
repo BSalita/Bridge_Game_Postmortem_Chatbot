@@ -1120,7 +1120,7 @@ def reset_data():
     st.session_state.debug_favorites = None
     st.session_state.debug_favorites_file = None
     st.session_state.prompts_selectbox = 'Choose a Prompt'
-    st.session_state.vetted_prompts = None
+    #st.session_state.vetted_prompts = None
     st.session_state.vetted_prompt_titles = None
     st.session_state.dataframe_tooltips = None
 
@@ -1253,18 +1253,10 @@ def create_sidebar():
         # favorite buttons
         selected_boxes_vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
         st.session_state.vetted_prompt_titles = {prompt['title']:prompt for prompt in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].values()}
-        st.session_state.vetted_prompts = {}
+        #st.session_state.vetted_prompts = {}
         for k, button in st.session_state.favorites['Buttons'].items():
             # create dict of vetted prompts
             # default list of vetted prompts is
-            ups = []
-            for up in button['prompts']:
-                if up.startswith('@'):
-                    box = up[1:]
-                    ups.extend(selected_boxes_vetted_prompts[box]['prompts'])
-                else:
-                    ups.append({'prompt':up})
-            st.session_state.vetted_prompts[k] = ups
             if st.sidebar.button(button['title'], help=button['help'], key=k):
                 st.session_state.sql_query_mode = False
                 
@@ -1467,11 +1459,9 @@ def process_prompt_macros(sql_query):
     return sql_query
 
 
-def write_main_window():
+def write_report():
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
     # todo: need to pass the Button title to the stqdm description. this is a hack until implemented.
-    st.session_state.button_title = 'Summarize'
-    analyze_game_stqdm = stqdm(st.session_state.vetted_prompts[st.session_state.button_title], desc='Morty is analyzing your game...', bar_format='{l_bar}{bar}')
     st.session_state.main_section_container = st.container(border=True)
     with st.session_state.main_section_container:
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
@@ -1491,19 +1481,25 @@ def write_main_window():
         pdf_assets.append(f"### {report_event_info}")
         pdf_assets.append(f"#### {report_acbl_results_page}")
         pdf_assets.append(f"### {report_your_match_info}")
+        st.session_state.button_title = 'Summarize' # todo: generalize to all buttons!
+        selected_button = st.session_state.favorites['Buttons'][st.session_state.button_title]
+        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
         sql_query_count = 0
-        for i,v in enumerate(analyze_game_stqdm): #[:-3]:
-            if "sql" in v and v["sql"]:
-                if i == 0:
-                    streamlit_chat.message(f"Morty: {v['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
-                    pdf_assets.append(f"### {v['help']}")
-                #print('sql:',prompt["sql"])
-                prompt_sql = v['sql']
-                sql_query = process_prompt_macros(prompt_sql)
-                query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
-                if query_df is not None:
-                    pdf_assets.append(query_df)
-                sql_query_count += 1
+        for stats in stqdm(selected_button['prompts'], desc='Creating personalized report...'):
+            assert stats[0] == '@', stats
+            stat = vetted_prompts[stats[1:]]
+            for i, prompt in enumerate(stat['prompts']):
+                if 'sql' in prompt and prompt['sql']:
+                    #print('sql:',prompt["sql"])
+                    if i == 0:
+                        streamlit_chat.message(f"Morty: {stat['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
+                        pdf_assets.append(f"### {stat['help']}")
+                    prompt_sql = prompt['sql']
+                    sql_query = process_prompt_macros(prompt_sql)
+                    query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
+                    if query_df is not None:
+                        pdf_assets.append(query_df)
+                    sql_query_count += 1
 
         # As a text link
         #st.markdown('[Back to Top](#your-personalized-report)')
@@ -1536,7 +1532,7 @@ def create_ui():
     if not st.session_state.sql_query_mode:
         #create_tab_bar()
         if st.session_state.session_id is not None:
-            write_main_window()
+            write_report()
     ask_sql_query()
 
 
