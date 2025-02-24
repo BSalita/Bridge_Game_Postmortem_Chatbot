@@ -923,16 +923,16 @@ class MatchPointAugmenter:
             )
 
 
-    def process_group(self, series_list: list[pl.Series]) -> pl.Series:
+    def _calculate_matchpoints_group(self, series_list: list[pl.Series]) -> pl.Series:
         col_values = series_list[0]
         score_ns_values = series_list[1]
         if col_values.is_null().sum() > 0:
             print(f"Warning: Null values in col_values: {col_values.is_null().sum()}")
-        if score_ns_values.is_null().sum() > 0:
-            print(f"Warning: Null values in score_ns_values: {score_ns_values.is_null().sum()}")
-        # todo: handle null values in col_values and score_ns_values
-        score_ns_values = score_ns_values.fill_null(0.0) # todo: always passes?
-        col_values = col_values.fill_null(0.0) # todo: always passes?
+        #if score_ns_values.is_null().sum() > 0:
+        #    print(f"Warning: Null values in score_ns_values: {score_ns_values.is_null().sum()}")
+        # todo: is there a more proper way to handle null values in col_values and score_ns_values?
+        score_ns_values = score_ns_values.fill_null(0.0) # todo: why do some have nulls? sitout?
+        col_values = col_values.fill_null(0.0) # todo: why do some have nulls? sitout?
         return pl.Series([
             sum(1.0 if val > score else 0.5 if val == score else 0.0 
                 for score in score_ns_values)
@@ -948,12 +948,14 @@ class MatchPointAugmenter:
         else:
             print('Calculate matchpoints over session, PBN, and Board.')
             # calc matchpoints on row-by-row basis
+            if self.df['Score_NS'].is_null().sum() > 0:
+                print(f"Warning: Null values in score_ns_values: {self.df['Score_NS'].is_null().sum()}")
             for col in self.all_score_columns + ['DD_Score_NS','Par_NS','EV_Score']:
                 assert 'MP_'+col not in self.df.columns, f"Column 'MP_{col}' already exists in DataFrame"
                 self.df = self.df.with_columns([
                         pl.map_groups(
                             exprs=[col, 'Score_Declarer'],
-                            function=self.process_group,
+                            function=self._calculate_matchpoints_group,
                             return_dtype=pl.Float64,
                         ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
                     ])
