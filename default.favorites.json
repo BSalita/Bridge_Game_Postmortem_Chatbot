@@ -35,6 +35,7 @@
 				"@Boards_We_Beat_Par",
 				"@Boards_We_Equaled_Par",
 				"@Boards_We_Underperformed_Par",
+				"@Boards_We_Underperformed_EV",
 				"@Expected_Value_Our_Boards",
 				"@Expected_Value_All_Boards",
 				"@Declarer_Rankings",
@@ -192,7 +193,7 @@
 					}
 				]
 			},
-			"Boards_We_Underperformed_SD": {
+			"Boards_We_Underperformed_EV": {
 				"title": "Boards You Underperformed Expected value (EV)",
 				"help": "**Showing boards which underperformed Expected value (EV).**",
 				"prompts": [
