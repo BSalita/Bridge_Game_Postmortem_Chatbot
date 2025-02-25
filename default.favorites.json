@@ -349,11 +349,11 @@
 			},
 			"Expected_Value_Our_Boards": {
 				"title": "Expected value (EV) Analysis of Our Boards",
-				"help": "**Showing Expected value (EV) analysis of our boards. SD is an expert's statistic. sd pct diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
+				"help": "**Showing Expected value (EV) analysis of our boards. SD is an expert's statistic. EV_Pct_Max_Diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
 				"comment": "EV_Par_Pct_Diff, Prob_Taking_ needed to avoid oy.",
 				"prompts": [
 					{
-						"prompt": "Show board, sd pct diff, contract, score, Par, pct, Par pct, sd pct, dd tricks, sd Par pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
+						"prompt": "Show board, ev max pct diff, contract, score, Par, pct, Par pct, sd pct, dd tricks, sd Par pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
 						"sql": "SELECT Board, EV_Pct_Max_Diff_{Pair_Direction} AS EV_Pct_Max_Diff, Contract, Score_{Pair_Direction} AS Score, Par_{Pair_Direction} AS Par, Pct_{Pair_Direction} AS Pct, Par_Pct_{Pair_Direction} AS Par_Pct, section_name, Pair_Number_NS, Pair_Number_EW, EV_Pct_Max_{Pair_Direction} AS EV_Pct, DD_Tricks, EV_Pct_Max_Diff_{Pair_Direction} AS EV_Par_Pct_Diff, EV_Max_{Pair_Direction} AS EV_Score, Prob_Taking_0, Prob_Taking_1, Prob_Taking_2, Prob_Taking_3, Prob_Taking_4, Prob_Taking_5, Prob_Taking_6, Prob_Taking_7, Prob_Taking_8, Prob_Taking_9, Prob_Taking_10, Prob_Taking_11, Prob_Taking_12, Prob_Taking_13 FROM self WHERE Boards_We_Played = True ORDER BY EV_Pct_Max_Diff_{Pair_Direction} DESC"
 					}
 				]
