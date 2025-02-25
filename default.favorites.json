@@ -194,8 +194,8 @@
 				]
 			},
 			"Boards_We_Underperformed_EV": {
-				"title": "Boards You Underperformed Expected value (EV)",
-				"help": "**Showing boards we declared which underperformed Expected value (EV).**",
+				"title": "Boards You Underperformed Expected Value (EV)",
+				"help": "**Showing boards we declared which underperformed Expected Value (EV).**",
 				"prompts": [
 					{
 						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Par_{Pair_Direction}, Pct_{Pair_Direction}, Par_Pct_{Pair_Direction}, EV_Max_Col, EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, MP_EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Par_Pct_Max_Diff_{Pair_Direction} FROM self WHERE Boards_We_Declared = True AND (Score_{Pair_Direction} < EV_Score_Declarer OR Score_{Pair_Direction} < EV_Max_Declarer) ORDER BY Board"
@@ -329,7 +329,7 @@
 			},
 			"EV_Pcts": {
 				"title": "Expected Value (EV) Pcts in Contract's Strain",
-				"help": "**Showing average expected value (EV) score pcts in contract's strain.**",
+				"help": "**Showing average Expected Value (EV) score pcts in contract's strain.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -339,7 +339,7 @@
 			},
 			"EV_Max_Pcts": {
 				"title": "Expected Value (EV) Pcts Optimal Contract",
-				"help": "**Showing average expected value (EV) score pcts in optimal contract.**",
+				"help": "**Showing average Expected Value (EV) score pcts in optimal contract.**",
 				"prompts": [
 					{
 						"prompt": "",
@@ -348,8 +348,8 @@
 				]
 			},
 			"Expected_Value_Our_Boards": {
-				"title": "Expected value (EV) Analysis of Our Boards",
-				"help": "**Showing Expected value (EV) analysis of our boards. EV is an expert's statistic. EV_Pct_Max_Diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
+				"title": "Expected Value (EV) Analysis of Our Boards",
+				"help": "**Showing Expected Value (EV) analysis of our boards. EV is an expert's statistic. EV_Pct_Max_Diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
 				"prompts": [
 					{
 						"prompt": "Show board, ev max pct diff, contract, score, Par, pct, Par pct, sd pct, dd tricks, sd Par pct diff, sd score, sd probs taking_* sort by sd pct diff descending. Show those boards we played.",
@@ -358,8 +358,8 @@
 				]
 			},
 			"Expected_Value_All_Boards": {
-				"title": "Expected value (EV) of All Boards at All Tables By Strain",
-				"help": "**Showing Expected value (EV) analysis of all boards at all tables by strain. EV_Pct_Max_Diff is an expert's statistic. It represents the probability of taking a certain number of tricks in declared strain.**",
+				"title": "Expected Value (EV) of All Boards at All Tables By Strain",
+				"help": "**Showing Expected Value (EV) analysis of all boards at all tables by strain. EV_Pct_Max_Diff is an expert's statistic. It represents the probability of taking a certain number of tricks in declared strain.**",
 				"prompts": [
 					{
 						"prompt": "Show board, bidsuit, contract, score, pct, section_name, pair_number_ns, pair_number_ew, sd score, sd pct diff, sd pct, dd tricks, sd probs taking_* sort by board, bidsuit, sd pct diff descending.",
