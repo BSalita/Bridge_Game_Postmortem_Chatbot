@@ -21,16 +21,16 @@ def print_to_log(level, *args):
 import sys
 from collections import defaultdict
 import pathlib
-import re
+#import re
 import time
 import streamlit as st
 import streamlit_chat
 from streamlit_extras.bottom_container import bottom
 from stqdm import stqdm
-import openai
+#import openai
 #from openai import AsyncOpenAI
 #from openai import openai_object  # used to suppress vscode type checking errors
-import pandas as pd
+import polars as pl
 import duckdb
 import json
 import os
@@ -40,12 +40,12 @@ from dotenv import load_dotenv
 #from streamlit_profiler import Profiler # Profiler -- temp?
 
 # Only declared to display version information
-import fastai
+#import fastai
 import numpy as np
-import polars as pl
-import safetensors
-import sklearn
-import torch
+import pandas as pd
+#import safetensors
+#import sklearn
+#import torch
 
 # todo: only want to assert if first time. assert os.getenv("ACBL_API_KEY") is None, f"ACBL_API_KEY environment variable should not be set. Remove .streamlit/secrets.toml file? {os.getenv('ACBL_API_KEY')}"
 load_dotenv()

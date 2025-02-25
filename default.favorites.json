@@ -349,7 +349,7 @@
 			},
 			"Expected_Value_Our_Boards": {
 				"title": "Expected value (EV) Analysis of Our Boards",
-				"help": "**Showing Expected value (EV) analysis of our boards. SD is an expert's statistic. EV_Pct_Max_Diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
+				"help": "**Showing Expected value (EV) analysis of our boards. EV is an expert's statistic. EV_Pct_Max_Diff is percentage difference between actual and probable percentages. Higher values are your luckiest boards.**",
 				"comment": "EV_Par_Pct_Diff, Prob_Taking_ needed to avoid oy.",
 				"prompts": [
 					{
