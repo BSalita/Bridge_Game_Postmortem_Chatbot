@@ -195,11 +195,10 @@
 			},
 			"Boards_We_Underperformed_EV": {
 				"title": "Boards You Underperformed Expected value (EV)",
-				"help": "**Showing boards which underperformed Expected value (EV).**",
+				"help": "**Showing boards we declared which underperformed Expected value (EV).**",
 				"prompts": [
 					{
-						"prompt": "Show board, contract, score, Par, pct, Par pct, sd contract, sd score, sd pct, sd mps max, sd pct max, sd score diff, sd score max diff, sd pct diff, sd pct max diff, sd Par pct diff, sd Par pct max diff. Show those boards we declared.",
-						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Par_{Pair_Direction}, Pct_{Pair_Direction}, Par_Pct_{Pair_Direction}, EV_Max_Col, EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_MP_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Par_Pct_Max_Diff_{Pair_Direction} FROM self WHERE Boards_We_Declared = True ORDER BY Board"
+						"sql": "SELECT Board, Contract, Score_{Pair_Direction}, Par_{Pair_Direction}, Pct_{Pair_Direction}, Par_Pct_{Pair_Direction}, EV_Max_Col, EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, MP_EV_Max_{Pair_Direction}, EV_Pct_Max_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Pct_Max_Diff_{Pair_Direction}, EV_Par_Pct_Max_Diff_{Pair_Direction} FROM self WHERE Boards_We_Declared = True AND (Score_{Pair_Direction} < EV_Score_Declarer OR Score_{Pair_Direction} < EV_Max_Declarer) ORDER BY Board"
 					}
 				]
 			},

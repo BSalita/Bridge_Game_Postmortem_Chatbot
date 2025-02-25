@@ -1073,6 +1073,27 @@ def read_configs():
             debug_favorites = json.load(f)
         st.session_state.debug_favorites = debug_favorites
 
+    # display missing prompts in favorites
+    if 'missing_in_summarize' not in st.session_state:
+        # Get the prompts from both locations
+        summarize_prompts = st.session_state.favorites['Buttons']['Summarize']['prompts']
+        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+
+        # Process the keys to ignore leading '@'
+        st.session_state.summarize_keys = {p.lstrip('@') for p in summarize_prompts}
+        st.session_state.vetted_keys = set(vetted_prompts.keys())
+
+        # Find items in summarize_prompts but not in vetted_prompts. There should be none.
+        st.session_state.missing_in_vetted = st.session_state.summarize_keys - st.session_state.vetted_keys
+        assert len(st.session_state.missing_in_vetted) == 0, f"Oops. {st.session_state.missing_in_vetted} not in {st.session_state.vetted_keys}."
+
+        # Find items in vetted_prompts but not in summarize_prompts. ok if there's some missing.
+        st.session_state.missing_in_summarize = st.session_state.vetted_keys - st.session_state.summarize_keys
+
+        print("\nItems in Vetted_Prompts but not in Summarize.prompts:")
+        for item in st.session_state.missing_in_summarize:
+            print(f"- {item}: {vetted_prompts[item]['title']}")
+
 
 def reset_data():
     # resets all data. used initially and when player number changes.
@@ -1177,9 +1198,9 @@ def reset_data():
 
 def app_info():
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
-    # obsolete when chat was removed: Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__}
+    # obsolete when chat was removed: Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} 
     st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} numpy:{np.__version__} polars:{pl.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} Query Params:{st.query_params.to_dict()}")
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} numpy:{np.__version__} polars:{pl.__version__} Query Params:{st.query_params.to_dict()}")
 
 
 def create_sidebar():
