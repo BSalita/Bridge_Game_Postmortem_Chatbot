@@ -286,7 +286,7 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
             #fit_columns_on_grid_load=True, # deprecated?
             theme=AgGridTheme.BALHAM, # Only choices: AgGridTheme.STREAMLIT, AgGridTheme.ALPINE, AgGridTheme.BALHAM, AgGridTheme.MATERIAL
             #enable_enterprise_modules=True,
-            height=330 if len(table_df) > 10 else 50+len(table_df)*30, # not sure why 50 is right height but scoll bars disappear using both 50/*30.
+            height=330 if len(table_df) > 10 else 60+len(table_df)*30, # not sure why 60 is right height but scoll bars disappear using both 60/*30.
             #width='100%',
             #reload_data=True
             key=key
