@@ -286,7 +286,7 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
             #fit_columns_on_grid_load=True, # deprecated?
             theme=AgGridTheme.BALHAM, # Only choices: AgGridTheme.STREAMLIT, AgGridTheme.ALPINE, AgGridTheme.BALHAM, AgGridTheme.MATERIAL
             #enable_enterprise_modules=True,
-            height= 70 if len(table_df) == 0 else 70+25*max(10,len(table_df)-1), # arbitrary height. horizontal scrollbars makes calculation difficult.
+            height= 70 if len(table_df) == 0 else 70+25*min(10-1,len(table_df)-1), # arbitrary height. horizontal scrollbars makes calculation difficult.
             #width='100%',
             #reload_data=True
             key=key
