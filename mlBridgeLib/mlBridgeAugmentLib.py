@@ -605,37 +605,37 @@ def Create_Fake_Predictions(df):
     return df
 
 
-def calculate_matchpoint_scores_ns(df,score_columns):
+# def calculate_matchpoint_scores_ns(df,score_columns):
     
-    # Process each row
-    mp_columns = defaultdict(list)
-    for r in df.iter_rows(named=True):
-        scores_list = r['Expanded_Scores_List'] # todo: make 'Expanded_Scores_List' sorted and with a 'Score_NS' removed?
-        if scores_list is None:
-            # todo: kludge: apparently Expanded_Scores_List can be null if director's adjustment.
-            # matchpoints can't be computed because there's no list of scores. we only have scores at player's table, not all tables.
-            # The fix is to download all table's results to replace a null Expanded_Scores_List.
-            print(f"Expanded_Scores_List is null: Score_NS:{r['Score_NS']} MP_NS:{r['MP_NS']}. Skipping.")
-            for col in score_columns:
-                mp_columns['MP_'+col].append(0.5)
-            continue
-        scores_list.remove(r['Score_NS'])
+#     # Process each row
+#     mp_columns = defaultdict(list)
+#     for r in df.iter_rows(named=True):
+#         scores_list = r['Expanded_Scores_List'] # todo: make 'Expanded_Scores_List' sorted and with a 'Score_NS' removed?
+#         if scores_list is None:
+#             # todo: kludge: apparently Expanded_Scores_List can be null if director's adjustment.
+#             # matchpoints can't be computed because there's no list of scores. we only have scores at player's table, not all tables.
+#             # The fix is to download all table's results to replace a null Expanded_Scores_List.
+#             print(f"Expanded_Scores_List is null: Score_NS:{r['Score_NS']} MP_NS:{r['MP_NS']}. Skipping.")
+#             for col in score_columns:
+#                 mp_columns['MP_'+col].append(0.5)
+#             continue
+#         scores_list.remove(r['Score_NS'])
         
-        for col in score_columns:
-            # Calculate rank for each DD score
-            rank = 0.0
-            new_score = r[col]
-            if scores_list:
-                for score in scores_list:
-                    if new_score > score:
-                        rank += 1.0
-                    elif new_score == score:
-                        rank += 0.5
+#         for col in score_columns:
+#             # Calculate rank for each DD score
+#             rank = 0.0
+#             new_score = r[col]
+#             if scores_list:
+#                 for score in scores_list:
+#                     if new_score > score:
+#                         rank += 1.0
+#                     elif new_score == score:
+#                         rank += 0.5
                     
-            mp_columns['MP_'+col].append(rank)
+#             mp_columns['MP_'+col].append(rank)
     
-    # Add all new columns at once
-    return df.hstack(pl.DataFrame(mp_columns))
+#     # Add all new columns at once
+#     return df.hstack(pl.DataFrame(mp_columns))
 
 
 def DealToCards(df):
@@ -1660,35 +1660,35 @@ class MatchPointAugmenter:
 
     def _calculate_all_score_matchpoints(self):
         t = time.time()
-        if 'Expanded_Scores_List' in self.df.columns: # todo: obsolete?
-            print('Calculate matchpoints for existing Expanded_Scores_List column.')
-            self.df = calculate_matchpoint_scores_ns(self.df, self.all_score_columns)
-        else:
-            print('Calculate matchpoints over session, PBN, and Board.')
-            # calc matchpoints on row-by-row basis
-            if self.df['Score_NS'].is_null().sum() > 0:
-                print(f"Warning: Null values in score_ns_values: {self.df['Score_NS'].is_null().sum()}")
-            # for NS scores
-            for col in self.all_score_columns + ['DD_Score_NS', 'Par_NS']:
-                assert 'MP_'+col not in self.df.columns, f"Column 'MP_{col}' already exists in DataFrame"
-                self.df = self.df.with_columns([
-                        pl.map_groups(
-                            exprs=[col, 'Score_NS'],
-                            function=self._calculate_matchpoints_group,
-                            return_dtype=pl.Float64,
-                        ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
-                    ])
-            # for declarer orientation scores
-            for col in [('DD_Score_Declarer','Score_Declarer'),('Par_Declarer','Score_Declarer'),('EV_Score_Declarer','Score_Declarer'),('EV_Max_Declarer','Score_Declarer')]:
-                assert 'MP_'+col[0] not in self.df.columns, f"Column 'MP_{col[0]}' already exists in DataFrame"
-                self.df = self.df.with_columns([
-                        pl.map_groups(
-                            exprs=col,
-                            function=self._calculate_matchpoints_group,
-                            return_dtype=pl.Float64,
-                        ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col[0])
-                    ])
-            print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
+        # if 'Expanded_Scores_List' in self.df.columns: # todo: obsolete?
+        #     print('Calculate matchpoints for existing Expanded_Scores_List column.')
+        #     self.df = calculate_matchpoint_scores_ns(self.df, self.all_score_columns)
+        # else:
+        print('Calculate matchpoints over session, PBN, and Board.')
+        # calc matchpoints on row-by-row basis
+        if self.df['Score_NS'].is_null().sum() > 0:
+            print(f"Warning: Null values in score_ns_values: {self.df['Score_NS'].is_null().sum()}")
+        # for NS scores
+        for col in self.all_score_columns + ['DD_Score_NS', 'Par_NS']:
+            assert 'MP_'+col not in self.df.columns, f"Column 'MP_{col}' already exists in DataFrame"
+            self.df = self.df.with_columns([
+                    pl.map_groups(
+                        exprs=[col, 'Score_NS'],
+                        function=self._calculate_matchpoints_group,
+                        return_dtype=pl.Float64,
+                    ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col)
+                ])
+        # for declarer orientation scores
+        for col in [('DD_Score_Declarer','Score_Declarer'),('Par_Declarer','Score_Declarer'),('EV_Score_Declarer','Score_Declarer'),('EV_Max_Declarer','Score_Declarer')]:
+            assert 'MP_'+col[0] not in self.df.columns, f"Column 'MP_{col[0]}' already exists in DataFrame"
+            self.df = self.df.with_columns([
+                    pl.map_groups(
+                        exprs=col,
+                        function=self._calculate_matchpoints_group,
+                        return_dtype=pl.Float64,
+                    ).over(['session_id', 'PBN', 'Board']).alias('MP_'+col[0])
+                ])
+        print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
 
     def _calculate_final_scores(self):
         t = time.time()
