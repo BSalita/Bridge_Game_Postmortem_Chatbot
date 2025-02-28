@@ -286,8 +286,8 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
             #fit_columns_on_grid_load=True, # deprecated?
             theme=AgGridTheme.BALHAM, # Only choices: AgGridTheme.STREAMLIT, AgGridTheme.ALPINE, AgGridTheme.BALHAM, AgGridTheme.MATERIAL
             #enable_enterprise_modules=True,
-            # height is a bit arbitrary. adding 20 in case there's horizontal scrollbar. adding 30 per row for text. adding 10 per row for line separators.
-            height= 70 if len(table_df) == 0 else 80+30 if len(table_df) == 1 else 80+(30+10)*min(4,len(table_df)),
+            # height calc is a bit arbitrary. add 50 for header. add 40 per row for text. add 10 per row for line separators.  add 20 in case there's a horizontal scrollbar.
+            height=50+(30+10)*min(4,len(table_df))+20,
             #width='100%',
             #reload_data=True
             key=key
