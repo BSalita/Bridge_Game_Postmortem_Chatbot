@@ -269,7 +269,7 @@
 			},
 			"Opponent_Underbid": {
 				"title": "Opponent Underbid",
-				"help": "**Showing boards your opponent either underbid, arrived at inferior contract or should have penalty doubled.**",
+				"help": "**Showing boards your opponent either underbid, arrived at inferior contract or should have penalty doubled. Boards shown from opponents perspective.**",
 				"prompts": [
 					{
 						"prompt": "Show board, contract, score, Par, sd score, sd score max, sd contract max. Show those boards opponent declared and score > 0 and score < Par and score < sd score.",
