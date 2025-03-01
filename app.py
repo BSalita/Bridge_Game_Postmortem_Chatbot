@@ -447,8 +447,6 @@ def perform_hand_augmentations(df, sd_productions):
 
 
 def augment_df(df):
-    #with st.spinner('Creating ffbridge data to dataframe...'):
-    #    df = ffbridgelib.convert_ffdf_to_mldf(df) # warning: drops columns from df.
     with st.spinner('Creating hand data...'):
         # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
         #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
@@ -1822,6 +1820,7 @@ def main():
 
     else:
         create_ui()
+
 
 if __name__ == '__main__':
     main()

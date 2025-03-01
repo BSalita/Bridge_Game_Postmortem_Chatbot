@@ -635,8 +635,10 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
         assert 'Tricks' not in df.columns
         df = df.with_columns(pl.Series('scores_l',mlBridgeLib.ContractToScores(df),pl.List(pl.Int16)))
 
+        # todo: use mlBridgeAugmentLib.ContractToScores?
+        # adjusted score is the reason for any unexpected scores.
         df = df.with_columns(
-            pl.Series('Result',[None if r[0] == 'PASS' or r[1] not in r[2] else r[2].index(r[1])-(r[3]+6) for r in df['Contract','Score_NS','scores_l','BidLvl'].rows()],dtype=pl.Int8),
+            pl.Series('Result',[None if (None in r) or (r[1] not in r[2]) else r[2].index(r[1])-(r[3]+6) for r in df['Contract','Score_NS','scores_l','BidLvl'].rows()],dtype=pl.Int8),
         )
         # can be null if errata.
         df.filter(pl.col('Result').is_null())['Board','Contract','Score_NS','BidLvl','Vul','iVul','scores_l']
