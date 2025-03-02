@@ -34,7 +34,8 @@ import polars as pl
 import duckdb
 import json
 import os
-from datetime import datetime, timezone 
+from datetime import datetime, timezone
+import platform
 from dotenv import load_dotenv
 #import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
@@ -46,15 +47,19 @@ import pandas as pd
 #import safetensors
 #import sklearn
 #import torch
+import endplay
 
 # todo: only want to assert if first time. assert os.getenv("ACBL_API_KEY") is None, f"ACBL_API_KEY environment variable should not be set. Remove .streamlit/secrets.toml file? {os.getenv('ACBL_API_KEY')}"
 load_dotenv()
+
+# retrieve ACBL API Key
 acbl_api_key = os.getenv("ACBL_API_KEY")
 assert acbl_api_key is not None, "ACBL_API_KEY environment variable not set. See README.md for instructions."
-print('acbl_api_key:',acbl_api_key)
 assert 'Bearer' not in acbl_api_key, "ACBL_API_KEY must not contain 'Bearer' or it will be rejected by ACBL."
 assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Authorization' or it will be rejected by ACBL."
-openai_api_key = os.getenv("OPENAI_API_KEY")
+
+# retrieve OpenAI API Key
+#openai_api_key = os.getenv("OPENAI_API_KEY")
 #assert openai_api_key is not None, "OPENAI_API_KEY environment variable not set. See README.md for instructions."
 #openai_async_client = AsyncOpenAI(api_key=openai_api_key)
 #DEFAULT_CHEAP_AI_MODEL = "gpt-3.5-turbo-1106" # -1106 until Dec 11th 2023. "gpt-3.5-turbo" is cheapest. "gpt-4" is most expensive.
@@ -69,10 +74,12 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 #import streamlitlib.streamlitlib
 #import chatlib.chatlib
 #import mlBridgeLib.mlBridgeLib
+
 sys.path.append(str(pathlib.Path.cwd().joinpath('acbllib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('chatlib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
+
 # streamlitlib, mlBridgeLib, chatlib must be placed after sys.path.append. vscode re-format likes to move them to the top
 import acbllib
 import streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
@@ -82,10 +89,6 @@ import chatlib  # must be placed after sys.path.append. vscode re-format likes t
 
 # override pandas display options
 # mlBridgeLib.pd_options_display()
-
-rootPath = pathlib.Path('.')  # e:/bridge/data')
-acblPath = rootPath.joinpath('data')  # was 'acbl'
-savedModelsPath = rootPath.joinpath('SavedModels')
 
 # pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
@@ -652,7 +655,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
         return False
 
     # No more user errors possible. Everything checks out so it's safe to update the session state with new data.
-    reset_data() # wipe out all game state data
+    reset_game_data() # wipe out all game state data
     st.session_state.player_id = player_id
     st.session_state.session_id = session_id
     st.session_state.game_description = game_description
@@ -1046,116 +1049,70 @@ def chat_input_on_submit():
 
 #     return df # return newly created df. created by df = pd.concat().
 
-def read_configs():
 
-    st.session_state.default_favorites_file = pathlib.Path(
-        'default.favorites.json')
-    st.session_state.player_id_custom_favorites_file = pathlib.Path(
-        f'favorites/{st.session_state.player_id}.favorites.json')
-    st.session_state.debug_favorites_file = pathlib.Path(
-        'favorites/debug.favorites.json')
+# def reset_data():
+#     # resets all data. used initially and when player number changes.
+#     # todo: put all session state into st.session_state.data so that clearing data clears all session states.
 
-    if st.session_state.default_favorites_file.exists():
-        with open(st.session_state.default_favorites_file, 'r') as f:
-            favorites = json.load(f)
-        st.session_state.favorites = favorites
-        #st.session_state.vetted_prompts = get_vetted_prompts_from_favorites(favorites)
+#     print_to_log_info('reset_data()')
 
-    if st.session_state.player_id_custom_favorites_file.exists():
-        with open(st.session_state.player_id_custom_favorites_file, 'r') as f:
-            player_id_favorites = json.load(f)
-        st.session_state.player_id_favorites = player_id_favorites
+#     # app
+#     #st.session_state.app_datetime = None
+#     st.session_state.help = None
+#     st.session_state.release_notes = None
 
-    if st.session_state.debug_favorites_file.exists():
-        with open(st.session_state.debug_favorites_file, 'r') as f:
-            debug_favorites = json.load(f)
-        st.session_state.debug_favorites = debug_favorites
+#     # game
+#     st.session_state.game_date = None
+#     st.session_state.session_id = None
+#     st.session_state.acbl_results_page = None
+#     st.session_state.json_results_d = None
 
-    # display missing prompts in favorites
-    if 'missing_in_summarize' not in st.session_state:
-        # Get the prompts from both locations
-        summarize_prompts = st.session_state.favorites['Buttons']['Summarize']['prompts']
-        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+#     # chat
+#     #st.session_state.ai_api = None
+#     #st.session_state.system_prompt = None
+#     #st.session_state.augmented_system_prompt = None
+#     #st.session_state.messages = []
+#     #st.session_state.dataframes = defaultdict(list)
+#     #st.session_state.matchpoint_ns_d = None
+#     #st.session_state.function_calls = None
 
-        # Process the keys to ignore leading '@'
-        st.session_state.summarize_keys = {p.lstrip('@') for p in summarize_prompts}
-        st.session_state.vetted_keys = set(vetted_prompts.keys())
+#     # data
+#     st.session_state.df = None
+#     st.session_state.do_not_cache_df = True
 
-        # Find items in summarize_prompts but not in vetted_prompts. There should be none.
-        st.session_state.missing_in_vetted = st.session_state.summarize_keys - st.session_state.vetted_keys
-        assert len(st.session_state.missing_in_vetted) == 0, f"Oops. {st.session_state.missing_in_vetted} not in {st.session_state.vetted_keys}."
+#     # sql
+#     #st.session_state.con = None
+#     st.session_state.con_register_name = 'self' # todo: this and others have duplicate initializations.
+#     #st.session_state.show_sql_query = None
+#     #st.session_state.commands_sql = None
+#     st.session_state.df_meta = None
+#     st.session_state.df_schema_string = None
 
-        # Find items in vetted_prompts but not in summarize_prompts. ok if there's some missing.
-        st.session_state.missing_in_summarize = st.session_state.vetted_keys - st.session_state.summarize_keys
+#     # favorite files
+#     st.session_state.favorites = None
+#     st.session_state.default_favorites_file = None
+#     st.session_state.player_id_favorites = None
+#     st.session_state.player_id_custom_favorites_file = None
+#     st.session_state.debug_favorites = None
+#     st.session_state.debug_favorites_file = None
+#     st.session_state.prompts_selectbox = 'Choose a Prompt'
+#     #st.session_state.vetted_prompts = None
+#     st.session_state.vetted_prompt_titles = None
+#     st.session_state.dataframe_tooltips = None
 
-        print("\nItems in Vetted_Prompts but not in Summarize.prompts:")
-        for item in st.session_state.missing_in_summarize:
-            print(f"- {item}: {vetted_prompts[item]['title']}")
-
-
-def reset_data():
-    # resets all data. used initially and when player number changes.
-    # todo: put all session state into st.session_state.data so that clearing data clears all session states.
-
-    print_to_log_info('reset_data()')
-
-    # app
-    #st.session_state.app_datetime = None
-    st.session_state.help = None
-    st.session_state.release_notes = None
-
-    # game
-    st.session_state.game_date = None
-    st.session_state.session_id = None
-    st.session_state.acbl_results_page = None
-    st.session_state.json_results_d = None
-
-    # chat
-    #st.session_state.ai_api = None
-    #st.session_state.system_prompt = None
-    #st.session_state.augmented_system_prompt = None
-    #st.session_state.messages = []
-    #st.session_state.dataframes = defaultdict(list)
-    #st.session_state.matchpoint_ns_d = None
-    #st.session_state.function_calls = None
-
-    # data
-    st.session_state.df = None
-    st.session_state.do_not_cache_df = True
-
-    # sql
-    #st.session_state.con = None
-    st.session_state.con_register_name = 'self' # todo: this and others have duplicate initializations.
-    #st.session_state.show_sql_query = None
-    #st.session_state.commands_sql = None
-    st.session_state.df_meta = None
-    st.session_state.df_schema_string = None
-
-    # favorite files
-    st.session_state.favorites = None
-    st.session_state.default_favorites_file = None
-    st.session_state.player_id_favorites = None
-    st.session_state.player_id_custom_favorites_file = None
-    st.session_state.debug_favorites = None
-    st.session_state.debug_favorites_file = None
-    st.session_state.prompts_selectbox = 'Choose a Prompt'
-    #st.session_state.vetted_prompts = None
-    st.session_state.vetted_prompt_titles = None
-    st.session_state.dataframe_tooltips = None
-
-    # augmented columns
-    st.session_state.player_id = None
-    st.session_state.player_direction = None
-    st.session_state.player_name = None
-    st.session_state.player_id = None
-    st.session_state.partner_direction = None
-    st.session_state.partner_name = None
-    st.session_state.pair_number = None
-    st.session_state.pair_direction = None
-    st.session_state.pair_name = None
-    st.session_state.opponent_pair_direction = None
-    st.session_state.session_id = None
-    st.session_state.section_name = None
+#     # augmented columns
+#     st.session_state.player_id = None
+#     st.session_state.player_direction = None
+#     st.session_state.player_name = None
+#     st.session_state.player_id = None
+#     st.session_state.partner_direction = None
+#     st.session_state.partner_name = None
+#     st.session_state.pair_number = None
+#     st.session_state.pair_direction = None
+#     st.session_state.pair_name = None
+#     st.session_state.opponent_pair_direction = None
+#     st.session_state.session_id = None
+#     st.session_state.section_name = None
 
     # main_message_df_count = 0
     # for k, v in st.session_state.items():
@@ -1194,13 +1151,6 @@ def reset_data():
     # st.session_state.ai_api = DEFAULT_AI_MODEL
 
 
-def app_info():
-    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in Streamlit. AI API is OpenAI. Data engine is Pandas. Query engine is Duckdb. Chat UI uses streamlit-chat. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot Club data scraped from public ACBL webpages. Tournament data from ACBL API.")
-    # obsolete when chat was removed: Default AI model:{DEFAULT_AI_MODEL} OpenAI client:{openai.__version__} fastai:{fastai.__version__} safetensors:{safetensors.__version__} sklearn:{sklearn.__version__} torch:{torch.__version__} 
-    st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} duckdb:{duckdb.__version__} numpy:{np.__version__} polars:{pl.__version__} Query Params:{st.query_params.to_dict()}")
-
-
 def create_sidebar():
     
     t = time.time()
@@ -1221,7 +1171,7 @@ def create_sidebar():
 
     if st.session_state.session_id is None:
         st.error(f'Please choose a new game or tournament session from the left sidebar.')
-        st.stop()
+        return
 
     # if st.sidebar.download_button(label="Download Personalized Report",
     #         data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
@@ -1342,10 +1292,18 @@ def create_sidebar():
         #                             on_change=ai_api_selectbox_change, key='ai_api_selectbox')
 
         # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
-        st.number_input("Single Dummy Random Trials", min_value=1, max_value=100,
-                                value=st.session_state.single_dummy_sample_count, on_change=single_dummy_sample_count_changed, key='single_dummy_sample_count_number_input')
+
+        st.number_input(
+            "Single Dummy Samples Count",
+            min_value=1,
+            max_value=100,
+            value=st.session_state.single_dummy_sample_count,
+            on_change=single_dummy_sample_count_changed,
+            key='single_dummy_sample_count_number_input'
+        )
 
     print_to_log_info('create_sidebar time:', time.time()-t)
+    return
 
 # def create_tab_bar():
 
@@ -1465,6 +1423,93 @@ def create_sidebar():
 #     return vetted_prompts
 
 
+def perform_hand_augmentations(df, sd_productions):
+    """Wrapper for backward compatibility"""
+    def hand_augmentation_work(df, progress, **kwargs):
+        augmenter = mlBridgeAugmentLib.HandAugmenter(
+            df, 
+            {}, 
+            sd_productions=kwargs.get('sd_productions'),
+            progress=progress
+        )
+        return augmenter.perform_hand_augmentations()
+    
+    return streamlitlib.perform_queued_work(
+        df, 
+        hand_augmentation_work, 
+        work_description="Hand analysis",
+        sd_productions=sd_productions
+    )
+
+
+def augment_df(df):
+    with st.spinner('Creating hand data...'):
+        # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
+        #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
+        #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
+        #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
+        #     df = augmenter.perform_hand_augmentations()
+        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
+    with st.spinner('Augmenting with result data...'):
+        augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
+        df = augmenter.perform_result_augmentations()
+    with st.spinner('Augmenting with DD and SD data...'):
+        augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
+        df = augmenter.perform_dd_sd_augmentations()
+    with st.spinner('Augmenting with matchpoints and percentages data...'):
+        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        df = augmenter.perform_matchpoint_augmentations()
+    return df
+
+
+def read_configs():
+
+    st.session_state.default_favorites_file = pathlib.Path(
+        'default.favorites.json')
+    st.session_state.player_id_custom_favorites_file = pathlib.Path(
+        f'favorites/{st.session_state.player_id}.favorites.json')
+    st.session_state.debug_favorites_file = pathlib.Path(
+        'favorites/debug.favorites.json')
+
+    if st.session_state.default_favorites_file.exists():
+        with open(st.session_state.default_favorites_file, 'r') as f:
+            favorites = json.load(f)
+        st.session_state.favorites = favorites
+        #st.session_state.vetted_prompts = get_vetted_prompts_from_favorites(favorites)
+
+    if st.session_state.player_id_custom_favorites_file.exists():
+        with open(st.session_state.player_id_custom_favorites_file, 'r') as f:
+            player_id_favorites = json.load(f)
+        st.session_state.player_id_favorites = player_id_favorites
+
+    if st.session_state.debug_favorites_file.exists():
+        with open(st.session_state.debug_favorites_file, 'r') as f:
+            debug_favorites = json.load(f)
+        st.session_state.debug_favorites = debug_favorites
+
+    # display missing prompts in favorites
+    if 'missing_in_summarize' not in st.session_state:
+        # Get the prompts from both locations
+        summarize_prompts = st.session_state.favorites['Buttons']['Summarize']['prompts']
+        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+
+        # Process the keys to ignore leading '@'
+        st.session_state.summarize_keys = {p.lstrip('@') for p in summarize_prompts}
+        st.session_state.vetted_keys = set(vetted_prompts.keys())
+
+        # Find items in summarize_prompts but not in vetted_prompts. There should be none.
+        st.session_state.missing_in_vetted = st.session_state.summarize_keys - st.session_state.vetted_keys
+        assert len(st.session_state.missing_in_vetted) == 0, f"Oops. {st.session_state.missing_in_vetted} not in {st.session_state.vetted_keys}."
+
+        # Find items in vetted_prompts but not in summarize_prompts. ok if there's some missing.
+        st.session_state.missing_in_summarize = st.session_state.vetted_keys - st.session_state.summarize_keys
+
+        print("\nItems in Vetted_Prompts but not in Summarize.prompts:")
+        for item in st.session_state.missing_in_summarize:
+            print(f"- {item}: {vetted_prompts[item]['title']}")
+    return
+
+
 # todo: similar to prompt_keyword_replacements
 def process_prompt_macros(sql_query):
     replacements = {
@@ -1474,6 +1519,8 @@ def process_prompt_macros(sql_query):
         '{Opponent_Pair_Direction}': st.session_state.opponent_pair_direction
     }
     for old, new in replacements.items():
+        if new is None:
+            continue
         sql_query = sql_query.replace(old, new)
     return sql_query
 
@@ -1484,21 +1531,21 @@ def write_report():
     st.session_state.main_section_container = st.container(border=True)
     with st.session_state.main_section_container:
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
-        report_creator = "Created by https://acbl.postmortem.chat"
+        report_creator = f"Created by https://{st.session_state.game_name}.postmortem.chat"
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
-        report_acbl_results_page = f"ACBL Results Page: {st.session_state.acbl_results_page}"
-        report_your_match_info = f"Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
+        report_game_results_webpage = f"Results Page: {st.session_state.game_url}"
+        report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
-        st.markdown(f"##### {report_acbl_results_page}")
+        st.markdown(f"##### {report_game_results_webpage}")
         st.markdown(f"#### {report_your_match_info}")
         pdf_assets = st.session_state.pdf_assets
         pdf_assets.clear()
         pdf_assets.append(f"# {report_title}")
         pdf_assets.append(f"#### {report_creator}")
         pdf_assets.append(f"### {report_event_info}")
-        pdf_assets.append(f"#### {report_acbl_results_page}")
+        pdf_assets.append(f"#### {report_game_results_webpage}")
         pdf_assets.append(f"### {report_your_match_info}")
         st.session_state.button_title = 'Summarize' # todo: generalize to all buttons!
         selected_button = st.session_state.favorites['Buttons'][st.session_state.button_title]
@@ -1536,6 +1583,8 @@ def write_report():
             mime='application/octet-stream',
             key='personalized_report_download_button'):
         st.warning('Personalized report downloaded.')
+    return
+
 
 
 def ask_sql_query():
@@ -1710,117 +1759,458 @@ def create_ui():
 #     print_to_log_info('create_main_section time:', time.time()-t)
 
 
-def main():
+# def main():
 
-#     AvatarStyle = [
-#     "adventurer",
-#     "adventurer-neutral",
-#     "avataaars",
-#     "avataaars-neutral",
-#     "big-ears",
-#     "big-ears-neutral",
-#     "big-smile",
-#     "bottts",
-#     "bottts-neutral",
-#     "croodles",
-#     "croodles-neutral",
-#     "fun-emoji",
-#     "icons",
-#     "identicon",
-#     "initials",
-#     "lorelei",
-#     "lorelei-neutral",
-#     "micah",
-#     "miniavs",
-#     "open-peeps",
-#     "personas",
-#     "pixel-art",
-#     "pixel-art-neutral",
-#     "shapes",
-#     "thumbs",
-# ]
-#     for a in AvatarStyle:
-#         streamlit_chat.message(
-#             f"Hi. I'm Morty. Your friendly postmortem chatbot."+a, key='vacation_message_1'+a, avatar_style=a)
+# #     AvatarStyle = [
+# #     "adventurer",
+# #     "adventurer-neutral",
+# #     "avataaars",
+# #     "avataaars-neutral",
+# #     "big-ears",
+# #     "big-ears-neutral",
+# #     "big-smile",
+# #     "bottts",
+# #     "bottts-neutral",
+# #     "croodles",
+# #     "croodles-neutral",
+# #     "fun-emoji",
+# #     "icons",
+# #     "identicon",
+# #     "initials",
+# #     "lorelei",
+# #     "lorelei-neutral",
+# #     "micah",
+# #     "miniavs",
+# #     "open-peeps",
+# #     "personas",
+# #     "pixel-art",
+# #     "pixel-art-neutral",
+# #     "shapes",
+# #     "thumbs",
+# # ]
+# #     for a in AvatarStyle:
+# #         streamlit_chat.message(
+# #             f"Hi. I'm Morty. Your friendly postmortem chatbot."+a, key='vacation_message_1'+a, avatar_style=a)
 
-    # first time through
-    if "player_id" not in st.session_state:
+#     # first time through
+#     if "player_id" not in st.session_state:
 
-        # initialize values which will never change
-        st.set_page_config(page_title="Morty", page_icon=":robot_face:", layout="wide")
-        #streamlitlib.widen_scrollbars() # removed because it was causing a problem for Aggrid table height.
-        st.session_state.app_datetime = datetime.fromtimestamp(pathlib.Path(
-            __file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
-        # in case there's no ai_apis.json file
-        import platform
-        if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
-            pathlib.PosixPath = pathlib.WindowsPath
-        else:
-            pathlib.WindowsPath = pathlib.PosixPath
-        st.session_state.main_section_container = st.empty()
-        st.session_state.pdf_assets = []
-        #st.session_state.ai_api = DEFAULT_AI_MODEL # feature removed
-        st.session_state.con = duckdb.connect()
-        st.session_state.con_register_name = 'self'
-        st.session_state.show_sql_query = os.getenv('STREAMLIT_ENV') == 'development'
-        st.session_state.sql_query_mode = False
-        st.session_state.sql_queries = []
-        st.session_state.player_id = None
-        st.session_state.session_id = None
-        st.session_state.game_urls_d = {}
-        st.session_state.tournament_session_urls_d = {}
-        st.session_state.single_dummy_sample_count = 10
-        st.session_state.do_not_cache_df = True
+#         # initialize values which will never change
+#         st.set_page_config(page_title="Morty", page_icon=":robot_face:", layout="wide")
+#         #streamlitlib.widen_scrollbars() # removed because it was causing a problem for Aggrid table height.
+#         st.session_state.app_datetime = datetime.fromtimestamp(pathlib.Path(
+#             __file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
+#         # in case there's no ai_apis.json file
+#         import platform
+#         if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
+#             pathlib.PosixPath = pathlib.WindowsPath
+#         else:
+#             pathlib.WindowsPath = pathlib.PosixPath
+#         st.session_state.main_section_container = st.empty()
+#         st.session_state.pdf_assets = []
+#         #st.session_state.ai_api = DEFAULT_AI_MODEL # feature removed
+#         st.session_state.con = duckdb.connect()
+#         st.session_state.con_register_name = 'self'
+#         st.session_state.show_sql_query = os.getenv('STREAMLIT_ENV') == 'development'
+#         st.session_state.sql_query_mode = False
+#         st.session_state.sql_queries = []
+#         st.session_state.player_id = None
+#         st.session_state.session_id = None
+#         st.session_state.game_urls_d = {}
+#         st.session_state.tournament_session_urls_d = {}
+#         st.session_state.single_dummy_sample_count = 10
+#         st.session_state.do_not_cache_df = True
 
-        #st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
-        #st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
-        #st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
-        st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
-        st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+#         #st.session_state.df_unique_id = 0 # only needed because message dataframes aren't being released for some unknown reason.
+#         #st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+#         #st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+#         st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+#         st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
 
-        # causes streamlit connection error
-        # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
-        #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:
-        #         # todo: need to parse STREAMLIT_QUERY_STRING instead of hardcoding.
-        #         if 'player_id' not in st.query_params:
-        #             obsolete? st.experimental_set_query_params(player_id=2663279)
-        # http://localhost:8501/?player_id=2663279
+#         # causes streamlit connection error
+#         # if os.environ.get('STREAMLIT_ENV') is not None and os.environ.get('STREAMLIT_ENV') == 'development':
+#         #     if os.environ.get('STREAMLIT_QUERY_STRING') is not None:
+#         #         # todo: need to parse STREAMLIT_QUERY_STRING instead of hardcoding.
+#         #         if 'player_id' not in st.query_params:
+#         #             obsolete? st.experimental_set_query_params(player_id=2663279)
+#         # http://localhost:8501/?player_id=2663279
 
+#     if 'player_id' in st.query_params:
+#         player_id = st.query_params['player_id']
+#         if not isinstance(player_id, str):
+#             st.error(f'player_id must be a string {player_id}')
+#             st.stop()
+#         st.session_state.player_id = player_id
+
+#     if st.session_state.player_id is None:
+#         st.sidebar.caption(f"App:{st.session_state.app_datetime}")
+#         if False:
+#             streamlit_chat.message(
+#                 "Hi. I'm Morty. Your friendly postmortem chatbot.", key='vacation_message_1', logo=st.session_state.assistant_logo)
+#             streamlit_chat.message(
+#                 "I'm on a well deserved vacation while my overlord swaps out my chat API for something more economically sustainable. Should be back in a week or so. Meanwhile, happy prompting.", key='vacation_message_2', logo=st.session_state.assistant_logo)
+#             app_info()
+#             st.stop()
+#         st.sidebar.text_input(
+#             "Enter an ACBL player number", on_change=player_id_change, placeholder='2663279', key='player_id_input')
+#         st.session_state.main_section_container = st.container()
+#         with st.session_state.main_section_container:
+#             streamlit_chat.message(
+#                 "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
+#             streamlit_chat.message(
+#                 "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
+#             streamlit_chat.message(
+#                 "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
+#             streamlit_chat.message(
+#                 "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
+#             streamlit_chat.message(
+#                 "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
+#             app_info()
+
+#     else:
+#         create_ui()
+
+
+def initialize_website_specific():
+
+    st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
+    st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
+    st.session_state.game_url_default = None
+    st.session_state.game_name = 'acbl'
+    st.session_state.game_url = st.session_state.game_url_default
+    # todo: put filenames into a .json or .toml file?
+    st.session_state.rootPath = pathlib.Path('e:/bridge/data')
+    st.session_state.acblPath = st.session_state.rootPath.joinpath('acbl')
+    #st.session_state.favoritesPath = pathlib.joinpath('favorites'),
+    st.session_state.savedModelsPath = st.session_state.rootPath.joinpath('SavedModels')
+    
+    streamlit_chat.message(
+        "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
+    streamlit_chat.message(
+        "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
+    streamlit_chat.message(
+        "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
+    streamlit_chat.message(
+        "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
+    streamlit_chat.message(
+        "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
+    return
+
+
+# Everything below here is the standard mlBridge code.
+
+
+def perform_hand_augmentations(df, sd_productions):
+    """Wrapper for backward compatibility"""
+    def hand_augmentation_work(df, progress, **kwargs):
+        augmenter = mlBridgeAugmentLib.HandAugmenter(
+            df, 
+            {}, 
+            sd_productions=kwargs.get('sd_productions'),
+            progress=progress
+        )
+        return augmenter.perform_hand_augmentations()
+    
+    return streamlitlib.perform_queued_work(
+        df, 
+        hand_augmentation_work, 
+        work_description="Hand analysis",
+        sd_productions=sd_productions
+    )
+
+
+def augment_df(df):
+    with st.spinner('Creating hand data...'):
+        # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
+        #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
+        #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
+        #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
+        #     df = augmenter.perform_hand_augmentations()
+        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
+    with st.spinner('Augmenting with result data...'):
+        augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
+        df = augmenter.perform_result_augmentations()
+    with st.spinner('Augmenting with DD and SD data...'):
+        augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
+        df = augmenter.perform_dd_sd_augmentations()
+    with st.spinner('Augmenting with matchpoints and percentages data...'):
+        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        df = augmenter.perform_matchpoint_augmentations()
+    return df
+
+
+def read_configs():
+
+    st.session_state.default_favorites_file = pathlib.Path(
+        'default.favorites.json')
+    st.session_state.player_id_custom_favorites_file = pathlib.Path(
+        f'favorites/{st.session_state.player_id}.favorites.json')
+    st.session_state.debug_favorites_file = pathlib.Path(
+        'favorites/debug.favorites.json')
+
+    if st.session_state.default_favorites_file.exists():
+        with open(st.session_state.default_favorites_file, 'r') as f:
+            favorites = json.load(f)
+        st.session_state.favorites = favorites
+        #st.session_state.vetted_prompts = get_vetted_prompts_from_favorites(favorites)
+
+    if st.session_state.player_id_custom_favorites_file.exists():
+        with open(st.session_state.player_id_custom_favorites_file, 'r') as f:
+            player_id_favorites = json.load(f)
+        st.session_state.player_id_favorites = player_id_favorites
+
+    if st.session_state.debug_favorites_file.exists():
+        with open(st.session_state.debug_favorites_file, 'r') as f:
+            debug_favorites = json.load(f)
+        st.session_state.debug_favorites = debug_favorites
+
+    # display missing prompts in favorites
+    if 'missing_in_summarize' not in st.session_state:
+        # Get the prompts from both locations
+        summarize_prompts = st.session_state.favorites['Buttons']['Summarize']['prompts']
+        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+
+        # Process the keys to ignore leading '@'
+        st.session_state.summarize_keys = {p.lstrip('@') for p in summarize_prompts}
+        st.session_state.vetted_keys = set(vetted_prompts.keys())
+
+        # Find items in summarize_prompts but not in vetted_prompts. There should be none.
+        st.session_state.missing_in_vetted = st.session_state.summarize_keys - st.session_state.vetted_keys
+        assert len(st.session_state.missing_in_vetted) == 0, f"Oops. {st.session_state.missing_in_vetted} not in {st.session_state.vetted_keys}."
+
+        # Find items in vetted_prompts but not in summarize_prompts. ok if there's some missing.
+        st.session_state.missing_in_summarize = st.session_state.vetted_keys - st.session_state.summarize_keys
+
+        print("\nItems in Vetted_Prompts but not in Summarize.prompts:")
+        for item in st.session_state.missing_in_summarize:
+            print(f"- {item}: {vetted_prompts[item]['title']}")
+    return
+
+
+def process_prompt_macros(sql_query):
+    replacements = {
+        '{Player_Direction}': st.session_state.player_direction,
+        '{Partner_Direction}': st.session_state.partner_direction,
+        '{Pair_Direction}': st.session_state.pair_direction,
+        '{Opponent_Pair_Direction}': st.session_state.opponent_pair_direction
+    }
+    for old, new in replacements.items():
+        if new is None:
+            continue
+        sql_query = sql_query.replace(old, new)
+    return sql_query
+
+
+def write_report():
+    # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
+    # todo: need to pass the Button title to the stqdm description. this is a hack until implemented.
+    st.session_state.main_section_container = st.container(border=True)
+    with st.session_state.main_section_container:
+        report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
+        report_creator = f"Created by https://{st.session_state.game_name}.postmortem.chat"
+        report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
+        report_game_results_webpage = f"Results Page: {st.session_state.game_url}"
+        report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
+        st.markdown(f"### {report_title}")
+        st.markdown(f"##### {report_creator}")
+        st.markdown(f"#### {report_event_info}")
+        st.markdown(f"##### {report_game_results_webpage}")
+        st.markdown(f"#### {report_your_match_info}")
+        pdf_assets = st.session_state.pdf_assets
+        pdf_assets.clear()
+        pdf_assets.append(f"# {report_title}")
+        pdf_assets.append(f"#### {report_creator}")
+        pdf_assets.append(f"### {report_event_info}")
+        pdf_assets.append(f"#### {report_game_results_webpage}")
+        pdf_assets.append(f"### {report_your_match_info}")
+        st.session_state.button_title = 'Summarize' # todo: generalize to all buttons!
+        selected_button = st.session_state.favorites['Buttons'][st.session_state.button_title]
+        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+        sql_query_count = 0
+        for stats in stqdm(selected_button['prompts'], desc='Creating personalized report...'):
+            assert stats[0] == '@', stats
+            stat = vetted_prompts[stats[1:]]
+            for i, prompt in enumerate(stat['prompts']):
+                if 'sql' in prompt and prompt['sql']:
+                    #print('sql:',prompt["sql"])
+                    if i == 0:
+                        streamlit_chat.message(f"Morty: {stat['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
+                        pdf_assets.append(f"### {stat['help']}")
+                    prompt_sql = prompt['sql']
+                    sql_query = process_prompt_macros(prompt_sql)
+                    query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
+                    if query_df is not None:
+                        pdf_assets.append(query_df)
+                    sql_query_count += 1
+
+        # As a text link
+        #st.markdown('[Back to Top](#your-personalized-report)')
+
+        # As an html button (needs styling added)
+        # can't use link_button() restarts page rendering. markdown() will correctly jump to href.
+        # st.link_button('Go to top of report',url='#your-personalized-report')\
+        report_title_anchor = report_title.replace(' ','-').lower()
+        st.markdown(f'<a target="_self" href="#{report_title_anchor}"><button>Go to top of report</button></a>', unsafe_allow_html=True)
+
+    if st.session_state.pdf_link.download_button(label="Download Personalized Report",
+            data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
+            file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
+            disabled = len(st.session_state.pdf_assets) == 0,
+            mime='application/octet-stream',
+            key='personalized_report_download_button'):
+        st.warning('Personalized report downloaded.')
+    return
+
+
+def ask_sql_query():
+
+    if st.session_state.show_sql_query:
+        with st.container():
+            with bottom():
+                st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
+
+
+def create_ui():
+    create_sidebar()
+    if not st.session_state.sql_query_mode:
+        #create_tab_bar()
+        if st.session_state.session_id is not None:
+            write_report()
+    ask_sql_query()
+
+
+def initialize_session_state():
+    st.set_page_config(layout="wide")
+    # Add this auto-scroll code
+    streamlitlib.widen_scrollbars()
+
+    if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
+        pathlib.PosixPath = pathlib.WindowsPath
+    else:
+        pathlib.WindowsPath = pathlib.PosixPath
+    
     if 'player_id' in st.query_params:
         player_id = st.query_params['player_id']
         if not isinstance(player_id, str):
             st.error(f'player_id must be a string {player_id}')
             st.stop()
         st.session_state.player_id = player_id
+    else:
+        st.session_state.player_id = None
 
-    if st.session_state.player_id is None:
-        st.sidebar.caption(f"App:{st.session_state.app_datetime}")
-        if False:
-            streamlit_chat.message(
-                "Hi. I'm Morty. Your friendly postmortem chatbot.", key='vacation_message_1', logo=st.session_state.assistant_logo)
-            streamlit_chat.message(
-                "I'm on a well deserved vacation while my overlord swaps out my chat API for something more economically sustainable. Should be back in a week or so. Meanwhile, happy prompting.", key='vacation_message_2', logo=st.session_state.assistant_logo)
-            app_info()
+
+def initialize_session_state():
+    st.set_page_config(layout="wide")
+    # Add this auto-scroll code
+    streamlitlib.widen_scrollbars()
+
+    if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
+        pathlib.PosixPath = pathlib.WindowsPath
+    else:
+        pathlib.WindowsPath = pathlib.PosixPath
+    
+    if 'player_id' in st.query_params:
+        player_id = st.query_params['player_id']
+        if not isinstance(player_id, str):
+            st.error(f'player_id must be a string {player_id}')
             st.stop()
-        st.sidebar.text_input(
-            "Enter an ACBL player number", on_change=player_id_change, placeholder='2663279', key='player_id_input')
-        st.session_state.main_section_container = st.container()
-        with st.session_state.main_section_container:
-            streamlit_chat.message(
-                "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
-            streamlit_chat.message(
-                "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
-            streamlit_chat.message(
-                "To start our postmortem chat, I'll need an ACBL player number. I'll use it to find player's latest ACBL club game. It will be the subject of our chat.", key='intro_message_3', logo=st.session_state.assistant_logo)
-            streamlit_chat.message(
-                "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
-            streamlit_chat.message(
-                "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
-            app_info()
+        st.session_state.player_id = player_id
+    else:
+        st.session_state.player_id = None
 
+    initialize_website_specific()
+    first_time_defaults = {
+        'first_time': True,
+        'single_dummy_sample_count': 10,
+        'show_sql_query': True, # os.getenv('STREAMLIT_ENV') == 'development',
+        'use_historical_data': False,
+        'do_not_cache_df': True, # todo: set to True for production
+        'con': duckdb.connect(),
+        'con_register_name': 'self',
+        'main_section_container': st.empty(),
+        'app_datetime': datetime.fromtimestamp(pathlib.Path(__file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z'),
+        'current_datetime': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    for key, value in first_time_defaults.items():
+        st.session_state[key] = value
+
+    reset_game_data()
+    return
+
+
+def reset_game_data():
+
+    # Default values for session state variables
+    reset_defaults = {
+        'game_description_default': None,
+        'group_id_default': None,
+        'session_id_default': None,
+        'section_name_default': None,
+        'player_id_default': None,
+        'partner_id_default': None,
+        'player_name_default': None,
+        'partner_name_default': None,
+        'player_direction_default': None,
+        'partner_direction_default': None,
+        'pair_id_default': None,
+        'pair_direction_default': None,
+        'opponent_pair_direction_default': None,
+    }
+    
+    # Initialize default values if not already set
+    for key, value in reset_defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+    
+    # Initialize additional session state variables that depend on defaults.
+    reset_session_vars = {
+        'df': None,
+        'game_description': st.session_state.game_description_default,
+        'group_id': st.session_state.group_id_default,
+        'session_id': st.session_state.session_id_default,
+        'section_name': st.session_state.section_name_default,
+        'player_id': st.session_state.player_id_default,
+        'partner_id': st.session_state.partner_id_default,
+        'player_name': st.session_state.player_name_default,
+        'partner_name': st.session_state.partner_name_default,
+        'player_direction': st.session_state.player_direction_default,
+        'partner_direction': st.session_state.partner_direction_default,
+        'pair_id': st.session_state.pair_id_default,
+        'pair_direction': st.session_state.pair_direction_default,
+        'opponent_pair_direction': st.session_state.opponent_pair_direction_default,
+        #'sidebar_loaded': False,
+        'analysis_started': False,   # new flag for analysis sidebar rewrite
+        'vetted_prompts': [],
+        'pdf_assets': [],
+        'sql_query_mode': False,
+        'sql_queries': [],
+        'game_urls_d': {},
+        'tournament_session_urls_d': {},
+    }
+    
+    for key, value in reset_session_vars.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+    return
+
+
+def app_info():
+    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in streamlit. Data engine is polars. Query engine is duckdb. Bridge lib is endplay. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/ffbridge-postmortem")
+    st.caption(
+        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} polars:{pl.__version__} endplay:{endplay.__version__} Query Params:{st.query_params.to_dict()}")
+    return
+
+
+def main():
+    if 'first_time' not in st.session_state:
+        initialize_session_state()
+        create_sidebar()
     else:
         create_ui()
+    return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+
