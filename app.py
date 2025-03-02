@@ -2076,7 +2076,6 @@ def initialize_session_state():
     else:
         st.session_state.player_id = None
 
-    initialize_website_specific()
     first_time_defaults = {
         'first_time': True,
         'single_dummy_sample_count': 10,
@@ -2093,6 +2092,7 @@ def initialize_session_state():
         st.session_state[key] = value
 
     reset_game_data()
+    initialize_website_specific()
     return
 
 
