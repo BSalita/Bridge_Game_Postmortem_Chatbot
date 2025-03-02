@@ -1945,54 +1945,6 @@ def augment_df(df):
     return df
 
 
-def read_configs():
-
-    st.session_state.default_favorites_file = pathlib.Path(
-        'default.favorites.json')
-    st.session_state.player_id_custom_favorites_file = pathlib.Path(
-        f'favorites/{st.session_state.player_id}.favorites.json')
-    st.session_state.debug_favorites_file = pathlib.Path(
-        'favorites/debug.favorites.json')
-
-    if st.session_state.default_favorites_file.exists():
-        with open(st.session_state.default_favorites_file, 'r') as f:
-            favorites = json.load(f)
-        st.session_state.favorites = favorites
-        #st.session_state.vetted_prompts = get_vetted_prompts_from_favorites(favorites)
-
-    if st.session_state.player_id_custom_favorites_file.exists():
-        with open(st.session_state.player_id_custom_favorites_file, 'r') as f:
-            player_id_favorites = json.load(f)
-        st.session_state.player_id_favorites = player_id_favorites
-
-    if st.session_state.debug_favorites_file.exists():
-        with open(st.session_state.debug_favorites_file, 'r') as f:
-            debug_favorites = json.load(f)
-        st.session_state.debug_favorites = debug_favorites
-
-    # display missing prompts in favorites
-    if 'missing_in_summarize' not in st.session_state:
-        # Get the prompts from both locations
-        summarize_prompts = st.session_state.favorites['Buttons']['Summarize']['prompts']
-        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
-
-        # Process the keys to ignore leading '@'
-        st.session_state.summarize_keys = {p.lstrip('@') for p in summarize_prompts}
-        st.session_state.vetted_keys = set(vetted_prompts.keys())
-
-        # Find items in summarize_prompts but not in vetted_prompts. There should be none.
-        st.session_state.missing_in_vetted = st.session_state.summarize_keys - st.session_state.vetted_keys
-        assert len(st.session_state.missing_in_vetted) == 0, f"Oops. {st.session_state.missing_in_vetted} not in {st.session_state.vetted_keys}."
-
-        # Find items in vetted_prompts but not in summarize_prompts. ok if there's some missing.
-        st.session_state.missing_in_summarize = st.session_state.vetted_keys - st.session_state.summarize_keys
-
-        print("\nItems in Vetted_Prompts but not in Summarize.prompts:")
-        for item in st.session_state.missing_in_summarize:
-            print(f"- {item}: {vetted_prompts[item]['title']}")
-    return
-
-
 def process_prompt_macros(sql_query):
     replacements = {
         '{Player_Direction}': st.session_state.player_direction,
