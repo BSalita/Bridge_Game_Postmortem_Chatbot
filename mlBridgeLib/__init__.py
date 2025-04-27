@@ -16,18 +16,6 @@ from .mlBridgeLib import (
     NS_EW
 )
 
-# Common direction mappings
-Direction_to_NESW_d = {
-    'N': 'N',
-    'E': 'E',
-    'S': 'S',
-    'W': 'W',
-    'North': 'N',
-    'East': 'E',
-    'South': 'S',
-    'West': 'W'
-}
-
 # List of all possible contract strings
 contract_classes = [f"{level}{strain}{dbl}" for level in range(1,8) for strain in ['C','D','H','S','N'] for dbl in ['','X','XX']] + ['Pass']
 

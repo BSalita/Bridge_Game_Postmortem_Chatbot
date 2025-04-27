@@ -86,7 +86,11 @@ Direction_to_NESW_d = {
     'North': 'N',
     'East': 'E',
     'South': 'S',
-    'West': 'W'
+    'West': 'W',
+    'north': 'N',
+    'east': 'E',
+    'south': 'S',
+    'west': 'W', # only 'west' is used in the data. not sure why.
 }
 
 # List of all possible contract strings

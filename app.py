@@ -699,10 +699,10 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             assert player_names.height == 1, "Oops. player_names non-unique."
             st.session_state.player_name = player_names[0, 0]
 
-            pair_numbers = rows.select(f"Pair_Number_{pair_direction}").unique()
+            pair_numbers = rows.select(f"Pair_Number_{pair_direction}").unique() # todo: pair_numbers have a suffix of 'NS' or 'EW'. rename to pair_id? rename pair_id to section_pair_id?
             assert pair_numbers.height == 1, "Oops. pair_numbers non-unique."
             st.session_state.pair_number = pair_numbers[0, 0]
-
+ 
             partner_ids = rows.select(f"Player_ID_{partner_direction}").unique()
             assert partner_ids.height == 1, "Oops. partner_ids non-unique."
             st.session_state.partner_id = partner_ids[0, 0]
@@ -710,6 +710,8 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             partner_names = rows.select(f"Player_Name_{partner_direction}").unique()
             assert partner_names.height == 1, "Oops. partner_names non-unique."
             st.session_state.partner_name = partner_names[0, 0]
+
+            st.session_state.pair_id = f"{st.session_state.section_name}-{st.session_state.pair_number}"
 
             # Add new columns based on conditions
             df = df.with_columns([
