@@ -510,7 +510,8 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             st.text(f"{game_description}")
             t = time.time()
             # game_urls[session_id][1] is detail_url
-            data = get_club_results_details_data(game_urls[session_id][1])
+            results_url = game_urls[session_id][1]
+            data = get_club_results_details_data(results_url)
             if data is None:
                 st.error(f"Could not retrieve data for game {session_id}")
                 return False
@@ -579,6 +580,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     elif session_id in tournament_session_urls:
         game_description = tournament_session_urls[session_id][2]
         st.text(f"{game_description}")
+        results_url = tournament_session_urls[session_id][1]
         dfs = tournament_session_urls[session_id][3]
         #dfs = create_tournament_dfs(player_id, tournament_session_urls[session_id][3])
         if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
@@ -658,6 +660,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     st.session_state.session_id = session_id
     st.session_state.game_description = game_description
     st.session_state.game_urls_d[player_id] = game_urls
+    st.session_state.game_results_url = results_url
     st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
     st.session_state.sql_query_mode = False
     st.session_state.main_section_container = st.container(border=True)
@@ -1539,7 +1542,7 @@ def write_report():
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
         report_creator = f"Created by https://{st.session_state.game_name}.postmortem.chat"
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
-        report_game_results_webpage = f"Results Page: {st.session_state.game_url}"
+        report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
@@ -1880,9 +1883,9 @@ def initialize_website_specific():
 
     st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
     st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
-    st.session_state.game_url_default = None
+    st.session_state.game_results_url_default = None
     st.session_state.game_name = 'acbl'
-    st.session_state.game_url = st.session_state.game_url_default
+    st.session_state.game_results_url = st.session_state.game_results_url_default
     # todo: put filenames into a .json or .toml file?
     st.session_state.rootPath = pathlib.Path('e:/bridge/data')
     st.session_state.acblPath = st.session_state.rootPath.joinpath('acbl')
@@ -1966,7 +1969,7 @@ def write_report():
         report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
         report_creator = f"Created by https://{st.session_state.game_name}.postmortem.chat"
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
-        report_game_results_webpage = f"Results Page: {st.session_state.game_url}"
+        report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
