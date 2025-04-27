@@ -91,6 +91,7 @@ Direction_to_NESW_d = {
     'east': 'E',
     'south': 'S',
     'west': 'W', # only 'west' is used in ACBL data, not 'north', 'east', or 'south'. not sure why.
+    '': '', # passed-out so no declarer direction
 }
 
 # List of all possible contract strings
