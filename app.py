@@ -75,20 +75,39 @@ assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Auth
 #import chatlib.chatlib
 #import mlBridgeLib.mlBridgeLib
 
+
+# import mlBridgeLib.mlBridgeLib
+# import mlBridgeLib.mlBridgeAugmentLib
+# import acbllib.acbllib
+# import chatlib.chatlib
+# import streamlitlib.streamlitlib
+
+# mlBridgeLib.pd_options_display()
+
 sys.path.append(str(pathlib.Path.cwd().joinpath('acbllib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('chatlib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 
 # streamlitlib, mlBridgeLib, chatlib must be placed after sys.path.append. vscode re-format likes to move them to the top
-import acbllib
-import streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
-import mlBridgeLib # must be placed after sys.path.append. vscode re-format likes to move this to the top
-import mlBridgeAugmentLib # Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
-import chatlib  # must be placed after sys.path.append. vscode re-format likes to move this to the top
+from acbllib import (
+    get_club_results_from_acbl_number,
+    get_tournament_sessions_from_acbl_number,
+    get_tournament_session_results,
+    get_club_results_details_data
+)
+import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
+from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
+from mlBridgeLib.mlBridgeAugmentLib import (
+    HandAugmenter,
+    ResultAugmenter,
+    DDSDAugmenter,
+    MatchPointAugmenter
+)
+import chatlib
 
 # override pandas display options
-# mlBridgeLib.pd_options_display()
+pd_options_display()
 
 # pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
@@ -358,20 +377,8 @@ def ShowDataFrameTable(df, key, query=None, show_sql_query=True, color_column=No
 #     return True
 
 
-def get_club_results_from_acbl_number(acbl_number):
-    return acbllib.get_club_results_from_acbl_number(acbl_number)
-
-
-def get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key):
-    return acbllib.get_tournament_sessions_from_acbl_number(acbl_number, acbl_api_key)
-
-
-def get_tournament_session_results(session_id, acbl_api_key):
-    return acbllib.get_tournament_session_results(session_id, acbl_api_key)
-
-
-def create_club_dfs(player_id, event_url):
-    data = acbllib.get_club_results_details_data(event_url)
+def call_create_club_dfs(player_id, event_url):
+    data = get_club_results_details_data(event_url)
     if data is None:
         return None
     return chatlib.create_club_dfs(data) # todo: fully convert to polars
@@ -382,19 +389,6 @@ def create_club_dfs(player_id, event_url):
 #     if data is None:
 #         return None
 #     return chatlib.create_tournament_dfs(data)
-
-
-def merge_clean_augment_club_dfs(dfs, sd_cache_d, player_id):
-    return chatlib.merge_clean_augment_club_dfs(dfs, sd_cache_d, player_id)
-
-
-def merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_id):
-    return chatlib.merge_clean_augment_tournament_dfs(dfs, json_results_d, sd_cache_d, player_id)
-
-
-# no caching because of hashing parameter concerns
-def augment_single_dummy(df, sd_cache_d, single_dummy_sample_count, match_point_ns_d):
-    return chatlib.Augment_Single_Dummy(df, sd_cache_d, single_dummy_sample_count, match_point_ns_d)
 
 
 def create_schema_string(df, con):
@@ -433,7 +427,7 @@ def create_schema_string(df, con):
 def perform_hand_augmentations(df, sd_productions):
     """Wrapper for backward compatibility"""
     def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = mlBridgeAugmentLib.HandAugmenter(
+        augmenter = HandAugmenter(
             df, 
             {}, 
             sd_productions=kwargs.get('sd_productions'),
@@ -454,17 +448,17 @@ def augment_df(df):
         # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
         #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
         #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
+        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
         #     df = augmenter.perform_hand_augmentations()
         df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
     with st.spinner('Augmenting with result data...'):
-        augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
+        augmenter = ResultAugmenter(df,{})
         df = augmenter.perform_result_augmentations()
     with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
+        augmenter = DDSDAugmenter(df)
         df = augmenter.perform_dd_sd_augmentations()
     with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        augmenter = MatchPointAugmenter(df)
         df = augmenter.perform_matchpoint_augmentations()
     return df
 
@@ -516,7 +510,11 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             st.text(f"{game_description}")
             t = time.time()
             # game_urls[session_id][1] is detail_url
-            dfs = create_club_dfs(player_id, game_urls[session_id][1])
+            data = get_club_results_details_data(game_urls[session_id][1])
+            if data is None:
+                st.error(f"Could not retrieve data for game {session_id}")
+                return False
+            dfs = chatlib.create_club_dfs(data)
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
                 st.error(
                     f"Game {session_id} has missing or invalid game data. Must be a Mitchell movement game. Select a different club game or tournament session from left sidebar.")
@@ -551,7 +549,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
         #with st.spinner(f"Processing data for club game: {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
             #df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_id) # doesn't use any caching
-            df = merge_clean_augment_club_dfs(dfs, {}, player_id)
+            df = chatlib.merge_clean_augment_club_dfs(dfs, {}, player_id)
             if df is None:
                 st.error(
                     f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
@@ -638,7 +636,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             t = time.time()
             #with Profiler():
 
-            df = merge_clean_augment_tournament_dfs(dfs, json_results_d, acbl_api_key, player_id)
+            df = chatlib.merge_clean_augment_tournament_dfs(dfs, json_results_d, acbl_api_key, player_id)
             if df is None:
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
@@ -1426,7 +1424,7 @@ def create_sidebar():
 def perform_hand_augmentations(df, sd_productions):
     """Wrapper for backward compatibility"""
     def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = mlBridgeAugmentLib.HandAugmenter(
+        augmenter = HandAugmenter(
             df, 
             {}, 
             sd_productions=kwargs.get('sd_productions'),
@@ -1447,17 +1445,17 @@ def augment_df(df):
         # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
         #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
         #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
+        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
         #     df = augmenter.perform_hand_augmentations()
         df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
     with st.spinner('Augmenting with result data...'):
-        augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
+        augmenter = ResultAugmenter(df,{})
         df = augmenter.perform_result_augmentations()
     with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
+        augmenter = DDSDAugmenter(df)
         df = augmenter.perform_dd_sd_augmentations()
     with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        augmenter = MatchPointAugmenter(df)
         df = augmenter.perform_matchpoint_augmentations()
     return df
 
@@ -1876,7 +1874,6 @@ def create_ui():
 #     else:
 #         create_ui()
 
-
 def initialize_website_specific():
 
     st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
@@ -1909,7 +1906,7 @@ def initialize_website_specific():
 def perform_hand_augmentations(df, sd_productions):
     """Wrapper for backward compatibility"""
     def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = mlBridgeAugmentLib.HandAugmenter(
+        augmenter = HandAugmenter(
             df, 
             {}, 
             sd_productions=kwargs.get('sd_productions'),
@@ -1930,17 +1927,17 @@ def augment_df(df):
         # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
         #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
         #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
+        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
         #     df = augmenter.perform_hand_augmentations()
         df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
     with st.spinner('Augmenting with result data...'):
-        augmenter = mlBridgeAugmentLib.ResultAugmenter(df,{})
+        augmenter = ResultAugmenter(df,{})
         df = augmenter.perform_result_augmentations()
     with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = mlBridgeAugmentLib.DDSDAugmenter(df)
+        augmenter = DDSDAugmenter(df)
         df = augmenter.perform_dd_sd_augmentations()
     with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = mlBridgeAugmentLib.MatchPointAugmenter(df)
+        augmenter = MatchPointAugmenter(df)
         df = augmenter.perform_matchpoint_augmentations()
     return df
 

@@ -18,7 +18,8 @@ import sys
 sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('mlBridgeLib'))) # removed .parent
 sys.path.append(str(pathlib.Path.cwd().parent.parent.joinpath('acbllib'))) # removed .parent
 sys.path
-import mlBridgeLib
+from mlBridgeLib.mlBridgeLib import pd_options_display, Direction_to_NESW_d, brs_to_pbn, Vulnerability_to_Vul_d, vul_sym_to_index_d, BoardNumberToVul, ContractToScores
+import mlBridgeLib.mlBridgeLib as mlBridgeLib
 # import acbllib
 
 
@@ -897,7 +898,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 #     df['MP_Geo_NS'] = df['mp_total_n']*df['mp_total_s']
 #     df['MP_Geo_EW'] = df['mp_total_e']*df['mp_total_w']
 
-#     df, sd_cache_d = Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
+#     df, sd_cache_d = mlBridgeLib.Augment_Single_Dummy(df,sd_cache_d,10,matchpoint_ns_d) # {} is no cache
 
 #     # todo: check dtypes
 #     # df = df.astype({'Name_Declarer':'string','Score_Declarer':'int16','Par_Declarer':'int16','Pct_Declarer':'float32','DD_Tricks':'uint8','DD_Score_Declarer':'int16','DD_Pct_Declarer':'float32','Tricks_DD_Diff_Declarer':'int8','Score_DD_Diff_Declarer':'int16','Par_DD_Diff_Declarer':'int16','Par_Pct_Declarer':'float32','Pair_Declarer':'string','Pair_Defender':'string'})
@@ -914,7 +915,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
 
 
 # # todo: merge into mlBridgeAugmentLib. requires converting to Polars.
-# def Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
+# def mlBridgeLib.Augment_Single_Dummy(df,sd_cache_d,produce,matchpoint_ns_d):
 
 #     sd_cache_d = mlBridgeLib.append_single_dummy_results(df['PBN'],sd_cache_d,produce)
 #     df['SD_Prob'] = df.apply(lambda r: sd_cache_d[r['PBN']].get(tuple([r['Declarer_Pair_Direction'],r['Declarer_Direction'],r['BidSuit']]),[0]*14),axis='columns') # had to use get(tuple([...]))
