@@ -424,45 +424,6 @@ def create_schema_string(df, con):
     return df_schema_string
 
 
-def perform_hand_augmentations(df, sd_productions):
-    """Wrapper for backward compatibility"""
-    def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = HandAugmenter(
-            df, 
-            {}, 
-            sd_productions=kwargs.get('sd_productions'),
-            progress=progress
-        )
-        return augmenter.perform_hand_augmentations()
-    
-    return streamlitlib.perform_queued_work(
-        df, 
-        hand_augmentation_work, 
-        work_description="Hand analysis",
-        sd_productions=sd_productions
-    )
-
-
-def augment_df(df):
-    with st.spinner('Creating hand data...'):
-        # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
-        #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
-        #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
-        #     df = augmenter.perform_hand_augmentations()
-        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
-    with st.spinner('Augmenting with result data...'):
-        augmenter = ResultAugmenter(df,{})
-        df = augmenter.perform_result_augmentations()
-    with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = DDSDAugmenter(df)
-        df = augmenter.perform_dd_sd_augmentations()
-    with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = MatchPointAugmenter(df)
-        df = augmenter.perform_matchpoint_augmentations()
-    return df
-
-        
 def change_game_state(player_id, session_id): # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
@@ -501,8 +462,14 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
     if session_id is None:
-        st.error(f"Please make sure {player_id} is a valid player number.")
+        st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
         return False
+
+    # clear games state aninitialize values which are known to be valid at this point
+    reset_game_data() # wipe out all game state data
+    st.session_state.player_id = player_id
+    st.session_state.game_urls_d[player_id] = game_urls
+    st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
 
     if session_id in game_urls:
         with st.spinner(f"Collecting data for club game {session_id} and player {player_id}."):
@@ -539,10 +506,11 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
                     f"Game {session_id} is {dfs['event']['board_scoring_method'][0]}. Expecting an ACBL pairs match point game. Select a different club game or tournament session from left sidebar.")
                 return False
 
-            if not dfs['sessions']['hand_record_id'][0].isdigit():
+            if not dfs['sessions']['hand_record_id'][0].isdigit(): # all session should have the same hand_record_id so just take the first.
                 st.error(
-                    f"Game {session_id} is {dfs['sessions']['hand_record_id'][0]}. Expecting a valid hand record number. Select a different club game or tournament session from left sidebar.")
+                    f"Game {session_id} has an invalid hand record of {dfs['sessions']['hand_record_id'][0]}. Select a different club game or tournament session from left sidebar.")
                 return False
+            
             print_to_log_info('create_club_dfs time:', time.time()-t) # takes 3s
 
         with st.spinner(f"Processing data for club game: {session_id} and player {player_id}."):
@@ -651,17 +619,17 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
                     f.write(col+'\n')
 
     else:
-        st.error(f"player {player_id} not found")
+        st.error(f"Player {player_id} not found")
         return False
 
     # No more user errors possible. Everything checks out so it's safe to update the session state with new data.
-    reset_game_data() # wipe out all game state data
-    st.session_state.player_id = player_id
+    #reset_game_data() # wipe out all game state data
+    #st.session_state.player_id = player_id
     st.session_state.session_id = session_id
     st.session_state.game_description = game_description
-    st.session_state.game_urls_d[player_id] = game_urls
+    #st.session_state.game_urls_d[player_id] = game_urls
     st.session_state.game_results_url = results_url
-    st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
+    #st.session_state.tournament_session_urls_d[player_id] = tournament_session_urls
     st.session_state.sql_query_mode = False
     st.session_state.main_section_container = st.container(border=True)
 
@@ -890,8 +858,8 @@ def slash_about():
 def player_id_change():
     # assign changed textbox value (player_id_input) to player_id
     player_id = st.session_state.player_id_input
-    if not change_game_state(player_id, None):
-        st.session_state.player_id = None
+    change_game_state(player_id, None)
+
 
 
 def debug_player_id_names_change():
@@ -1426,45 +1394,6 @@ def create_sidebar():
 #     return vetted_prompts
 
 
-def perform_hand_augmentations(df, sd_productions):
-    """Wrapper for backward compatibility"""
-    def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = HandAugmenter(
-            df, 
-            {}, 
-            sd_productions=kwargs.get('sd_productions'),
-            progress=progress
-        )
-        return augmenter.perform_hand_augmentations()
-    
-    return streamlitlib.perform_queued_work(
-        df, 
-        hand_augmentation_work, 
-        work_description="Hand analysis",
-        sd_productions=sd_productions
-    )
-
-
-def augment_df(df):
-    with st.spinner('Creating hand data...'):
-        # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
-        #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
-        #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
-        #     df = augmenter.perform_hand_augmentations()
-        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
-    with st.spinner('Augmenting with result data...'):
-        augmenter = ResultAugmenter(df,{})
-        df = augmenter.perform_result_augmentations()
-    with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = DDSDAugmenter(df)
-        df = augmenter.perform_dd_sd_augmentations()
-    with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = MatchPointAugmenter(df)
-        df = augmenter.perform_matchpoint_augmentations()
-    return df
-
-
 def read_configs():
 
     st.session_state.default_favorites_file = pathlib.Path(
@@ -1517,100 +1446,6 @@ def read_configs():
         for item in st.session_state.missing_in_summarize:
             print(f"- {item}: {vetted_prompts[item]['title']}")
     return
-
-
-# todo: similar to prompt_keyword_replacements
-def process_prompt_macros(sql_query):
-    replacements = {
-        '{Player_Direction}': st.session_state.player_direction,
-        '{Partner_Direction}': st.session_state.partner_direction,
-        '{Pair_Direction}': st.session_state.pair_direction,
-        '{Opponent_Pair_Direction}': st.session_state.opponent_pair_direction
-    }
-    for old, new in replacements.items():
-        if new is None:
-            continue
-        sql_query = sql_query.replace(old, new)
-    return sql_query
-
-
-def write_report():
-    # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
-    # todo: need to pass the Button title to the stqdm description. this is a hack until implemented.
-    st.session_state.main_section_container = st.container(border=True)
-    with st.session_state.main_section_container:
-        report_title = f"Bridge Game Postmortem Report Personalized for {st.session_state.player_name}" # can't use (st.session_state.player_id) because of href link below.
-        report_creator = f"Created by https://{st.session_state.game_name}.postmortem.chat"
-        report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
-        report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
-        report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
-        st.markdown(f"### {report_title}")
-        st.markdown(f"##### {report_creator}")
-        st.markdown(f"#### {report_event_info}")
-        st.markdown(f"##### {report_game_results_webpage}")
-        st.markdown(f"#### {report_your_match_info}")
-        pdf_assets = st.session_state.pdf_assets
-        pdf_assets.clear()
-        pdf_assets.append(f"# {report_title}")
-        pdf_assets.append(f"#### {report_creator}")
-        pdf_assets.append(f"### {report_event_info}")
-        pdf_assets.append(f"#### {report_game_results_webpage}")
-        pdf_assets.append(f"### {report_your_match_info}")
-        st.session_state.button_title = 'Summarize' # todo: generalize to all buttons!
-        selected_button = st.session_state.favorites['Buttons'][st.session_state.button_title]
-        vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
-        sql_query_count = 0
-        for stats in stqdm(selected_button['prompts'], desc='Creating personalized report...'):
-            assert stats[0] == '@', stats
-            stat = vetted_prompts[stats[1:]]
-            for i, prompt in enumerate(stat['prompts']):
-                if 'sql' in prompt and prompt['sql']:
-                    #print('sql:',prompt["sql"])
-                    if i == 0:
-                        streamlit_chat.message(f"Morty: {stat['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
-                        pdf_assets.append(f"### {stat['help']}")
-                    prompt_sql = prompt['sql']
-                    sql_query = process_prompt_macros(prompt_sql)
-                    query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
-                    if query_df is not None:
-                        pdf_assets.append(query_df)
-                    sql_query_count += 1
-
-        # As a text link
-        #st.markdown('[Back to Top](#your-personalized-report)')
-
-        # As an html button (needs styling added)
-        # can't use link_button() restarts page rendering. markdown() will correctly jump to href.
-        # st.link_button('Go to top of report',url='#your-personalized-report')\
-        report_title_anchor = report_title.replace(' ','-').lower()
-        st.markdown(f'<a target="_self" href="#{report_title_anchor}"><button>Go to top of report</button></a>', unsafe_allow_html=True)
-
-    if st.session_state.pdf_link.download_button(label="Download Personalized Report",
-            data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
-            file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
-            disabled = len(st.session_state.pdf_assets) == 0,
-            mime='application/octet-stream',
-            key='personalized_report_download_button'):
-        st.warning('Personalized report downloaded.')
-    return
-
-
-
-def ask_sql_query():
-
-    if st.session_state.show_sql_query:
-        with st.container():
-            with bottom():
-                st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
-
-
-def create_ui():
-    create_sidebar()
-    if not st.session_state.sql_query_mode:
-        #create_tab_bar()
-        if st.session_state.session_id is not None:
-            write_report()
-    ask_sql_query()
 
 
 # def initialize_new_player():
@@ -1893,7 +1728,7 @@ def initialize_website_specific():
     st.session_state.savedModelsPath = st.session_state.rootPath.joinpath('SavedModels')
     
     streamlit_chat.message(
-        "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement and not shuffled.", key='intro_message_1', logo=st.session_state.assistant_logo)
+        "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement.", key='intro_message_1', logo=st.session_state.assistant_logo)
     streamlit_chat.message(
         "I'm optimized for large screen devices such as a notebook or monitor. Do not use a smartphone.", key='intro_message_2', logo=st.session_state.assistant_logo)
     streamlit_chat.message(
@@ -2037,26 +1872,6 @@ def create_ui():
         if st.session_state.session_id is not None:
             write_report()
     ask_sql_query()
-
-
-def initialize_session_state():
-    st.set_page_config(layout="wide")
-    # Add this auto-scroll code
-    streamlitlib.widen_scrollbars()
-
-    if platform.system() == 'Windows': # ugh. this hack is required because torch somehow remembers the platform where the model was created. Must be a bug. Must lie to torch.
-        pathlib.PosixPath = pathlib.WindowsPath
-    else:
-        pathlib.WindowsPath = pathlib.PosixPath
-    
-    if 'player_id' in st.query_params:
-        player_id = st.query_params['player_id']
-        if not isinstance(player_id, str):
-            st.error(f'player_id must be a string {player_id}')
-            st.stop()
-        st.session_state.player_id = player_id
-    else:
-        st.session_state.player_id = None
 
 
 def initialize_session_state():
