@@ -1177,10 +1177,11 @@ def create_sidebar():
         if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
             st.session_state.acbl_results_page = st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]
             markdown_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.acbl_results_page})"
-        else:
+            st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
+        elif st.session_state.session_id in st.session_state.tournament_session_urls_d[st.session_state.player_id]:
             st.session_state.acbl_results_page = st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]
             markdown_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.acbl_results_page})"
-        st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
+            st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
 
     st.sidebar.divider()
 
