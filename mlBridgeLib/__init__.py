@@ -1,5 +1,5 @@
 # mlBridgeLib package
-from .mlBridgeLib import (
+from mlBridgeLib.mlBridgeLib import (
     pd_options_display,
     Direction_to_NESW_d,
     brs_to_pbn,
@@ -13,7 +13,11 @@ from .mlBridgeLib import (
     CreateSqlFile,
     NESW,
     SHDC,
-    NS_EW
+    NS_EW,
+    PlayerDirectionToPairDirection,
+    NextPosition,
+    PairDirectionToOpponentPairDirection,
+    score
 )
 
 # List of all possible contract strings

@@ -99,10 +99,12 @@ from acbllib import (
 import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridgeLib.mlBridgeAugmentLib import (
-    HandAugmenter,
-    ResultAugmenter,
-    DDSDAugmenter,
-    MatchPointAugmenter
+    AllAugmentations,
+    #HandAugmenter,
+    #ResultAugmenter,
+    #ScoreAugmenter,
+    #DDSDAugmenter,
+    #MatchPointAugmenter
 )
 import chatlib
 
@@ -442,7 +444,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
         if len(game_urls) == 0:
             st.error(f"Could not find any club games for {player_id}.")
         elif session_id is None:
-            session_id = list(game_urls.keys())[0]  # default to most recent club game# default to most recent club game
+            session_id = list(game_urls.keys())[0]  # default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
 
     with st.spinner(f"Retrieving a list of tournament sessions for {player_id} ..."):
@@ -856,6 +858,7 @@ def slash_about():
 
 
 def player_id_change():
+    # todo: looks like there's some situation where this is not called because player_id_input is already set. Need to breakpoint here to determine why st.session_state.player_id isn't updated.
     # assign changed textbox value (player_id_input) to player_id
     player_id = st.session_state.player_id_input
     change_game_state(player_id, None)
@@ -1741,45 +1744,29 @@ def initialize_website_specific():
     return
 
 
-# Everything below here is the standard mlBridge code.
-
-
-def perform_hand_augmentations(df, sd_productions):
-    """Wrapper for backward compatibility"""
-    def hand_augmentation_work(df, progress, **kwargs):
-        augmenter = HandAugmenter(
-            df, 
-            {}, 
-            sd_productions=kwargs.get('sd_productions'),
-            progress=progress
-        )
-        return augmenter.perform_hand_augmentations()
-    
-    return streamlitlib.perform_queued_work(
-        df, 
-        hand_augmentation_work, 
-        work_description="Hand analysis",
-        sd_productions=sd_productions
-    )
-
+# this version of perform_hand_augmentations_locked() uses self for class compatibility, older versions did not.
+def perform_hand_augmentations_queue(self, hand_augmentation_work):
+    return streamlitlib.perform_queued_work(self, hand_augmentation_work, "Hand analysis")
 
 def augment_df(df):
-    with st.spinner('Creating hand data...'):
-        # with safe_resource(): # perform_hand_augmentations() requires a lock because of double dummy solver dll
-        #     # todo: break apart perform_hand_augmentations into dd and sd augmentations to speed up and stqdm()\
-        #     progress = st.progress(0) # pass progress bar to augmenter to show progress of long running operations
-        #     augmenter = mlBridgeLib.mlBridgeAugmentLib.HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=progress)
-        #     df = augmenter.perform_hand_augmentations()
-        df = perform_hand_augmentations(df, st.session_state.single_dummy_sample_count)
-    with st.spinner('Augmenting with result data...'):
-        augmenter = ResultAugmenter(df,{})
-        df = augmenter.perform_result_augmentations()
-    with st.spinner('Augmenting with DD and SD data...'):
-        augmenter = DDSDAugmenter(df)
-        df = augmenter.perform_dd_sd_augmentations()
-    with st.spinner('Augmenting with matchpoints and percentages data...'):
-        augmenter = MatchPointAugmenter(df)
-        df = augmenter.perform_matchpoint_augmentations()
+    with st.spinner('Augmenting data...'):
+        augmenter = AllAugmentations(df,hrs_d={},sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
+        df = augmenter.perform_all_augmentations()
+    # with st.spinner('Creating hand data...'):
+    #     augmenter = HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
+    #     df = augmenter.perform_hand_augmentations()
+    # with st.spinner('Augmenting with result data...'):
+    #     augmenter = ResultAugmenter(df,{})
+    #     df = augmenter.perform_result_augmentations()
+    # with st.spinner('Augmenting with contract data...'):
+    #     augmenter = ScoreAugmenter(df)
+    #     df = augmenter.perform_score_augmentations()
+    # with st.spinner('Augmenting with DD and SD data...'):
+    #     augmenter = DDSDAugmenter(df)
+    #     df = augmenter.perform_dd_sd_augmentations()
+    # with st.spinner('Augmenting with matchpoints and percentages data...'):
+    #     augmenter = MatchPointAugmenter(df)
+    #     df = augmenter.perform_matchpoint_augmentations()
     return df
 
 
