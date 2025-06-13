@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 #from streamlit_profiler import Profiler # Profiler -- temp?
 
 # Only declared to display version information
-#import fastai
+
 import numpy as np
 import pandas as pd
 #import safetensors
@@ -100,11 +100,6 @@ import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path
 from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridgeLib.mlBridgeAugmentLib import (
     AllAugmentations,
-    #HandAugmenter,
-    #ResultAugmenter,
-    #ScoreAugmenter,
-    #DDSDAugmenter,
-    #MatchPointAugmenter
 )
 import chatlib
 
@@ -715,10 +710,10 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
 
     # make predictions
     # todo: add back in
-    # with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
-    #     t = time.time()
-    #     df = Predict_Game_Results(df) # returning updated df for con.register()
-    #     print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
+    with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
+        t = time.time()
+        # todo: not implemented yet. #df = Predict_Game_Results(df) # returning updated df for con.register()
+        print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'self' for duckdb discovery. SQL queries will reference this df/table.
@@ -932,96 +927,104 @@ def chat_input_on_submit():
             ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'user_query_main_doit_{i}')
 
 
-# import mlBridgeAiLib
+import mlBridgeAiLib
+import mlBridgeLib
 
-# def Predict_Game_Results(df):
-#     # Predict game results using a saved model.
+def Predict_Game_Results(df):
+    # Predict game results using a saved model.
 
-#     if df is None:
-#         return None
+    if df is None:
+        return None
 
-#     club_or_tournament = 'club' if st.session_state.session_id in st.session_state.game_urls else 'tournament'
+    club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
 
-#     df['Declarer_Rating'] = df['Declarer_Rating'].fillna(.5) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
+    # Convert pandas fillna to polars fill_null
+    df = df.with_columns(pl.col('Declarer_Rating').fill_null(0.5)) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
 
-#     # create columns from model's predictions.
-#     predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contract_fastai_model.pkl"
-#     predicted_contracts_model_file = savedModelsPath.joinpath(predicted_contracts_model_filename)
-#     print_to_log_info('predicted_contract_model_file:',predicted_contracts_model_file)
-#     if not predicted_contracts_model_file.exists():
-#         st.error(f"Oops. {predicted_contracts_model_filename} not found.")
-#         return None
-#     # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
-#     learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
-#     print_to_log_debug('isna:',df.isna().sum())
-#     contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for dbl in ['','X','XX'] for direction in 'NESW']
-#     #df['Contract'] = df['Contract'].astype('category',categories=contracts_all)
-#     #df['Contract'] = df['Contract'].astype('string')
-#     #print(df['Contract'])
-#     #df = df.drop(df[~df['Contract'].isin(learn.dls.vocab)].index)
-#     assert df['Contract'].isin(mlBridgeLib.contract_classes).all(), df['Contract'][~df['Contract'].isin(mlBridgeLib.contract_classes)]
-#     #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.vocab)
-#     #import pickle
-#     #save_df_filename = "app_df.pkl"
-#     #save_df_file = savedModelsPath.joinpath(save_df_filename)
-#     #with open(save_df_file, 'wb') as f:
-#     #    pickle.dump(df,f)
-#     #print(f"Saved {save_df_filename}: size:{save_df_file.stat().st_size}")
-#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
-#     df = pd.concat([df,pred_df],axis='columns')
-#     print(df)
+    # create columns from model's predictions.
+    predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contract_pytorch_model.pth"
+    predicted_contracts_model_file = st.session_state.savedModelsPath.joinpath(predicted_contracts_model_filename)
+    print_to_log_info('predicted_contract_model_file:',predicted_contracts_model_file)
+    if not predicted_contracts_model_file.exists():
+        st.error(f"Oops. {predicted_contracts_model_filename} not found.")
+        return None
+    # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
+    learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
+    print_to_log_debug('null_count:', df.null_count())
+    contracts_all = ['PASS']+[str(level+1)+strain+direction+dbl for level in range(7) for strain in 'CDHSN' for direction in 'NESW' for dbl in ['','X','XX']]
+    assert df['Contract'].is_in(contracts_all).all(), df.filter(~pl.col('Contract').is_in(mlBridgeLib.contract_classes))['Contract']
+    # todo: fix this: KeyError: "['mp_total_w', 'iPlayer_Number_N', 'mp_total_n', 'iPlayer_Number_S', 'mp_total_s', 'iPlayer_Number_E', 'mp_total_e', 'iPlayer_Number_W'] not in index"
+    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
+    pred_df_pl = pl.from_pandas(pred_df)
+    df = pl.concat([df, pred_df_pl], how='horizontal')
+    print(df)
 
-#     # create columns from model's predictions.
-#     predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_declarer_direction_fastai_model.pkl"
-#     predicted_directions_model_file = savedModelsPath.joinpath(predicted_directions_model_filename)
-#     print_to_log_info('predicted_declarer_direction_model_file:',predicted_directions_model_file)
-#     if not predicted_directions_model_file.exists():
-#         st.error(f"Oops. {predicted_directions_model_file} not found.")
-#         return None
-#     # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
-#     learn = mlBridgeAiLib.load_model(predicted_directions_model_file)
-#     print_to_log_debug('isna:',df.isna().sum())
-#     #df['Tricks'].fillna(.5,inplace=True)
-#     #df['Result'].fillna(.5,inplace=True)
-#     # FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
-#     df['Declarer_Rating'] = df['Declarer_Rating'].fillna(.5) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
-#     # encode categories using original y categories
-#     #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.procs.categorify.classes[learn.dls.y_names[0]])
-#     print(df['Declarer_Direction'])
-#     #df['Declarer_Direction'] = df['Declarer_Direction'].astype('string')
-#     print('vocab:',learn.dls.vocab)
-#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
-#     df = pd.concat([df,pred_df],axis='columns')
-#     y_name = learn.dls.y_names[0]
-#     print(y_name)
-#     print(df)
-#     df['Declarer_Number_Pred'] = df.apply(lambda r: r['Player_ID_'+(r['Dealer'] if r[y_name+'_Pred']=='PASS' else r[y_name+'_Pred'][-1])],axis='columns')
-#     df['Declarer_Name_Pred'] = df.apply(lambda r: r['Player_Name_'+(r['Dealer'] if r[y_name+'_Pred']=='PASS' else r[y_name+'_Pred'][-1])],axis='columns')
-#     df['Declarer_Pair_Direction_Match'] = df.apply(lambda r: (r[y_name+'_Actual'] in 'NS') == (r[y_name+'_Pred'] in 'NS'),axis='columns')
+    # create columns from model's predictions.
+    predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_declarer_direction_pytorch_model.pth"
+    predicted_directions_model_file = st.session_state.savedModelsPath.joinpath(predicted_directions_model_filename)
+    print_to_log_info('predicted_declarer_direction_model_file:',predicted_directions_model_file)
+    if not predicted_directions_model_file.exists():
+        st.error(f"Oops. {predicted_directions_model_file} not found.")
+        return None
+    # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
+    learn = mlBridgeAiLib.load_model(predicted_directions_model_file)
+    print_to_log_debug('null_count:', df.null_count())
+    #df['Tricks'].fillna(.5,inplace=True)
+    #df['Result'].fillna(.5,inplace=True)
+    # FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+    df = df.with_columns(pl.col('Declarer_Rating').fill_null(0.5)) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
+    print(df['Declarer_Direction'])
+    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
+    # Convert pandas DataFrame to polars and concatenate horizontally
+    pred_df_pl = pl.from_pandas(pred_df)
+    df = pl.concat([df, pred_df_pl], how='horizontal')
+    # y_name = learn['artifacts']['target_name']
+    # print(y_name)
+    # print(df)
+    # df = df.with_columns([
+    #     pl.struct([
+    #         'Dealer_Direction', f'{y_name}_Pred',
+    #         'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W'
+    #     ]).map_elements(
+    #         lambda row: row[f'Player_ID_{row["Dealer_Direction"] if row[f"{y_name}_Pred"] == "PASS" else row[f"{y_name}_Pred"][-1]}'],
+    #         return_dtype=pl.String
+    #     ).alias('Declarer_Number_Pred'),
+    #     pl.struct([
+    #         'Dealer', f'{y_name}_Pred',
+    #         'Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W'
+    #     ]).map_elements(
+    #         lambda row: row[f'Player_Name_{row["Dealer_Direction"] if row[f"{y_name}_Pred"] == "PASS" else row[f"{y_name}_Pred"][-1]}'],
+    #         return_dtype=pl.String
+    #     ).alias('Declarer_Name_Pred'),
+    #     pl.struct([f'{y_name}_Actual', f'{y_name}_Pred']).map_elements(
+    #         lambda row: (row[f'{y_name}_Actual'] in 'NS') == (row[f'{y_name}_Pred'] in 'NS'),
+    #         return_dtype=pl.Boolean
+    #     ).alias('Declarer_Pair_Direction_Match')
+    # ])
 
-#     # create columns from model's predictions.
-#     predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_pct_ns_fastai_model.pkl"
-#     predicted_rankings_model_file = savedModelsPath.joinpath(predicted_rankings_model_filename)
-#     print_to_log_info('predicted_pct_ns_model_file:',predicted_rankings_model_file)
-#     if not predicted_rankings_model_file.exists():
-#         st.error(f"Oops. {predicted_rankings_model_file} not found.")
-#         return None
-#     #y_name = 'Pct_NS'
-#     #predicted_board_result_pcts_ns, _ = mlBridgeAiLib.make_predictions(predicted_rankings_model_file, df)
-#     learn = mlBridgeAiLib.load_model(predicted_rankings_model_file)
-#     #df[learn.dls.y_names[0]] = pd.Categorical(df[learn.dls.y_names[0]], categories=learn.dls.procs.categorify.classes[learn.dls.y_names[0]])
-#     pred_df = mlBridgeAiLib.get_predictions(learn, df) # classifier returns list containing a probability for every class label (NESW)
-#     df = pd.concat([df,pred_df],axis='columns')
-#     y_name = learn.dls.y_names[0]
-#     print(y_name)
-#     y_name_ns = y_name
-#     y_name_ew = y_name.replace('NS','EW')
-#     df[y_name_ew+'_Actual'] = df[y_name_ew]
-#     df[y_name_ew+'_Pred'] = 1-df[y_name_ns+'_Pred']
-#     df[y_name_ns+'_Diff'] = df[y_name_ns+'_Actual']-df[y_name_ns+'_Pred']
-#     df[y_name_ew+'_Diff'] = df[y_name_ew+'_Actual']-df[y_name_ew+'_Pred']
-
-#     return df # return newly created df. created by df = pd.concat().
+    # create columns from model's predictions.
+    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_pct_ns_pytorch_model.pth"
+    predicted_rankings_model_file = st.session_state.savedModelsPath.joinpath(predicted_rankings_model_filename)
+    print_to_log_info('predicted_pct_ns_model_file:',predicted_rankings_model_file)
+    if not predicted_rankings_model_file.exists():
+        st.error(f"Oops. {predicted_rankings_model_file} not found.")
+        return None
+    learn = mlBridgeAiLib.load_model(predicted_rankings_model_file)
+    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
+    pred_df_pl = pl.from_pandas(pred_df)
+    df = pl.concat([df, pred_df_pl], how='horizontal')
+    # y_name = learn['artifacts']['target_name']
+    # print(y_name)
+    # y_name_ns = y_name
+    # y_name_ew = y_name.replace('NS','EW')
+    # df = df.with_columns([
+    #     pl.col(y_name_ew).alias(f'{y_name_ew}_Actual'),
+    #     (1 - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred'),
+    #     (pl.col(f'{y_name_ns}_Actual') - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Diff'),
+    #     (pl.col(f'{y_name_ew}_Actual') - pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Diff')
+    # ])
+    #st.session_state.sql_query_mode = True
+    return df # return newly created df. created by pl.concat().
 
 
 # def reset_data():
@@ -1729,7 +1732,7 @@ def initialize_website_specific():
     st.session_state.rootPath = pathlib.Path('e:/bridge/data')
     st.session_state.acblPath = st.session_state.rootPath.joinpath('acbl')
     #st.session_state.favoritesPath = pathlib.joinpath('favorites'),
-    st.session_state.savedModelsPath = st.session_state.rootPath.joinpath('SavedModels')
+    st.session_state.savedModelsPath = st.session_state.acblPath.joinpath('SavedModels')
     
     streamlit_chat.message(
         "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement.", key='intro_message_1', logo=st.session_state.assistant_logo)
@@ -1750,8 +1753,15 @@ def perform_hand_augmentations_queue(self, hand_augmentation_work):
 
 def augment_df(df):
     with st.spinner('Augmenting data...'):
-        augmenter = AllAugmentations(df,hrs_d={},sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
-        df = augmenter.perform_all_augmentations()
+        augmenter = AllAugmentations(df,None,sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
+        df, hrs_cache_df = augmenter.perform_all_augmentations()
+    # previously_missing_columns = {'CT_EW_S_Game', 'HCP_NS_S', 'CT_EW_C_Partial', 'CT_NS_C_GSlam', 'CT_NS_C_SSlam', 'CT_NS_D', 'CT_NS_C', 'QT_NS_S', 'CT_EW_H', 'CT_EW_H_GSlam', 'CT_NS_N_SSlam', 'LoTT_Variance', 'MP_Sum_EW', 'CT_NS_C_Pass', 'MP_Geo_NS', 'CT_EW_N', 'CT_EW_N_Pass', 'DP_EW_S', 'iPlayer_Number_W', 'CT_EW_C', 'MP_Geo_EW', 'QT_EW_D', 'QT_NS_D', 'iPlayer_Number_N', 'CT_EW_C_Pass', 'CT_NS_S_Partial', 'CT_NS_H_Pass', 'CT_EW_H_Partial', 'HCP_EW_C', 'CT_EW_N_Game', 'CT_NS_S_SSlam', 'HCP_NS_H', 'CT_NS_D_SSlam', 'CT_NS_D_Pass', 'CT_NS_C_Partial', 'CT_NS_S_Pass', 'HCP_EW_D', 'CT_EW_N_SSlam', 'CT_EW_C_Game', 'HCP_EW_H', 'CT_EW_S_Partial', 'CT_NS_N', 'QT_EW_S', 'CT_EW_S', 'mp_total_n', 'HCP_EW_S', 'CT_NS_C_Game', 'CT_EW_S_GSlam', 'CT_NS_H_Partial', 'iPlayer_Number_S', 'CT_NS_S_GSlam', 'CT_NS_N_GSlam', 'DP_NS_H', 'CT_NS_H_GSlam', 'CT_EW_S_SSlam', 'iPlayer_Number_E', 'CT_NS_H_SSlam', 'DP_EW_C', 'mp_total_w', 'CT_EW_H_Pass', 'CT_NS_D_Game', 'CT_EW_D_GSlam', 'LoTT_Suit_Length', 'CT_EW_C_SSlam', 'QT_EW_H', 'CT_NS_H_Game', 'CT_NS_H', 'QT_NS_H', 'CT_NS_D_GSlam', 'DP_NS_D', 'MP_Sum_NS', 'CT_EW_H_Game', 'DP_NS_C', 'CT_NS_D_Partial', 'CT_EW_S_Pass', 'CT_NS_N_Game', 'CT_NS_N_Pass', 'CT_EW_D_Pass', 'QT_EW_C', 'ParScore_NS', 'HCP_NS_C', 'CT_EW_H_SSlam', 'CT_EW_D_Game', 'HCP_NS_D', 'mp_total_s', 'CT_EW_N_GSlam', 'CT_NS_S', 'CT_EW_D_SSlam', 'CT_EW_D_Partial', 'CT_EW_D', 'CT_EW_C_GSlam', 'DP_EW_D', 'LoTT_Tricks', 'CT_EW_N_Partial', 'DP_NS_S', 'mp_total_e', 'CT_NS_S_Game', 'CT_NS_N_Partial', 'QT_NS_C', 'DP_EW_H'}
+    # now_missing_cols = previously_missing_columns.difference(df.columns)
+    # print(now_missing_cols)
+    # df = df.with_columns([
+    #     pl.lit(None).alias(col) for col in now_missing_cols
+    # ])
+    #assert not now_missing_cols, now_missing_cols
     # with st.spinner('Creating hand data...'):
     #     augmenter = HandAugmenter(df,{},sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
     #     df = augmenter.perform_hand_augmentations()
