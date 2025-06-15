@@ -940,6 +940,9 @@ def Predict_Game_Results(df):
 
     club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
 
+    if club_or_tournament == 'tournament':
+        return df
+
     # Convert pandas fillna to polars fill_null
     df = df.with_columns(pl.col('Declarer_Rating').fill_null(0.5)) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
 
