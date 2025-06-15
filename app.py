@@ -488,7 +488,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
 
             # todo: probably need to check if keys exist to control error processing -- pair_summaries, event, sessions, ...
 
-            if dfs['pair_summaries']['pair_number'].n_unique() == 1: # Assuming pair_numbers are all unique for Howell
+            if dfs['pair_summaries']['pair_number'].n_unique() == 1 or dfs['pair_summaries']['direction'].n_unique() == 1: # Assuming pair_numbers are all unique for Howell
                 st.error(
                     f"Game {session_id}. I can only chat about Mitchell movements. Select a different club game or tournament session from left sidebar.")
                 return False
@@ -648,6 +648,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     # Iterate over player directions
     for player_direction, pair_direction, partner_direction, opponent_pair_direction in [('North', 'NS', 'S', 'EW'), ('South', 'NS', 'N', 'EW'), ('East', 'EW', 'W', 'NS'), ('West', 'EW', 'E', 'NS')]:
         rows = df.filter(pl.col(f"Player_ID_{player_direction[0]}").str.contains(st.session_state.player_id))
+        print(f"{st.session_state.player_id=} {rows.height=}")
         if rows.height > 0:
             st.session_state.player_id = player_id
             st.session_state.player_direction = player_direction
@@ -705,6 +706,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
             break # only want to do this once.
 
         print_to_log_info(f"create everything data table: {player_direction=} time:{time.time()-t}")
+    assert st.session_state.player_id is not None, f"{st.session_state.player_id=}" # can assert if non-mitchell movement isn't already detected.
 
 
 
@@ -712,7 +714,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     # todo: add back in
     with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
         t = time.time()
-        # todo: not implemented yet. #df = Predict_Game_Results(df) # returning updated df for con.register()
+        df = Predict_Game_Results(df) # returning updated df for con.register()
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
     # Create a DuckDB table from the DataFrame
@@ -978,29 +980,27 @@ def Predict_Game_Results(df):
     # Convert pandas DataFrame to polars and concatenate horizontally
     pred_df_pl = pl.from_pandas(pred_df)
     df = pl.concat([df, pred_df_pl], how='horizontal')
-    # y_name = learn['artifacts']['target_name']
-    # print(y_name)
-    # print(df)
-    # df = df.with_columns([
-    #     pl.struct([
-    #         'Dealer_Direction', f'{y_name}_Pred',
-    #         'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W'
-    #     ]).map_elements(
-    #         lambda row: row[f'Player_ID_{row["Dealer_Direction"] if row[f"{y_name}_Pred"] == "PASS" else row[f"{y_name}_Pred"][-1]}'],
-    #         return_dtype=pl.String
-    #     ).alias('Declarer_Number_Pred'),
-    #     pl.struct([
-    #         'Dealer', f'{y_name}_Pred',
-    #         'Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W'
-    #     ]).map_elements(
-    #         lambda row: row[f'Player_Name_{row["Dealer_Direction"] if row[f"{y_name}_Pred"] == "PASS" else row[f"{y_name}_Pred"][-1]}'],
-    #         return_dtype=pl.String
-    #     ).alias('Declarer_Name_Pred'),
-    #     pl.struct([f'{y_name}_Actual', f'{y_name}_Pred']).map_elements(
-    #         lambda row: (row[f'{y_name}_Actual'] in 'NS') == (row[f'{y_name}_Pred'] in 'NS'),
-    #         return_dtype=pl.Boolean
-    #     ).alias('Declarer_Pair_Direction_Match')
-    # ])
+    y_name = learn['artifacts']['target_name']
+    print(y_name)
+    print(df)
+    df = df.with_columns([
+        pl.struct([
+            f'{y_name}_Pred','Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W'
+        ]).map_elements(
+            lambda row: None if row[f"{y_name}_Pred"] is None or row[f"{y_name}_Pred"] not in 'NESW' else row[f'Player_ID_{row[f"{y_name}_Pred"]}'],
+            return_dtype=pl.String
+        ).alias('Declarer_ID_Pred'),
+        pl.struct([
+            f'{y_name}_Pred','Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W'
+        ]).map_elements(
+            lambda row: None if row[f"{y_name}_Pred"] is None or row[f"{y_name}_Pred"] not in 'NESW' else row[f'Player_Name_{row[f"{y_name}_Pred"]}'],
+            return_dtype=pl.String
+        ).alias('Declarer_Name_Pred'),
+        pl.struct([f'{y_name}_Actual', f'{y_name}_Pred']).map_elements(
+            lambda row: (row[f'{y_name}_Actual'] is not None and row[f'{y_name}_Actual'] in 'NS') and (row[f'{y_name}_Pred'] is not None and row[f'{y_name}_Pred'] in 'NS') or (row[f'{y_name}_Actual'] is None and row[f'{y_name}_Pred'] is None),
+            return_dtype=pl.Boolean
+        ).alias('Declarer_Pair_Direction_Match')
+    ])
 
     # create columns from model's predictions.
     predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_pct_ns_pytorch_model.pth"
@@ -1013,16 +1013,18 @@ def Predict_Game_Results(df):
     pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
     pred_df_pl = pl.from_pandas(pred_df)
     df = pl.concat([df, pred_df_pl], how='horizontal')
-    # y_name = learn['artifacts']['target_name']
-    # print(y_name)
-    # y_name_ns = y_name
-    # y_name_ew = y_name.replace('NS','EW')
-    # df = df.with_columns([
-    #     pl.col(y_name_ew).alias(f'{y_name_ew}_Actual'),
-    #     (1 - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred'),
-    #     (pl.col(f'{y_name_ns}_Actual') - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Diff'),
-    #     (pl.col(f'{y_name_ew}_Actual') - pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Diff')
-    # ])
+    y_name = learn['artifacts']['target_name']
+    print(y_name)
+    y_name_ns = y_name
+    y_name_ew = y_name.replace('NS','EW')
+    df = df.with_columns([
+        pl.col(y_name_ew).alias(f'{y_name_ew}_Actual')
+    ]).with_columns([
+        (1 - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred')
+    ]).with_columns([
+        (pl.col(f'{y_name_ns}_Actual') - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Error'),
+        (pl.col(f'{y_name_ew}_Actual') - pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Error')
+    ])
     #st.session_state.sql_query_mode = True
     return df # return newly created df. created by pl.concat().
 
@@ -1204,8 +1206,11 @@ def create_sidebar():
         for k, button in st.session_state.favorites['Buttons'].items():
             # create dict of vetted prompts
             # default list of vetted prompts is
+            if k == st.session_state.button_title_default:
+                st.session_state.selected_button = button
             if st.sidebar.button(button['title'], help=button['help'], key=k):
                 st.session_state.sql_query_mode = False
+                st.session_state.selected_button = button
                 
                 # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
                 # if len(ups) > 4:
@@ -1816,11 +1821,9 @@ def write_report():
         pdf_assets.append(f"### {report_event_info}")
         pdf_assets.append(f"#### {report_game_results_webpage}")
         pdf_assets.append(f"### {report_your_match_info}")
-        st.session_state.button_title = 'Summarize' # todo: generalize to all buttons!
-        selected_button = st.session_state.favorites['Buttons'][st.session_state.button_title]
         vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
         sql_query_count = 0
-        for stats in stqdm(selected_button['prompts'], desc='Creating personalized report...'):
+        for stats in stqdm(st.session_state.selected_button['prompts'], desc='Creating personalized report...'):
             assert stats[0] == '@', stats
             stat = vetted_prompts[stats[1:]]
             for i, prompt in enumerate(stat['prompts']):
@@ -1928,6 +1931,7 @@ def reset_game_data():
         'pair_id_default': None,
         'pair_direction_default': None,
         'opponent_pair_direction_default': None,
+        'button_title_default': 'Summarize',
     }
     
     # Initialize default values if not already set
@@ -1951,6 +1955,7 @@ def reset_game_data():
         'pair_id': st.session_state.pair_id_default,
         'pair_direction': st.session_state.pair_direction_default,
         'opponent_pair_direction': st.session_state.opponent_pair_direction_default,
+        'button_title': st.session_state.button_title_default,
         #'sidebar_loaded': False,
         'analysis_started': False,   # new flag for analysis sidebar rewrite
         'vetted_prompts': [],

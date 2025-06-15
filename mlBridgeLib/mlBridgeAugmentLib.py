@@ -733,23 +733,6 @@ def Perform_Legacy_Renames(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def Create_Fake_Predictions(df: pl.DataFrame) -> pl.DataFrame:
-    # todo: remove this once NN predictions are implemented
-    df = df.with_columns(
-
-        # pl.col('Pct_NS').alias('Pct_NS_Pred'),
-        # pl.col('Pct_EW').alias('Pct_EW_Pred'),
-        # pl.col('Pct_NS').sub(pl.col('Pct_NS')).alias('Pct_NS_Diff_Pred'),
-        # pl.col('Pct_EW').sub(pl.col('Pct_EW')).alias('Pct_EW_Diff_Pred'),
-        # pl.col('Declarer_Direction').alias('Declarer_Direction_Pred'), # Declarer_Direction_Actual not needed
-        # pl.lit(.321).alias('Declarer_Pct_Pred'), # todo: implement 'Declarer_Pct'
-        # pl.lit(456).alias('Declarer_Number_Pred'), # todo: implement 'Declarer_ID'
-        # pl.col('Declarer_Name').alias('Declarer_Name_Pred'),
-        # pl.col('Contract').alias('Contract_Pred'),
-    )
-    return df
-
-
 def DealToCards(df: pl.DataFrame) -> pl.DataFrame:
     lazy_df = df.lazy()
     lazy_cards_df = lazy_df.with_columns([
@@ -1649,14 +1632,6 @@ class FinalContractAugmenter:
             self.df
         )
 
-    # todo: remove this once NN predictions are implemented
-    def _create_fake_predictions(self) -> None:
-        self.df = self._time_operation(
-            "create fake predictions",
-            Create_Fake_Predictions,
-            self.df
-        )
-
 
     def _create_position_columns(self) -> None:
         # these augmentations should not already exist.
@@ -1674,6 +1649,12 @@ class FinalContractAugmenter:
         self.df = self._time_operation(
             "create position columns",
             lambda df: df.with_columns([
+                pl.struct(['Declarer_Direction', 'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W']).map_elements(
+                    lambda r: None if r['Declarer_Direction'] is None else r[f'Player_ID_{r["Declarer_Direction"]}'],
+                    return_dtype=pl.String
+                ).alias('Declarer'),
+            ])
+            .with_columns([
                 pl.col('Declarer_Direction').replace_strict(NextPosition).alias('Direction_OnLead'),
             ])
             .with_columns([
@@ -1824,7 +1805,6 @@ class FinalContractAugmenter:
         self._create_score_diff_columns()
         self._create_lott() # todo: would be interesting to create lott for all contracts and then move into AllContractsAugmenter
         self._perform_legacy_renames()
-        self._create_fake_predictions()
         self._create_position_columns()
         self._create_board_result_columns()
         self._create_trick_columns()
@@ -2127,7 +2107,8 @@ class AllHandRecordAugmentations:
         self.df = self.df.with_columns(pl.col('ParScore').alias('Par_NS'))
         self.df = self.df.with_columns(pl.col('ParScore').neg().alias('Par_EW'))
         
-        # Create DD columns for pair directions and strains
+        # todo: move this somewhere more sensible.
+        # Create DD columns for pair directions and strains e.g. DD_NS_S
         dd_pair_columns = [
             pl.max_horizontal(f'DD_{pair_direction[0]}_{strain}', f'DD_{pair_direction[1]}_{strain}').alias(f'DD_{pair_direction}_{strain}')
             for pair_direction in ['NS', 'EW']

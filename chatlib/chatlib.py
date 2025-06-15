@@ -240,10 +240,20 @@ def merge_clean_augment_club_dfs(dfs, sd_cache_d, acbl_number):  # todo: acbl_nu
     #assert not df_br_b_pair_summary_ew.columns.str.contains(r'^.*_[xy]$').any()
 
     df_players = dfs['players'].drop(['id', 'created_at', 'updated_at', 'transaction_date']).rename({'id_number': 'player_number', 'name': 'player_name'})
-    player_n = df_players.group_by('pair_summary_id').agg(pl.first('player_number').alias('player_number_n'), pl.first('player_name').alias('player_name_n'))
-    player_s = df_players.group_by('pair_summary_id').agg(pl.last('player_number').alias('player_number_s'), pl.last('player_name').alias('player_name_s'))
-    player_e = df_players.group_by('pair_summary_id').agg(pl.first('player_number').alias('player_number_e'), pl.first('player_name').alias('player_name_e'))
-    player_w = df_players.group_by('pair_summary_id').agg(pl.last('player_number').alias('player_number_w'), pl.last('player_name').alias('player_name_w'))
+    
+    # Get all column names except the grouping column
+    player_columns = [col for col in df_players.columns if col != 'pair_summary_id']
+    
+    # Create aggregations for each direction with all columns
+    player_n_aggs = [pl.first(col).alias(f'{col}_n') for col in player_columns]
+    player_s_aggs = [pl.last(col).alias(f'{col}_s') for col in player_columns]
+    player_e_aggs = [pl.first(col).alias(f'{col}_e') for col in player_columns]
+    player_w_aggs = [pl.last(col).alias(f'{col}_w') for col in player_columns]
+    
+    player_n = df_players.group_by('pair_summary_id').agg(player_n_aggs)
+    player_s = df_players.group_by('pair_summary_id').agg(player_s_aggs)
+    player_e = df_players.group_by('pair_summary_id').agg(player_e_aggs)
+    player_w = df_players.group_by('pair_summary_id').agg(player_w_aggs)
 
     player_ns = player_n.join(player_s, on='pair_summary_id', how='left')
     print_to_log_info(player_ns.head(1))
