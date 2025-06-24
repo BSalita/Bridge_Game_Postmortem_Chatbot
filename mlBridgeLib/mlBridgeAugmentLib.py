@@ -190,7 +190,10 @@ def calc_double_dummy_deals(deals: List[Deal], batch_size: int = 40, output_prog
         if output_progress:
             if progress:
                 percent_complete = int(i*100/len(deals))
-                progress.progress(percent_complete,f"{percent_complete}%: Double dummies calculated for {i} of {len(deals)} unique deals.")
+                if hasattr(progress, 'progress'): # streamlit
+                    progress.progress(percent_complete, f"{percent_complete}%: Double dummies calculated for {i} of {len(deals)} unique deals.")
+                elif hasattr(progress, 'set_description'): # tqdm
+                    progress.set_description(f"{percent_complete}%: Double dummies calculated for {i} of {len(deals)} unique deals.")
             else:
                 if i % 1000 == 0:
                     percent_complete = int(i*100/len(deals))
@@ -199,8 +202,11 @@ def calc_double_dummy_deals(deals: List[Deal], batch_size: int = 40, output_prog
         all_result_tables.extend(result_tables)
     if output_progress: 
         if progress:
-            progress.progress(100,f"100%: Double dummies calculated for {len(deals)} unique deals.")
-            progress.empty() # hmmm, this removes the progress bar so fast that 100% message won't be seen.
+            if hasattr(progress, 'progress'): # streamlit
+                progress.progress(100, f"100%: Double dummies calculated for {len(deals)} unique deals.")
+                progress.empty() # hmmm, this removes the progress bar so fast that 100% message won't be seen.
+            elif hasattr(progress, 'set_description'): # tqdm
+                progress.set_description(f"100%: Double dummies calculated for {len(deals)} unique deals.")
         else:
             print(f"100%: Double dummies calculated for {len(deals)} unique deals.")
     return all_result_tables
@@ -392,7 +398,10 @@ def calculate_sd_probs(df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_producti
     for i,pbn in enumerate(pbns_to_process):
         if progress:
             percent_complete = int(i*100/len(pbns_to_process))
-            progress.progress(percent_complete,f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal. This step takes 30 seconds...")
+            if hasattr(progress, 'progress'): # streamlit
+                progress.progress(percent_complete, f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal. This step takes 30 seconds...")
+            elif hasattr(progress, 'set_description'): # tqdm
+                progress.set_description(f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal. This step takes 30 seconds...")
         else:
             if i < 10 or i % 10000 == 0:
                 percent_complete = int(i*100/len(pbns_to_process))
@@ -404,7 +413,10 @@ def calculate_sd_probs(df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_producti
             print(f"calculate_single_dummy_probabilities: time:{time.time()-t} seconds")
         #error
     if progress:
-            progress.progress(100,f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
+        if hasattr(progress, 'progress'): # streamlit
+            progress.progress(100, f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
+        elif hasattr(progress, 'set_description'): # tqdm
+            progress.set_description(f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
     else:
         print(f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
 
@@ -429,7 +441,7 @@ def calculate_sd_probs(df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_producti
     #     assert set(sd_df.columns) == (set(sd_probs_df.columns))
     #     sd_df = pl.concat([sd_df, sd_probs_df.select(sd_df.columns)]) # must reorder columns to match sd_df
 
-    if progress:
+    if progress and hasattr(progress, 'empty'):
         progress.empty()
 
     return sd_dfs_d, sd_probs_df
@@ -734,14 +746,13 @@ def Perform_Legacy_Renames(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def DealToCards(df: pl.DataFrame) -> pl.DataFrame:
-    lazy_df = df.lazy()
-    lazy_cards_df = lazy_df.with_columns([
+    df = df.with_columns([
         pl.col(f'Suit_{direction}_{suit}').str.contains(rank).alias(f'C_{direction}{suit}{rank}')
         for direction in 'NESW'
         for suit in 'SHDC'
         for rank in 'AKQJT98765432'
     ])
-    return lazy_cards_df.collect()
+    return df
 
 
 def CardsToHCP(df: pl.DataFrame) -> pl.DataFrame:
@@ -1508,6 +1519,7 @@ class FinalContractAugmenter:
                 pl.max_horizontal('EV_Max_NS','EV_Max_EW').alias('EV_Max'),
                 pl.max_horizontal('EV_Max_Col_NS','EV_Max_Col_EW').alias('EV_Max_Col'),
                 pl.when(pl.col('Declarer_Pair_Direction').eq('NS')).then(pl.col('EV_Max_NS')).otherwise(pl.col('EV_Max_EW')).alias('EV_Max_Declarer'),
+                pl.when(pl.col('Declarer_Pair_Direction').eq('NS')).then(pl.col('EV_Max_Col_NS')).otherwise(pl.col('EV_Max_Col_EW')).alias('EV_Max_Col_Declarer'),
             ]),
             self.df
         )
@@ -1577,6 +1589,18 @@ class FinalContractAugmenter:
         ]
 
     def _create_score_columns(self) -> None:
+        if 'Score' not in self.df.columns and 'Score_NS' not in self.df.columns:
+            all_scores_d, scores_d, scores_df = calculate_scores()
+            self.df = self._time_operation(
+                "convert_contract_to_score",
+                lambda df: df.with_columns([
+                    pl.struct(['BidLvl', 'BidSuit', 'Tricks', 'Vul_Declarer', 'Dbl'])
+                        .map_elements(lambda x: all_scores_d.get(tuple(x.values()),None),
+                                    return_dtype=pl.Int16)
+                        .alias('Score'),
+                ]),
+                self.df
+            )
         if 'Score_NS' not in self.df.columns:
             self.df = self._time_operation(
                 "convert_score_to_score",
@@ -1969,12 +1993,12 @@ class MatchPointAugmenter:
                 #pl.col('EV_Pct_Max_EW').alias('SD_Pct_EW'),
                 #pl.col('EV_Pct_Max_NS').alias('SD_Pct_Max_NS'),
                 #pl.col('EV_Pct_Max_EW').alias('SD_Pct_Max_EW'),
-                (pl.col('Pct_NS')-pl.col('EV_Pct_Max_NS')).alias('EV_Pct_Max_Diff_NS'),
-                (pl.col('Pct_EW')-pl.col('EV_Pct_Max_EW')).alias('EV_Pct_Max_Diff_EW'),
-                (pl.col('Pct_NS')-pl.col('Par_Pct_NS')).alias('EV_Par_Pct_Diff_NS'),
-                (pl.col('Pct_EW')-pl.col('Par_Pct_EW')).alias('EV_Par_Pct_Diff_EW'),
-                (pl.col('Pct_NS')-pl.col('Par_Pct_NS')).alias('EV_Par_Pct_Max_Diff_NS'),
-                (pl.col('Pct_EW')-pl.col('Par_Pct_EW')).alias('EV_Par_Pct_Max_Diff_EW'),
+                (pl.col('EV_Pct_Max_NS')-pl.col('Pct_NS')).alias('EV_Pct_Max_Diff_NS'), # todo: suspect this is wrong
+                (pl.col('EV_Pct_Max_EW')-pl.col('Pct_EW')).alias('EV_Pct_Max_Diff_EW'), # todo: suspect this is wrong
+                (pl.col('DD_Score_Pct_NS_Max')-pl.col('Par_Pct_NS')).alias('EV_Par_Pct_Diff_NS'), # todo: suspect this is wrong
+                (pl.col('DD_Score_Pct_EW_Max')-pl.col('Par_Pct_EW')).alias('EV_Par_Pct_Diff_EW'), # todo: suspect this is wrong
+                (pl.col('EV_Pct_Max_NS')-pl.col('Par_Pct_NS')).alias('EV_Par_Pct_Max_Diff_NS'), # todo: suspect this is wrong
+                (pl.col('EV_Pct_Max_EW')-pl.col('Par_Pct_EW')).alias('EV_Par_Pct_Max_Diff_EW'), # todo: suspect this is wrong
             ])
         ]
 

@@ -940,7 +940,7 @@ def Predict_Game_Results(df):
 
     club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
 
-    if club_or_tournament == 'tournament':
+    if club_or_tournament == 'tournament': # todo: tournament models are not implemented yet.
         return df
 
     # Convert pandas fillna to polars fill_null
@@ -1911,7 +1911,7 @@ def initialize_session_state():
         'show_sql_query': True, # os.getenv('STREAMLIT_ENV') == 'development',
         'use_historical_data': False,
         'do_not_cache_df': True, # todo: set to True for production
-        'con': duckdb.connect(),
+        'con': duckdb.connect(), # IMPORTANT: duckdb.connect() hung until previous version was installed.
         'con_register_name': 'self',
         'main_section_container': st.empty(),
         'app_datetime': datetime.fromtimestamp(pathlib.Path(__file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z'),

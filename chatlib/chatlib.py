@@ -1,3 +1,6 @@
+
+# todo: looks like all of this is acbl specific to needs to be moved to acbllib.py
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # or DEBUG
@@ -636,9 +639,8 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     # Create 'Result' and 'Tricks' columns
     if 'Result' in df.columns:
         df = df.with_columns([
-            pl.when(pl.col('Result').is_not_null())
-            .then(pl.col('Result').map_elements(lambda x: 0 if x in ['=', '0', ''] else int(x[1:]) if x[0] == '+' else int(x),return_dtype=pl.Int8))
-            .otherwise(pl.col('Result'))
+            pl.when(pl.col('Result').is_not_null()) # todo: make unrecognized data into null? added '+' to list because of #96851 Duncan Open. A '+' was manually entered in results as part of an adjusted score.
+            .then(pl.col('Result').map_elements(lambda x: 0 if x in ['=', '0', '', '+'] else int(x[1:]) if x[0] == '+' else int(x),return_dtype=pl.Int8))
             .cast(pl.Int8)
             .alias('Result')
         ])
