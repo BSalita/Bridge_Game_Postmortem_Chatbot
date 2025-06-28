@@ -8,14 +8,15 @@
 # todo: load_model() is failing if numpy >= 2.0.0 is installed.
 
 import logging
+from typing import Any, Optional, Dict, List, Tuple, Union
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # or DEBUG
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-def print_to_log_info(*args):
+def print_to_log_info(*args: Any) -> None:
     print_to_log(logging.INFO, *args)
-def print_to_log_debug(*args):
+def print_to_log_debug(*args: Any) -> None:
     print_to_log(logging.DEBUG, *args)
-def print_to_log(level, *args):
+def print_to_log(level: int, *args: Any) -> None:
     logging.log(level, ' '.join(str(arg) for arg in args))
 
 import sys
@@ -108,7 +109,7 @@ pd_options_display()
 
 # pd.options.display.float_format = lambda x: f"{x:.2f}" doesn't work with streamlit
 
-def ShowDataFrameTable(df, key, query=None, show_sql_query=True, color_column=None, tooltips=None):
+def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_query: bool = True, color_column: Optional[str] = None, tooltips: Optional[Any] = None) -> Optional[Any]:
     if query is None:
         query = f'SELECT * FROM {st.session_state.con_register_name}'
     if show_sql_query and st.session_state.show_sql_query:
@@ -374,7 +375,7 @@ def ShowDataFrameTable(df, key, query=None, show_sql_query=True, color_column=No
 #     return True
 
 
-def call_create_club_dfs(player_id, event_url):
+def call_create_club_dfs(player_id: str, event_url: str) -> None:
     data = get_club_results_details_data(event_url)
     if data is None:
         return None
@@ -388,7 +389,7 @@ def call_create_club_dfs(player_id, event_url):
 #     return chatlib.create_tournament_dfs(data)
 
 
-def create_schema_string(df, con):
+def create_schema_string(df: Any, con: Any) -> str:
 
     df_dtypes_d = {}
     dtypes_d = defaultdict(list)
@@ -421,7 +422,7 @@ def create_schema_string(df, con):
     return df_schema_string
 
 
-def change_game_state(player_id, session_id): # todo: rename to session_id?
+def change_game_state(player_id: str, session_id: str) -> None: # todo: rename to session_id?
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
@@ -761,7 +762,7 @@ def change_game_state(player_id, session_id): # todo: rename to session_id?
     return True # no errors
 
 
-def slash_about():
+def slash_about() -> str:
     content = f"Hey {st.session_state.player_name} ({st.session_state.player_id}), let's chat about your game on {st.session_state.game_date} (event id {st.session_state.session_id}). Your pair was {st.session_state.pair_number}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
     return content
 
@@ -854,7 +855,7 @@ def slash_about():
 #     st.session_state.messages = messages
 
 
-def player_id_change():
+def player_id_change() -> None:
     # todo: looks like there's some situation where this is not called because player_id_input is already set. Need to breakpoint here to determine why st.session_state.player_id isn't updated.
     # assign changed textbox value (player_id_input) to player_id
     player_id = st.session_state.player_id_input
@@ -862,7 +863,7 @@ def player_id_change():
 
 
 
-def debug_player_id_names_change():
+def debug_player_id_names_change() -> None:
     # assign changed selectbox value (debug_player_id_names_selectbox). e.g. ['2663279','Robert Salita']
     player_id_name = st.session_state.debug_player_id_names_selectbox
     #if not chat_initialize(player_id_name[0], None):  # grab player number
@@ -870,7 +871,7 @@ def debug_player_id_names_change():
     change_game_state(player_id_name[0], None)
 
 
-def club_session_id_change():
+def club_session_id_change() -> None:
     #st.session_state.tournament_session_ids_selectbox = None # clear tournament index whenever club index changes. todo: doesn't seem to update selectbox with new index.
     selection = st.session_state.club_session_ids_selectbox
     if selection is not None:
@@ -879,7 +880,7 @@ def club_session_id_change():
             st.session_state.session_id = None
 
 
-def tournament_session_id_change():
+def tournament_session_id_change() -> None:
     #st.session_state.club_session_ids_selectbox = None # clear club index whenever tournament index changes. todo: doesn't seem to update selectbox with new index.
     selection = st.session_state.tournament_session_ids_selectbox
     if selection is not None:
@@ -888,7 +889,7 @@ def tournament_session_id_change():
             st.session_state.session_id = None
 
 
-def show_sql_query_change():
+def show_sql_query_change() -> None:
     # toggle whether to show sql query
     st.session_state.show_sql_query = st.session_state.sql_query_checkbox
 
@@ -899,7 +900,7 @@ def show_sql_query_change():
 #     st.session_state.ai_api = st.session_state.ai_api_selectbox
 
 
-def prompts_selectbox_change():
+def prompts_selectbox_change() -> None:
     if st.session_state.prompts_selectbox is not None:
         title = st.session_state.prompts_selectbox
         if st.session_state.vetted_prompt_titles is not None: # this fixes the situation when an unsupported game event is selected.
@@ -910,12 +911,12 @@ def prompts_selectbox_change():
             read_configs()
 
 
-def single_dummy_sample_count_changed():
+def single_dummy_sample_count_changed() -> None:
     st.session_state.single_dummy_sample_count = st.session_state.single_dummy_sample_count_number_input
     change_game_state(st.session_state.player_id, st.session_state.session_id)
 
 
-def chat_input_on_submit():
+def chat_input_on_submit() -> None:
     prompt = st.session_state.main_prompt_chat_input
     sql_query = process_prompt_macros(prompt)
     if not st.session_state.sql_query_mode:
@@ -932,7 +933,7 @@ def chat_input_on_submit():
 import mlBridgeAiLib
 import mlBridgeLib
 
-def Predict_Game_Results(df):
+def Predict_Game_Results(df: Any) -> Optional[Any]:
     # Predict game results using a saved model.
 
     if df is None:
@@ -1013,17 +1014,18 @@ def Predict_Game_Results(df):
         st.error(f"Oops. {predicted_rankings_model_file} not found.")
         return None
     learn = mlBridgeAiLib.load_model(predicted_rankings_model_file)
-    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
-    pred_df_pl = pl.from_pandas(pred_df)
-    df = pl.concat([df, pred_df_pl], how='horizontal')
+    pred_df = mlBridgeAiLib.predict_pct(
+        learn,
+        df
+    )
+    df = pred_df['df']
     y_name = learn['artifacts']['target_name']
     print(y_name)
     y_name_ns = y_name
     y_name_ew = y_name.replace('NS','EW')
     df = df.with_columns([
+        pl.col(y_name_ns).alias(f'{y_name_ns}_Actual'),
         pl.col(y_name_ew).alias(f'{y_name_ew}_Actual')
-    ]).with_columns([
-        (1 - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred')
     ]).with_columns([
         (pl.col(f'{y_name_ns}_Actual') - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Error'),
         (pl.col(f'{y_name_ew}_Actual') - pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Error')
@@ -1133,7 +1135,7 @@ def Predict_Game_Results(df):
     # st.session_state.ai_api = DEFAULT_AI_MODEL
 
 
-def create_sidebar():
+def create_sidebar() -> None:
     
     t = time.time()
 
@@ -1409,7 +1411,7 @@ def create_sidebar():
 #     return vetted_prompts
 
 
-def read_configs():
+def read_configs() -> None:
 
     st.session_state.default_favorites_file = pathlib.Path(
         'default.favorites.json')
@@ -1729,7 +1731,7 @@ def read_configs():
 #     else:
 #         create_ui()
 
-def initialize_website_specific():
+def initialize_website_specific() -> None:
 
     st.session_state.assistant_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_assistant.gif?raw=true' # 🥸 todo: put into config. must have raw=true for github url.
     st.session_state.guru_logo = 'https://github.com/BSalita/Bridge_Game_Postmortem_Chatbot/blob/master/assets/logo_guru.png?raw=true' # 🥷todo: put into config file. must have raw=true for github url.
@@ -1764,10 +1766,10 @@ def initialize_website_specific():
 
 
 # this version of perform_hand_augmentations_locked() uses self for class compatibility, older versions did not.
-def perform_hand_augmentations_queue(self, hand_augmentation_work):
+def perform_hand_augmentations_queue(self: Any, hand_augmentation_work: Any) -> None:
     return streamlitlib.perform_queued_work(self, hand_augmentation_work, "Hand analysis")
 
-def augment_df(df):
+def augment_df(df: Any) -> Any:
     with st.spinner('Augmenting data...'):
         augmenter = AllAugmentations(df,None,sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
         df, hrs_cache_df = augmenter.perform_all_augmentations()
@@ -1796,7 +1798,7 @@ def augment_df(df):
     return df
 
 
-def process_prompt_macros(sql_query):
+def process_prompt_macros(sql_query: str) -> str:
     replacements = {
         '{Player_Direction}': st.session_state.player_direction,
         '{Partner_Direction}': st.session_state.partner_direction,
@@ -1810,7 +1812,7 @@ def process_prompt_macros(sql_query):
     return sql_query
 
 
-def write_report():
+def write_report() -> None:
     # bar_format='{l_bar}{bar}' isn't working in stqdm. no way to suppress r_bar without editing stqdm source code.
     # todo: need to pass the Button title to the stqdm description. this is a hack until implemented.
     st.session_state.main_section_container = st.container(border=True)
@@ -1869,7 +1871,7 @@ def write_report():
     return
 
 
-def ask_sql_query():
+def ask_sql_query() -> None:
 
     if st.session_state.show_sql_query:
         with st.container():
@@ -1877,7 +1879,7 @@ def ask_sql_query():
                 st.chat_input('Enter a SQL query e.g. SELECT PBN, Contract, Result, N, S, E, W', key='main_prompt_chat_input', on_submit=chat_input_on_submit)
 
 
-def create_ui():
+def create_ui() -> None:
     create_sidebar()
     if not st.session_state.sql_query_mode:
         #create_tab_bar()
@@ -1886,7 +1888,7 @@ def create_ui():
     ask_sql_query()
 
 
-def initialize_session_state():
+def initialize_session_state() -> None:
     st.set_page_config(layout="wide")
     # Add this auto-scroll code
     streamlitlib.widen_scrollbars()
@@ -1925,7 +1927,7 @@ def initialize_session_state():
     return
 
 
-def reset_game_data():
+def reset_game_data() -> None:
 
     # Default values for session state variables
     reset_defaults = {
@@ -1984,14 +1986,14 @@ def reset_game_data():
     return
 
 
-def app_info():
+def app_info() -> None:
     st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in streamlit. Data engine is polars. Query engine is duckdb. Bridge lib is endplay. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/ffbridge-postmortem")
     st.caption(
         f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} polars:{pl.__version__} endplay:{endplay.__version__} Query Params:{st.query_params.to_dict()}")
     return
 
 
-def main():
+def main() -> None:
     if 'first_time' not in st.session_state:
         initialize_session_state()
         create_sidebar()
