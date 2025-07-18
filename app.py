@@ -957,7 +957,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
     learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
     print_to_log_debug('null_count:', df.null_count())
-    contracts_all = ['PASS']+[str(level+1)+strain+direction+dbl for level in range(7) for strain in 'CDHSN' for direction in 'NESW' for dbl in ['','X','XX']]
+    contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for direction in 'NESW' for dbl in ['','X','XX']]
     assert df['Contract'].is_in(contracts_all).all(), df.filter(~pl.col('Contract').is_in(mlBridgeLib.contract_classes))['Contract']
     # todo: fix this: KeyError: "['mp_total_w', 'iPlayer_Number_N', 'mp_total_n', 'iPlayer_Number_S', 'mp_total_s', 'iPlayer_Number_E', 'mp_total_e', 'iPlayer_Number_W'] not in index"
     pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
@@ -1822,6 +1822,7 @@ def write_report() -> None:
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
         report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
+        st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
@@ -1859,7 +1860,15 @@ def write_report() -> None:
         # can't use link_button() restarts page rendering. markdown() will correctly jump to href.
         # st.link_button('Go to top of report',url='#your-personalized-report')\
         report_title_anchor = report_title.replace(' ','-').lower()
-        st.markdown(f'<a target="_self" href="#{report_title_anchor}"><button>Go to top of report</button></a>', unsafe_allow_html=True)
+        st.markdown('''
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="#top-of-report" style="text-decoration: none;">
+                    <button style="padding: 8px 16px; background-color: #ff4b4b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                        Go to top of report
+                    </button>
+                </a>
+            </div>
+        ''', unsafe_allow_html=True)
 
     if st.session_state.pdf_link.download_button(label="Download Personalized Report",
             data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),

@@ -610,7 +610,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     df = df.with_columns([
         pl.when(pl.col('Contract') == 'PASS')
         .then(pl.col('Contract'))
-        .otherwise(pl.col('BidLvl').cast(pl.Utf8)+pl.col('BidSuit')+pl.col('Declarer_Direction')+pl.col('Dbl'))
+        .otherwise(pl.col('BidLvl').cast(pl.Utf8)+pl.col('BidSuit')+pl.col('Dbl')+pl.col('Declarer_Direction'))
         .cast(pl.String)
         .alias('Contract'),
     ])

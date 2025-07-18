@@ -330,6 +330,7 @@ def train_classifier_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
     best_model_state = None
     patience_counter = 0
     training_history = []
+    early_stopped = False
     
     for epoch in range(epochs):
         # Training
@@ -396,6 +397,7 @@ def train_classifier_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
         else:
             patience_counter += 1
             if patience_counter >= patience:
+                early_stopped = True
                 print_to_log_info(f"Early stopping at epoch {epoch+1}")
                 break
     
@@ -407,6 +409,7 @@ def train_classifier_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
         print_to_log_info("Warning: No best model state found, using final model")
     
     artifacts['training_history'] = training_history
+    artifacts['early_stopped'] = early_stopped
     artifacts['model_params'] = {
         'embedding_sizes': embedding_sizes,
         'n_continuous': n_continuous,
@@ -513,6 +516,7 @@ def train_regression_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
     best_model_state = None
     patience_counter = 0
     training_history = []
+    early_stopped = False
     
     for epoch in range(epochs):
         # Training
@@ -581,6 +585,7 @@ def train_regression_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
             patience_counter += 1
             print_to_log_info(f"No significant improvement. Patience: {patience_counter}/{patience}")
             if patience_counter >= patience:
+                early_stopped = True
                 print_to_log_info(f"Early stopping at epoch {epoch+1}")
                 break
     
@@ -592,6 +597,7 @@ def train_regression_pytorch(df: Any, y_names: List[str], cat_names: List[str], 
         print_to_log_info("Warning: No best model state found, using final model")
     
     artifacts['training_history'] = training_history
+    artifacts['early_stopped'] = early_stopped
     artifacts['model_params'] = {
         'embedding_sizes': embedding_sizes,
         'n_continuous': n_continuous,
