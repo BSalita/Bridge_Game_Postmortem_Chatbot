@@ -426,6 +426,8 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
+    st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
+
     con = st.session_state.con
 
     with st.spinner(f"Retrieving a list of club games for {player_id} ..."):
@@ -1822,7 +1824,7 @@ def write_report() -> None:
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
         report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
-        st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
+        #st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
