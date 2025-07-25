@@ -2003,15 +2003,49 @@ class MatchPointAugmenter:
 
     def _calculate_final_scores(self) -> None:
         t = time.time()
+
+        # self.df = self.df.with_columns([
+        #     (pl.col('Score_'+pair).rank().over('Board') - 1).alias('MP_'+col_pair),
+        # ])
         
         # Calculate DD and Par percentages. Technique is to start with matchpoints then add in dd/par score and then divide by MP_Top + 1.
-        for col_ns in ['DD_Score_NS','Par_NS']:
-            col_ew = col_ns.replace('NS','EW')
-            self.df = self.df.with_columns([
-                self._calculate_pct_from_new_score(col_ns).alias(col_ns.replace('_NS','_Pct_NS')),
-                self._calculate_pct_from_new_score(col_ew).alias(col_ew.replace('_EW','_Pct_EW')),
-            ])
-            # todo: assert self.df[col_ns.replace('_NS','_Pct_NS')].between(0,1).all() and self.df[col_ew.replace('_EW','_Pct_EW')].between(0,1).all()
+        # SELECT Board, Score_NS, DD_Score_NS, MP_DD_Score_NS, DD_Score_Pct_NS, DD_Score_EW, MP_DD_Score_EW, DD_Score_Pct_EW, Par_NS, MP_Par_NS, Par_Pct_NS
+        for col in ['DD_Score']:
+            for pair in ['NS','EW']:
+                col_pair = col + '_' + pair
+                # Calculate matchpoints: compare each row's DD_Score with all Score values for the same board.
+                board_scores_tuples = self.df.group_by('Board').agg(pl.col(f'Score_{pair}')).rows()
+                board_to_scores_d = {board: scores for board, scores in board_scores_tuples}
+                self.df = self.df.with_columns(
+                    pl.struct([col_pair, 'Board']).map_elements(
+                        lambda row: sum(
+                            1.0 if row[col_pair] > score else 0.5 if row[col_pair] == score else 0.0
+                            for score in board_to_scores_d[row['Board']]
+                        ),
+                        return_dtype=pl.Float64
+                    ).alias(f'MP_{col_pair}')
+                )
+                self.df = self.df.with_columns([
+                    (pl.col(f'MP_{col_pair}')/(pl.col('MP_Top')+1)).alias(f'{col}_Pct_{pair}')
+                ])
+                assert self.df[f'{col}_Pct_{pair}'].is_between(0,1).all()
+        # calculate Par percentages.
+        for col in ['Par']:
+            for pair in ['NS','EW']:
+                col_pair = col + '_' + pair
+                self.df = self.df.with_columns([
+                    pl.when(pl.col(col_pair) > pl.col(f'Score_{pair}')).then(1.0)
+                    .when(pl.col(col_pair) == pl.col(f'Score_{pair}')).then(0.5)
+                    .otherwise(0.0)
+                    .alias(f"MP_Rank_{col_pair}")
+                ])
+                self.df = self.df.with_columns([
+                    (pl.col(f"MP_Rank_{col_pair}").sum().over('Board')).alias(f'MP_{col_pair}'),
+                ])
+                self.df = self.df.with_columns([
+                    (pl.col(f'MP_{col_pair}')/(pl.col('MP_Top')+1)).alias(f'{col}_Pct_{pair}')
+                ])
+                assert self.df[f'{col}_Pct_{pair}'].is_between(0,1).all()
 
         # for declarer orientation scores
         self.df = self.df.with_columns(
