@@ -82,7 +82,7 @@ FRENCH_TO_ENGLISH_STRAIN_MAP = {
     'C': 'H',    # Hearts (Cœurs)
     'K': 'D',    # Diamonds (Carreau)
     'T': 'C',    # Clubs (Trèfle)
-    'sa': 'N',    # No Trump (Sans Atout)
+    'sa': 'N',    # No Trump (Sans Atout) - lowercase
     'SA': 'N',    # No Trump (Sans Atout) - uppercase
     '♠': 'S',
     '♥': 'H',
@@ -94,7 +94,8 @@ FRENCH_TO_ENGLISH_DIRECTION_MAP = {
     'N': 'N',    # North (Nord)
     'E': 'E',    # East (Est)
     'S': 'S',    # South (Sud)
-    'O': 'W'     # West (Ouest)
+    'O': 'W',     # West (Ouest)
+    'W': 'W'     # West (English)
 }
 
 FRENCH_TO_ENGLISH_CARDS_MAP = {
@@ -875,7 +876,7 @@ async def parse_boards_html_async(page) -> List[Dict]:
             french_vul = vul_match.group(1).strip()
             if french_vul:
                 # Translate French vulnerability to English using the global map
-                vul = FRENCH_TO_ENGLISH_VULNERABILITY_MAP.get(french_vul, french_vul)
+                vul = FRENCH_TO_ENGLISH_VULNERABILITY_MAP[french_vul]
                 logger.info(f"Extracted vulnerability: {vul}")
             else:
                 raise ValueError(f"Could not find vulnerability in HTML div with required classes (col-8, p-0, h2)")
@@ -980,7 +981,7 @@ async def parse_boards_html_async(page) -> List[Dict]:
         else:
             raise ValueError("Could not find colorized row for score extraction")
         
-        # Find the contract span using your suggested pattern
+        # Find the contract span
         contract_span_pattern = r'<span\s+[^>]*class=["\'][^"\']*gros[^"\']*["\'][^>]*>.*?Contrat\s.*?<\/span>'
         contract_span_match = re.search(contract_span_pattern, page_content, re.DOTALL)
         if contract_span_match:
@@ -1006,7 +1007,7 @@ async def parse_boards_html_async(page) -> List[Dict]:
             raise ValueError(f"Could not find level in contract span: {contract_span_html}")
         
         # Extract suit from nested span
-        suit_span_match = re.search(r'<span class="([^"]*)">[^<]*</span>', contract_span_html)
+        suit_span_match = re.search(r'Contrat.*?<span class="([^"]*)">[^<]*</span>', contract_span_html)
         if suit_span_match:
             suit_class = suit_span_match.group(1)
             # Map French suit classes to English
@@ -1017,7 +1018,7 @@ async def parse_boards_html_async(page) -> List[Dict]:
                 'trefle': 'C',   # Clubs
                 'sa': 'N'        # No Trump
             }
-            strain = suit_map.get(suit_class, 'N')
+            strain = suit_map[suit_class]
             logger.info(f"Extracted strain: {strain}")
         else:
             raise ValueError(f"Could not find suit in contract span: {contract_span_html}")

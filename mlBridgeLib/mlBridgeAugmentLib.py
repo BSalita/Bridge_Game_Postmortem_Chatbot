@@ -1998,17 +1998,13 @@ class MatchPointAugmenter:
                 ])
         print(f"calculate matchpoints all_score_columns: time:{time.time()-t} seconds")
 
-    def _calculate_pct_from_new_score(self, col: str) -> pl.Series:
+    def _calculate_mp_pct_from_new_score(self, col: str) -> pl.Series:
         return (pl.col(f'MP_{col}')+pl.col(f'MP_{col}').gt(pl.col(col))+(pl.col(f'MP_{col}').eq(pl.col(col))/2))/(pl.col('MP_Top')+1)
 
     def _calculate_final_scores(self) -> None:
         t = time.time()
-
-        # self.df = self.df.with_columns([
-        #     (pl.col('Score_'+pair).rank().over('Board') - 1).alias('MP_'+col_pair),
-        # ])
         
-        # Calculate DD and Par percentages. Technique is to start with matchpoints then add in dd/par score and then divide by MP_Top + 1.
+        # Calculate DD and Par percentages. Technique is to start calc matchpoints then compare dd/par score with all Score values for the same board and then divide by MP_Top + 1.
         # SELECT Board, Score_NS, DD_Score_NS, MP_DD_Score_NS, DD_Score_Pct_NS, DD_Score_EW, MP_DD_Score_EW, DD_Score_Pct_EW, Par_NS, MP_Par_NS, Par_Pct_NS
         for col in ['DD_Score']:
             for pair in ['NS','EW']:
@@ -2049,10 +2045,10 @@ class MatchPointAugmenter:
 
         # for declarer orientation scores
         self.df = self.df.with_columns(
-            self._calculate_pct_from_new_score('DD_Score_Declarer').alias('MP_DD_Pct_Declarer'),
-            self._calculate_pct_from_new_score('Par_Declarer').alias('MP_Par_Pct_Declarer'),
-            self._calculate_pct_from_new_score('EV_Score_Declarer').alias('MP_EV_Pct_Declarer'),
-            self._calculate_pct_from_new_score('EV_Max_Declarer').alias('MP_EV_Max_Pct_Declarer')
+            self._calculate_mp_pct_from_new_score('DD_Score_Declarer').alias('MP_DD_Pct_Declarer'),
+            self._calculate_mp_pct_from_new_score('Par_Declarer').alias('MP_Par_Pct_Declarer'),
+            self._calculate_mp_pct_from_new_score('EV_Score_Declarer').alias('MP_EV_Pct_Declarer'),
+            self._calculate_mp_pct_from_new_score('EV_Max_Declarer').alias('MP_EV_Max_Pct_Declarer')
         )
         # todo: assert self.df['MP_DD_Pct_Declarer'].between(0,1).all()
         # todo: assert self.df['MP_Par_Pct_Declarer'].between(0,1).all()
@@ -2073,8 +2069,8 @@ class MatchPointAugmenter:
                 #(pl.col('MP_EV_Max_EW')/pl.col('MP_Top')).alias('EV_Pct_Max_EW'),
                 # self._calculate_pct_from_new_score('DD_Score_NS_Max').alias('DD_Score_Pct_NS_Max'),
                 # self._calculate_pct_from_new_score('DD_Score_EW_Max').alias('DD_Score_Pct_EW_Max'),
-                self._calculate_pct_from_new_score('EV_Max_NS').alias('EV_Pct_Max_NS'),
-                self._calculate_pct_from_new_score('EV_Max_EW').alias('EV_Pct_Max_EW'),
+                self._calculate_mp_pct_from_new_score('EV_Max_NS').alias('EV_Pct_Max_NS'),
+                self._calculate_mp_pct_from_new_score('EV_Max_EW').alias('EV_Pct_Max_EW'),
             ]),
             # todo: assert self.df['DD_Score_Pct_NS_Max'].between(0,1).all()
             # todo: assert self.df['DD_Score_Pct_EW_Max'].between(0,1).all()
