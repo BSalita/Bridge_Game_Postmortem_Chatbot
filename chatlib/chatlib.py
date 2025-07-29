@@ -487,7 +487,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter(pl.col('Board').is_not_null() & pl.col('Board').gt(0))
 
     # Convert 'Board' to UInt8.
-    # todo: use UInt16 instead of UInt8?
+    # todo: use UInt32 instead of UInt8?
     df = df.with_columns(pl.col('Board').cast(pl.UInt8))
 
     if 'board_record_string' in df.columns:
@@ -496,13 +496,16 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     df = df.rename({'dealer': 'Dealer'})
     df = df.with_columns(pl.col('Dealer').replace_strict(mlBridgeLib.Direction_to_NESW_d,return_dtype=pl.String))
 
-    # Calculate percentages - problems strange values and with multiple section computations. Can't all be director's adjustments?
+    # todo: Shouldn't this be done in mlBridgeAugmentLib?
+    if 'MP_Top' not in df.columns:
+        # Calculate 'MP_Top'
+        df = df.with_columns([
+            pl.col('MP_NS').count().over('Board').sub(1).alias('MP_Top')
+        ])
+
+    # Calculate percentages. strange values and with multiple section computations. Can't all be director's adjustments?
+    # todo: Shouldn't this be done in mlBridgeAugmentLib?
     if 'Pct_NS' not in df.columns and 'Pct_EW' not in df.columns:
-        if 'MP_Top' not in df.columns:
-            # Calculate 'MP_Top'
-            df = df.with_columns([
-                pl.col('MP_NS').count().over('Board').alias('MP_Top')
-            ])
         df = df.with_columns([
             (pl.col('MP_NS').cast(pl.Float32) / pl.col('MP_Top')).alias('Pct_NS'),
             #(pl.col('MP_EW').cast(pl.Float32) / pl.col('MP_Top')).alias('Pct_EW')
@@ -516,16 +519,14 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
         ])
     else:   
         # Cap percentages at 1
+        # todo: is > 1 really a thing?
         df = df.with_columns([
             pl.when(pl.col('Pct_NS') > 1).then(1).otherwise(pl.col('Pct_NS')).alias('Pct_NS'),
             pl.when(pl.col('Pct_EW') > 1).then(1).otherwise(pl.col('Pct_EW')).alias('Pct_EW')
         ])
-        # I've seen some seemingly correct Pct_NS but null for Pct_EW. Mystery. Can't all be directory adjustments?
+        # I've seen some seemingly correct Pct_NS but null for Pct_EW. Mystery. Can't all be director's adjustments?
         df = df.with_columns([
             (1 - pl.col('Pct_NS')).alias('Pct_EW'),
-        ])
-        df = df.with_columns([
-            (pl.col('MP_NS') / pl.col('Pct_NS')).alias('MP_Top')
         ])
 
     # Function to transform names into "first last" format
@@ -556,6 +557,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     )
 
     # Clean up contracts
+    # todo: Shouldn't this be done in mlBridgeAugmentLib?
     df = df.with_columns(
            pl.col('Contract')
             .str.replace(' ', '',n=2)
@@ -586,6 +588,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     df = df.with_columns(pl.col('Score_NS').cast(pl.Int16,strict=False).alias('Score_NS'))
     df = df.with_columns(pl.col('Score_NS').neg().cast(pl.Int16,strict=False).alias('Score_EW'))
 
+    # todo: Shouldn't this be done in mlBridgeAugmentLib?
     df = df.with_columns([
         pl.when(pl.col('Contract') == 'PASS')
         .then(pl.lit(None))
@@ -607,6 +610,7 @@ def acbldf_to_mldf(df: pl.DataFrame) -> pl.DataFrame:
     ])
 
     # reformat contract to standard format. Using endplay's contract format.
+    # todo: Shouldn't this be done in mlBridgeAugmentLib?
     df = df.with_columns([
         pl.when(pl.col('Contract') == 'PASS')
         .then(pl.col('Contract'))
