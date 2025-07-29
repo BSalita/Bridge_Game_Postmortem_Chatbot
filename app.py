@@ -1144,7 +1144,7 @@ def create_sidebar() -> None:
     st.sidebar.caption(st.session_state.app_datetime)
 
     st.sidebar.text_input(
-        "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id, key='player_id_input')
+        "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id_default, key='player_id_input')
 
     if st.session_state.player_id is None:
         return
@@ -1929,6 +1929,7 @@ def initialize_session_state() -> None:
         'main_section_container': st.empty(),
         'app_datetime': datetime.fromtimestamp(pathlib.Path(__file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z'),
         'current_datetime': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'player_id_default': '2663279',
     }
     for key, value in first_time_defaults.items():
         st.session_state[key] = value

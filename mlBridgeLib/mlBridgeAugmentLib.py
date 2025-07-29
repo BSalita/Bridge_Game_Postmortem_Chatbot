@@ -2,13 +2,15 @@
 # mostly polars functions
 
 # todo:
-# since some columns can be derived from other columns, we should assert that input df has at least on column in each group of derived columns.
+# since some columns can be derived from other columns, we should assert that input df has at least one column in each group of mutually derivable columns.
 # assert that column names don't exist in df.columns for all column creation functions.
 # refactor when should *_Dcl columns be created? At end of each func, class, class of it's own?
 # if a column already exists, print a message and skip creation.
 # if a column already exists, generate a new column and assert that the new column is the same as the existing column.
 # print column names and dtypes for all columns generated and skipped.
 # print a list of mandatory columns that must be present in df.columns. many columns can be derived from other columns e.g. scoring columns.
+# for each augmentation function, validate that all columns are properly generated.
+# create a function which validate columns for every column generated.
 
 import polars as pl
 from collections import defaultdict
