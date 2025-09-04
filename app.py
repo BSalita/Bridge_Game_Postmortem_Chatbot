@@ -6,6 +6,7 @@
 #!pip install openai python-dotenv pandas --quiet
 
 # todo: load_model() is failing if numpy >= 2.0.0 is installed.
+# todo: don't automatically report on the most recent game. If the game is errors, it's inconvenient to selecting others.
 
 import logging
 from typing import Any, Optional, Dict, List, Tuple, Union
@@ -426,7 +427,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
-    st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height: 50px;"><a id="top-of-report" name="top-of-report"></a></div>', unsafe_allow_html=True)
 
     con = st.session_state.con
 
@@ -723,7 +724,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'self' for duckdb discovery. SQL queries will reference this df/table.
     
-    assert df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {[col for col, dtype in df.schema.items() if dtype == pl.Object]}"
+    assert df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {df.select(pl.col(pl.Object)).columns}"
     con.register(st.session_state.con_register_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
 
     st.session_state.df_schema_string = create_schema_string(df, con)
@@ -931,9 +932,96 @@ def chat_input_on_submit() -> None:
         for i, (prompt,sql_query) in enumerate(st.session_state.sql_queries):
             ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'user_query_main_doit_{i}')
 
+import mlBridgeAiLib # todo: move to top of file
+#import mlBridgeAiLib_obsolete # todo: remove when done
 
-import mlBridgeAiLib
-import mlBridgeLib
+def recenter_percentage_predictions(
+    df: pl.DataFrame,
+    pred_ns_col: str = 'Pct_NS_Pred',
+    pred_ew_col: str = 'Pct_EW_Pred',
+    actual_ns_col: str = 'Pct_NS_Actual',
+    actual_ew_col: str = 'Pct_EW_Actual',
+    target_mean: float = 0.5,
+) -> pl.DataFrame:
+    """Recenter predicted NS percentages to target_mean, clip to [0,1],
+    set EW to complementary, and recompute error metrics.
+
+    If the prediction column is missing or empty, returns df unchanged.
+    """
+    if pred_ns_col not in df.columns:
+        return df
+    if df.is_empty():
+        return df
+
+    ns_mean_df = df.select(pl.col(pred_ns_col).mean())
+    if ns_mean_df.is_empty():
+        return df
+    ns_mean = ns_mean_df.item()
+    if ns_mean is None:
+        return df
+    shift = target_mean - ns_mean
+
+    out = df.with_columns([
+        pl.min_horizontal(1.0, pl.max_horizontal(0.0, pl.col(pred_ns_col).add(pl.lit(shift)))).alias(pred_ns_col),
+    ])
+
+    # Ensure EW is complementary and update error columns if actuals exist
+    out = out.with_columns([
+        pl.lit(1).sub(pl.col(pred_ns_col)).alias(pred_ew_col),
+    ])
+
+    # derive dynamic error column names from prediction column bases
+    def _base_name(col_name: str) -> str:
+        return col_name[:-5] if col_name.endswith('_Pred') else col_name
+
+    ns_base = _base_name(pred_ns_col)
+    ew_base = _base_name(pred_ew_col)
+    ns_err_col = f"{ns_base}_Pred_Error"
+    ns_abs_err_col = f"{ns_base}_Pred_Absolute_Error"
+    ew_err_col = f"{ew_base}_Pred_Error"
+    ew_abs_err_col = f"{ew_base}_Pred_Absolute_Error"
+
+    if actual_ns_col in out.columns:
+        out = out.with_columns([
+            pl.col(actual_ns_col).sub(pl.col(pred_ns_col)).alias(ns_err_col),
+            pl.col(ns_err_col).abs().alias(ns_abs_err_col),
+        ])
+    if actual_ew_col in out.columns:
+        out = out.with_columns([
+            pl.col(actual_ew_col).sub(pl.col(pred_ew_col)).alias(ew_err_col),
+            pl.col(ew_err_col).abs().alias(ew_abs_err_col),
+        ])
+
+    return out
+
+def recenter_percentage_predictions_for_target(
+    df: pl.DataFrame,
+    y_name: str,
+    target_mean: float = 0.5,
+) -> pl.DataFrame:
+    """Convenience wrapper using y_name to derive column names.
+
+    Uses columns: f"{y_name}_Pred", f"{y_name}_Actual" and the EW counterpart
+    derived by swapping 'NS' and 'EW' in y_name.
+    """
+    if 'NS' in y_name:
+        y_name_ns = y_name
+        y_name_ew = y_name.replace('NS', 'EW')
+    elif 'EW' in y_name:
+        y_name_ew = y_name
+        y_name_ns = y_name.replace('EW', 'NS')
+    else:
+        # Cannot infer pair; return unchanged
+        return df
+
+    return recenter_percentage_predictions(
+        df,
+        pred_ns_col=f"{y_name_ns}_Pred",
+        pred_ew_col=f"{y_name_ew}_Pred",
+        actual_ns_col=f"{y_name_ns}_Actual",
+        actual_ew_col=f"{y_name_ew}_Actual",
+        target_mean=target_mean,
+    )
 
 def Predict_Game_Results(df: Any) -> Optional[Any]:
     # Predict game results using a saved model.
@@ -943,95 +1031,58 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
 
     club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
 
-    if club_or_tournament == 'tournament': # todo: tournament models are not implemented yet.
-        return df
-
-    # Convert pandas fillna to polars fill_null
-    df = df.with_columns(pl.col('Declarer_Rating').fill_null(0.5)) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
-
-    # create columns from model's predictions.
-    predicted_contracts_model_filename = f"acbl_{club_or_tournament}_predicted_contract_pytorch_model.pth"
-    predicted_contracts_model_file = st.session_state.savedModelsPath.joinpath(predicted_contracts_model_filename)
-    print_to_log_info('predicted_contract_model_file:',predicted_contracts_model_file)
-    if not predicted_contracts_model_file.exists():
-        st.error(f"Oops. {predicted_contracts_model_filename} not found.")
-        return None
-    # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
-    learn = mlBridgeAiLib.load_model(predicted_contracts_model_file)
-    print_to_log_debug('null_count:', df.null_count())
-    contracts_all = ['PASS']+[str(level+1)+strain+dbl+direction for level in range(7) for strain in 'CDHSN' for direction in 'NESW' for dbl in ['','X','XX']]
-    assert df['Contract'].is_in(contracts_all).all(), df.filter(~pl.col('Contract').is_in(mlBridgeLib.contract_classes))['Contract']
-    # todo: fix this: KeyError: "['mp_total_w', 'iPlayer_Number_N', 'mp_total_n', 'iPlayer_Number_S', 'mp_total_s', 'iPlayer_Number_E', 'mp_total_e', 'iPlayer_Number_W'] not in index"
-    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
-    pred_df_pl = pl.from_pandas(pred_df)
-    df = pl.concat([df, pred_df_pl], how='horizontal')
-    print(df)
-
-    # create columns from model's predictions.
-    predicted_directions_model_filename = f"acbl_{club_or_tournament}_predicted_declarer_direction_pytorch_model.pth"
-    predicted_directions_model_file = st.session_state.savedModelsPath.joinpath(predicted_directions_model_filename)
-    print_to_log_info('predicted_declarer_direction_model_file:',predicted_directions_model_file)
-    if not predicted_directions_model_file.exists():
-        st.error(f"Oops. {predicted_directions_model_file} not found.")
-        return None
-    # todo: not needed right now. However, need to change *_augment.ipynb to output Par_MPs_(NS|EW) df['Par_MPs'] = df['Par_MPs_NS']
-    learn = mlBridgeAiLib.load_model(predicted_directions_model_file)
-    print_to_log_debug('null_count:', df.null_count())
-    #df['Tricks'].fillna(.5,inplace=True)
-    #df['Result'].fillna(.5,inplace=True)
-    # FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
-    df = df.with_columns(pl.col('Declarer_Rating').fill_null(0.5)) # todo: NS sitout. Why is this needed? Are empty opponents required to have a declarer rating? Event id: 893775.
-    print(df['Declarer_Direction'])
-    pred_df = mlBridgeAiLib.get_predictions(learn, df.to_pandas()) # classifier returns list containing a probability for every class label (NESW)
-    # Convert pandas DataFrame to polars and concatenate horizontally
-    pred_df_pl = pl.from_pandas(pred_df)
-    df = pl.concat([df, pred_df_pl], how='horizontal')
-    y_name = learn['artifacts']['target_name']
-    print(y_name)
-    print(df)
-    df = df.with_columns([
-        pl.struct([
-            f'{y_name}_Pred','Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W'
-        ]).map_elements(
-            lambda row: None if row[f"{y_name}_Pred"] is None or row[f"{y_name}_Pred"] not in 'NESW' else row[f'Player_ID_{row[f"{y_name}_Pred"]}'],
-            return_dtype=pl.String
-        ).alias('Declarer_ID_Pred'),
-        pl.struct([
-            f'{y_name}_Pred','Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W'
-        ]).map_elements(
-            lambda row: None if row[f"{y_name}_Pred"] is None or row[f"{y_name}_Pred"] not in 'NESW' else row[f'Player_Name_{row[f"{y_name}_Pred"]}'],
-            return_dtype=pl.String
-        ).alias('Declarer_Name_Pred'),
-        pl.struct([f'{y_name}_Actual', f'{y_name}_Pred']).map_elements(
-            lambda row: (row[f'{y_name}_Actual'] is not None and row[f'{y_name}_Actual'] in 'NS') and (row[f'{y_name}_Pred'] is not None and row[f'{y_name}_Pred'] in 'NS') or (row[f'{y_name}_Actual'] is None and row[f'{y_name}_Pred'] is None),
-            return_dtype=pl.Boolean
-        ).alias('Declarer_Pair_Direction_Match')
-    ])
-
-    # create columns from model's predictions.
-    predicted_rankings_model_filename = f"acbl_{club_or_tournament}_predicted_pct_ns_pytorch_model.pth"
-    predicted_rankings_model_file = st.session_state.savedModelsPath.joinpath(predicted_rankings_model_filename)
-    print_to_log_info('predicted_pct_ns_model_file:',predicted_rankings_model_file)
-    if not predicted_rankings_model_file.exists():
-        st.error(f"Oops. {predicted_rankings_model_file} not found.")
-        return None
-    learn = mlBridgeAiLib.load_model(predicted_rankings_model_file)
-    pred_df = mlBridgeAiLib.predict_pct(
-        learn,
-        df
+    # todo: have to fake these columns for mlBridgeAiLib.predict_regression_model() because model was trained on them but they don't exist in df.
+    df = df.with_columns(
+        pl.lit(None).cast(pl.Float32).alias('MasterPoints_N'),
+        pl.lit(None).cast(pl.Float32).alias('MasterPoints_E'),
+        pl.lit(None).cast(pl.Float32).alias('MasterPoints_S'),
+        pl.lit(None).cast(pl.Float32).alias('MasterPoints_W'),
+        pl.lit(None).cast(pl.String).alias('board_result_id'),
     )
-    df = pred_df['df']
-    y_name = learn['artifacts']['target_name']
-    print(y_name)
-    y_name_ns = y_name
-    y_name_ew = y_name.replace('NS','EW')
-    df = df.with_columns([
-        pl.col(y_name_ns).alias(f'{y_name_ns}_Actual'),
-        pl.col(y_name_ew).alias(f'{y_name_ew}_Actual')
-    ]).with_columns([
-        (pl.col(f'{y_name_ns}_Actual') - pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Error'),
-        (pl.col(f'{y_name_ew}_Actual') - pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Error')
-    ])
+
+    # create prediction columns using AI model.
+    y_names = ['Pct_NS', 'Declarer_Direction', 'Contract']
+    for y_name in y_names:
+        model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
+        try:
+            pred_df = mlBridgeAiLib.predict_model(st.session_state.savedModelsPath, model_name, df)
+            df = df.hstack(pred_df)
+            match y_name:
+                case 'Pct_NS':
+                    y_name_ns = y_name
+                    y_name_ew = y_name.replace('NS','EW')
+                    df = df.with_columns([
+                        pl.col(y_name_ns).alias(f'{y_name_ns}_Actual'),
+                        pl.lit(1).sub(pl.col(f'{y_name_ns}')).alias(f'{y_name_ew}'),
+                        pl.col(y_name_ew).alias(f'{y_name_ew}_Actual'),
+                        pl.lit(1).sub(pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred'),
+                    ]).with_columns([
+                        pl.col(y_name_ns).sub(pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Pred_Error'),
+                        pl.col(y_name_ns).sub(pl.col(f'{y_name_ns}_Pred')).abs().alias(f'{y_name_ns}_Pred_Absolute_Error'),
+                        pl.col(y_name_ew).sub(pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Pred_Error'),
+                        pl.col(y_name_ew).sub(pl.col(f'{y_name_ew}_Pred')).abs().alias(f'{y_name_ew}_Pred_Absolute_Error'),
+                    ])
+                    # Recenter predictions to have mean 0.5, clip to [0,1], recompute complements and errors
+                    #df = recenter_percentage_predictions_for_target(df, y_name)
+                case 'Declarer_Direction':
+                    # Classification model - predictions are already added by predict_model
+                    # Use the predicted direction (N/E/S/W) to select the corresponding Player_ID and Player_Name
+                    df = df.with_columns([
+                        pl.struct([f'{y_name}_Pred', 'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W']).map_elements(lambda row: row[f'Player_ID_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String).alias('Declarer_ID_Pred'),
+                        pl.struct([f'{y_name}_Pred', 'Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W']).map_elements(lambda row: row[f'Player_Name_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String).alias('Declarer_Name_Pred'),
+                    ])
+                case 'Contract':
+                    # Classification model - predictions are already added by predict_model
+                    pass
+                case _:
+                    st.error(f"Unexpected target: {y_name}")
+                    return None
+        except FileNotFoundError:
+            st.warning(f"Model {model_name} not found, skipping predictions for {y_name}")
+            continue
+        except Exception as e:
+            st.error(f"Error predicting {y_name}: {str(e)}")
+            return None
     #st.session_state.sql_query_mode = True
     return df # return newly created df. created by pl.concat().
 
@@ -1773,8 +1824,18 @@ def perform_hand_augmentations_queue(self: Any, hand_augmentation_work: Any) -> 
 
 def augment_df(df: Any) -> Any:
     with st.spinner('Augmenting data...'):
-        augmenter = AllAugmentations(df,None,sd_productions=st.session_state.single_dummy_sample_count,progress=st.progress(0),lock_func=perform_hand_augmentations_queue)
+        augmenter = AllAugmentations(
+            df,
+            None,
+            sd_productions=st.session_state.single_dummy_sample_count,
+            progress=st.progress(0),
+            lock_func=perform_hand_augmentations_queue,
+            incorporate_elo_ratings=True,
+        )
         df, hrs_cache_df = augmenter.perform_all_augmentations()
+        print(df.select(pl.col(pl.Float64)).columns)
+        # todo: create these Float64 as 32: ['lifemaster_n', 'lifemaster_s', 'lifemaster_e', 'lifemaster_w', 'Pct_NS', 'Pct_EW', 'Declarer_Rating', 'Declarer_Pct']
+        df = df.with_columns(pl.col(pl.Float64).cast(pl.Float32)) # todo: this should be done earlier.
     # previously_missing_columns = {'CT_EW_S_Game', 'HCP_NS_S', 'CT_EW_C_Partial', 'CT_NS_C_GSlam', 'CT_NS_C_SSlam', 'CT_NS_D', 'CT_NS_C', 'QT_NS_S', 'CT_EW_H', 'CT_EW_H_GSlam', 'CT_NS_N_SSlam', 'LoTT_Variance', 'MP_Sum_EW', 'CT_NS_C_Pass', 'MP_Geo_NS', 'CT_EW_N', 'CT_EW_N_Pass', 'DP_EW_S', 'iPlayer_Number_W', 'CT_EW_C', 'MP_Geo_EW', 'QT_EW_D', 'QT_NS_D', 'iPlayer_Number_N', 'CT_EW_C_Pass', 'CT_NS_S_Partial', 'CT_NS_H_Pass', 'CT_EW_H_Partial', 'HCP_EW_C', 'CT_EW_N_Game', 'CT_NS_S_SSlam', 'HCP_NS_H', 'CT_NS_D_SSlam', 'CT_NS_D_Pass', 'CT_NS_C_Partial', 'CT_NS_S_Pass', 'HCP_EW_D', 'CT_EW_N_SSlam', 'CT_EW_C_Game', 'HCP_EW_H', 'CT_EW_S_Partial', 'CT_NS_N', 'QT_EW_S', 'CT_EW_S', 'mp_total_n', 'HCP_EW_S', 'CT_NS_C_Game', 'CT_EW_S_GSlam', 'CT_NS_H_Partial', 'iPlayer_Number_S', 'CT_NS_S_GSlam', 'CT_NS_N_GSlam', 'DP_NS_H', 'CT_NS_H_GSlam', 'CT_EW_S_SSlam', 'iPlayer_Number_E', 'CT_NS_H_SSlam', 'DP_EW_C', 'mp_total_w', 'CT_EW_H_Pass', 'CT_NS_D_Game', 'CT_EW_D_GSlam', 'LoTT_Suit_Length', 'CT_EW_C_SSlam', 'QT_EW_H', 'CT_NS_H_Game', 'CT_NS_H', 'QT_NS_H', 'CT_NS_D_GSlam', 'DP_NS_D', 'MP_Sum_NS', 'CT_EW_H_Game', 'DP_NS_C', 'CT_NS_D_Partial', 'CT_EW_S_Pass', 'CT_NS_N_Game', 'CT_NS_N_Pass', 'CT_EW_D_Pass', 'QT_EW_C', 'ParScore_NS', 'HCP_NS_C', 'CT_EW_H_SSlam', 'CT_EW_D_Game', 'HCP_NS_D', 'mp_total_s', 'CT_EW_N_GSlam', 'CT_NS_S', 'CT_EW_D_SSlam', 'CT_EW_D_Partial', 'CT_EW_D', 'CT_EW_C_GSlam', 'DP_EW_D', 'LoTT_Tricks', 'CT_EW_N_Partial', 'DP_NS_S', 'mp_total_e', 'CT_NS_S_Game', 'CT_NS_N_Partial', 'QT_NS_C', 'DP_EW_H'}
     # now_missing_cols = previously_missing_columns.difference(df.columns)
     # print(now_missing_cols)
@@ -1824,7 +1885,7 @@ def write_report() -> None:
         report_event_info = f"{st.session_state.game_description} (event id {st.session_state.session_id})."
         report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
-        #st.markdown('<div style="height: 50px;"><a name="top-of-report"></a></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height: 50px;"><a id="top-of-report" name="top-of-report"></a></div>', unsafe_allow_html=True)
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
