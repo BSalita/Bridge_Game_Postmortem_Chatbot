@@ -1041,7 +1041,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     )
 
     # create prediction columns using AI model.
-    y_names = ['Pct_NS', 'Declarer_Direction', 'Contract']
+    y_names = [] # todo: broken in streamlit on server. maybe package issue? ['Declarer_Direction', 'Contract']
     for y_name in y_names:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
         try:
