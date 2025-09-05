@@ -58,6 +58,22 @@ def get_db_connection():
         print_to_log_info(f"Created new database connection for session")
     return st.session_state.db_connection
 
+
+@st.cache_data
+def load_parquet_cached(file_path: str) -> pl.DataFrame:
+    """Load parquet file with Streamlit caching for sharing between users.
+    
+    This function uses @st.cache_data to load parquet files once and share
+    them between all concurrent users, improving memory efficiency and loading speed.
+    
+    Args:
+        file_path: Path to the parquet file as string
+        
+    Returns:
+        pl.DataFrame: Loaded DataFrame
+    """
+    return pl.read_parquet(file_path)
+
 # Only declared to display version information
 
 import numpy as np
@@ -548,7 +564,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
                 acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
                 acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
                 if acbl_session_player_cache_df_file.exists():
-                    df = pl.read_parquet(acbl_session_player_cache_df_file)
+                    df = load_parquet_cached(str(acbl_session_player_cache_df_file))
                     print(f"Loaded {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
                 else:
                     df = augment_df(df)
