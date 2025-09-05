@@ -42,6 +42,22 @@ from dotenv import load_dotenv
 #import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
 
+
+def get_db_connection():
+    """Get or create a session-specific database connection.
+    
+    This ensures each Streamlit session has its own database connection,
+    preventing concurrency issues when multiple users access the app.
+    
+    Returns:
+        duckdb.DuckDBPyConnection: Session-specific database connection
+    """
+    if 'db_connection' not in st.session_state:
+        # Create a new connection for this session
+        st.session_state.db_connection = duckdb.connect()
+        print_to_log_info(f"Created new database connection for session")
+    return st.session_state.db_connection
+
 # Only declared to display version information
 
 import numpy as np
@@ -126,20 +142,20 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
     # try:
     #     # First try using Polars SQL. However, Polars doesn't support some SQL functions: string_agg(), agg_value(), some joins are not supported.
     #     if True: # workaround issued by polars. CASE WHEN AVG() ELSE AVG() -> AVG(CASE WHEN ...)
-    #         result_df = st.session_state.con.execute(query).pl()
+    #         result_df = get_db_connection().execute(query).pl()
     #     else:
     #         result_df = df.sql(query) # todo: enforce FROM self for security concerns?
     # except Exception as e:
     #     try:
     #         # If Polars fails, try DuckDB
     #         print(f"Polars SQL failed. Trying DuckDB: {e}")
-    #         result_df = st.session_state.con.execute(query).pl()
+    #         result_df = get_db_connection().execute(query).pl()
     #     except Exception as e2:
     #         st.error(f"Both Polars and DuckDB SQL engines have failed. Polars error: {e}, DuckDB error: {e2}. Query: {query}")
     #         return None
     
     try:
-        result_df = st.session_state.con.execute(query).pl()
+        result_df = get_db_connection().execute(query).pl()
         if show_sql_query and st.session_state.show_sql_query:
             st.text(f"Result is a dataframe of {len(result_df)} rows.")
         streamlitlib.ShowDataFrameTable(result_df, key) #, color_column=color_column, tooltips=tooltips)
@@ -158,7 +174,7 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
 
 # def ask_database(query):
 #     print_to_log_info('ask_database query:', query)
-#     con = st.session_state.con
+#     con = get_db_connection()
 #     #"""Function to query duckdb database with a provided SQL query."""
 #     try:
 #         results = con.execute(query)
@@ -429,7 +445,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
 
     st.markdown('<div style="height: 50px;"><a id="top-of-report" name="top-of-report"></a></div>', unsafe_allow_html=True)
 
-    con = st.session_state.con
+    con = get_db_connection()
 
     with st.spinner(f"Retrieving a list of club games for {player_id} ..."):
         t = time.time()
@@ -1985,7 +2001,6 @@ def initialize_session_state() -> None:
         'show_sql_query': True, # os.getenv('STREAMLIT_ENV') == 'development',
         'use_historical_data': False,
         'do_not_cache_df': True, # todo: set to True for production
-        'con': duckdb.connect(), # IMPORTANT: duckdb.connect() hung until previous version was installed.
         'con_register_name': 'self',
         'main_section_container': st.empty(),
         'app_datetime': datetime.fromtimestamp(pathlib.Path(__file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z'),
