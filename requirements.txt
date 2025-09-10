@@ -1,6 +1,6 @@
 # Bridge Game Postmortem Chatbot Requirements
 # Core dependencies for the main application
-
+error
 # Streamlit and UI components
 streamlit>=1.30.0
 streamlit-extras>=0.4.0
@@ -42,7 +42,7 @@ markdown>=3.5.0
 asteval>=0.9.0
 
 # Bridge game specific
-endplay>=0.7.0
+endplay
 
 # Utilities
 python-dotenv>=1.0.0

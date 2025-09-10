@@ -118,24 +118,24 @@ assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Auth
 
 # mlBridgeLib.pd_options_display()
 
-sys.path.append(str(pathlib.Path.cwd().joinpath('acbllib')))  # global
-sys.path.append(str(pathlib.Path.cwd().joinpath('chatlib')))  # global
 sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 
-# streamlitlib, mlBridgeLib, chatlib must be placed after sys.path.append. vscode re-format likes to move them to the top
-from acbllib import (
+# streamlitlib, mlBridgeLib must be placed after sys.path.append. vscode re-format likes to move them to the top
+from mlBridgeLib.mlBridgeAcblLib import (
     get_club_results_from_acbl_number,
     get_tournament_sessions_from_acbl_number,
     get_tournament_session_results,
-    get_club_results_details_data
+    get_club_results_details_data,
+    create_club_dfs,
+    merge_clean_augment_club_dfs,
+    merge_clean_augment_tournament_dfs,
 )
 import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridgeLib.mlBridgeAugmentLib import (
     AllAugmentations,
 )
-import chatlib
 
 # override pandas display options
 pd_options_display()
@@ -412,7 +412,7 @@ def call_create_club_dfs(player_id: str, event_url: str) -> None:
     data = get_club_results_details_data(event_url)
     if data is None:
         return None
-    return chatlib.create_club_dfs(data) # todo: fully convert to polars
+    return create_club_dfs(data) # todo: fully convert to polars
 
 
 # def create_tournament_dfs(player_id, event_url):
@@ -515,7 +515,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             if data is None:
                 st.error(f"Could not retrieve data for game {session_id}")
                 return False
-            dfs = chatlib.create_club_dfs(data)
+            dfs = create_club_dfs(data)
             if dfs is None or 'event' not in dfs or len(dfs['event']) == 0:
                 st.error(
                     f"Game {session_id} has missing or invalid game data. Must be a Mitchell movement game. Select a different club game or tournament session from left sidebar.")
@@ -551,7 +551,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
         #with st.spinner(f"Processing data for club game: {dfs['session']['start_date']} {dfs['session']['description']} session {dfs['session']['id']} number {dfs['session']['session_number']} section {dfs['section']} and player {player_id}."):
             t = time.time()
             #df, sd_cache_d, matchpoint_ns_d = merge_clean_augment_club_dfs(dfs, {}, player_id) # doesn't use any caching
-            df = chatlib.merge_clean_augment_club_dfs(dfs, {}, player_id)
+            df = merge_clean_augment_club_dfs(dfs, {}, player_id)
             if df is None:
                 st.error(
                     f"Game {session_id} has an invalid game file. Select a different club game or tournament session from left sidebar.")
@@ -639,7 +639,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             t = time.time()
             #with Profiler():
 
-            df = chatlib.merge_clean_augment_tournament_dfs(dfs, json_results_d, acbl_api_key, player_id)
+            df = merge_clean_augment_tournament_dfs(dfs, json_results_d, acbl_api_key, player_id)
             if df is None:
                 st.error(
                     f"Session {session_id} has an invalid tournament session file. Choose another session.")
