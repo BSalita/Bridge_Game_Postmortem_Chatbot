@@ -136,6 +136,7 @@ from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must 
 from mlBridgeLib.mlBridgeAugmentLib import (
     AllAugmentations,
 )
+from mlBridgeLib.mlBridgePostmortemLib import PostmortemBase
 
 # override pandas display options
 pd_options_display()
@@ -456,6 +457,7 @@ def create_schema_string(df: Any, con: Any) -> str:
 
 
 def change_game_state(player_id: str, session_id: str) -> None: # todo: rename to session_id?
+    global acbl_api_key
 
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
@@ -732,8 +734,8 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
                 (pl.col('My_Pair')).alias('Boards_I_Played'),
                 (pl.col('My_Pair')).alias('Boards_We_Played'),
                 (pl.col('My_Pair')).alias('Our_Boards'),
-                (pl.col('My_Pair') & (pl.col('Number_Declarer') == st.session_state.player_id)).alias('Boards_I_Declared'),
-                (pl.col('My_Pair') & (pl.col('Number_Declarer') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
+                (pl.col('My_Pair') & (pl.col('Declarer_ID') == st.session_state.player_id)).alias('Boards_I_Declared'),
+                (pl.col('My_Pair') & (pl.col('Declarer_ID') == st.session_state.partner_id)).alias('Boards_Partner_Declared'),
                 (pl.col('My_Pair') & ((pl.col('Declarer_Direction') == opponent_pair_direction[0]) | (pl.col('Declarer_Direction') == opponent_pair_direction[1]))).alias('Boards_Opponent_Declared')
             ])
             df = df.with_columns([
@@ -744,7 +746,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
         print_to_log_info(f"create everything data table: {player_direction=} time:{time.time()-t}")
     assert st.session_state.player_id is not None, f"{st.session_state.player_id=}" # can assert if non-mitchell movement isn't already detected.
 
-
+    # (debug removed)
 
     # make predictions
     # todo: add back in
@@ -753,11 +755,30 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
         df = Predict_Game_Results(df) # returning updated df for con.register()
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
+    # (debug removed)
+
     # Create a DuckDB table from the DataFrame
     # register df as a table named 'self' for duckdb discovery. SQL queries will reference this df/table.
     
+    # (debug removed)
+    
+    # FIX: Ensure clean DuckDB registration by dropping any existing table first
+    table_name = st.session_state.con_register_name
+    # (debug removed)
+    
+    # Drop existing table if it exists to prevent schema corruption
+    try:
+        con.execute(f"DROP TABLE IF EXISTS {table_name}")
+        pass
+    except Exception as e:
+        pass
+    
     assert df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {df.select(pl.col(pl.Object)).columns}"
-    con.register(st.session_state.con_register_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
+    con.register(table_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
+    
+    # (debug removed)
+    
+    # (debug removed)
 
     st.session_state.df_schema_string = create_schema_string(df, con)
     # todo: temp for debugging
@@ -961,8 +982,19 @@ def chat_input_on_submit() -> None:
     st.session_state.main_section_container = st.empty()
     st.session_state.main_section_container = st.container()
     with st.session_state.main_section_container:
-        for i, (prompt,sql_query) in enumerate(st.session_state.sql_queries):
-            ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'user_query_main_doit_{i}')
+        # Only execute queries if we have a player_id and data table is ready
+        if st.session_state.player_id is not None and hasattr(st.session_state, 'df') and st.session_state.df is not None:
+            try:
+                # Check if DuckDB table is actually registered
+                con = get_db_connection()
+                con.execute(f"DESCRIBE {st.session_state.con_register_name}").fetchall()
+                # Table exists, execute queries
+                for i, (prompt,sql_query) in enumerate(st.session_state.sql_queries):
+                    ShowDataFrameTable(None, query=sql_query, key=f'user_query_main_doit_{i}')
+            except Exception as e:
+                st.info(f"Data is loading... Please wait for processing to complete.")
+        else:
+            st.info("Please enter a player ID to load data and execute queries.")
 
 import mlBridgeAiLib # todo: move to top of file
 #import mlBridgeAiLib_obsolete # todo: remove when done
@@ -1224,7 +1256,7 @@ def create_sidebar() -> None:
     
     t = time.time()
 
-    st.sidebar.caption(st.session_state.app_datetime)
+    st.sidebar.caption(f"Build:{st.session_state.app_datetime}")
 
     st.sidebar.text_input(
         "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id_default, key='player_id_input')
@@ -1847,6 +1879,7 @@ def initialize_website_specific() -> None:
         "Enter any ACBL player number in the left sidebar.", key='intro_message_4', logo=st.session_state.assistant_logo)
     streamlit_chat.message(
         "I'm just a Proof of Concept so don't double me.", key='intro_message_5', logo=st.session_state.assistant_logo)
+    app_info()
     return
 
 
@@ -1943,9 +1976,13 @@ def write_report() -> None:
                         pdf_assets.append(f"### {stat['help']}")
                     prompt_sql = prompt['sql']
                     sql_query = process_prompt_macros(prompt_sql)
-                    query_df = ShowDataFrameTable(st.session_state.df, query=sql_query, key=f'sql_query_{sql_query_count}')
-                    if query_df is not None:
-                        pdf_assets.append(query_df)
+                    try:
+                        query_df = ShowDataFrameTable(None, query=sql_query, key=f'sql_query_{sql_query_count}')
+                        if query_df is not None:
+                            pdf_assets.append(query_df)
+                    except Exception as e:
+                        st.error(f"Query failed: {sql_query[:100]}... Error: {e}")
+                        print(f"DEBUG: Report query failed: {e}")
                     sql_query_count += 1
 
         # As a text link
@@ -2091,18 +2128,62 @@ def reset_game_data() -> None:
 
 
 def app_info() -> None:
-    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in streamlit. Data engine is polars. Query engine is duckdb. Bridge lib is endplay. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita/ffbridge-postmortem")
-    st.caption(
-        f"App:{st.session_state.app_datetime} Python:{'.'.join(map(str, sys.version_info[:3]))} Streamlit:{st.__version__} Pandas:{pd.__version__} polars:{pl.__version__} endplay:{endplay.__version__} Query Params:{st.query_params.to_dict()}")
+    """Display app information"""
+    st.caption(f"Project lead is Robert Salita research@AiPolice.org. Code written in Python. UI written in streamlit. Data engine is polars. Query engine is duckdb. Bridge lib is endplay. Self hosted using Cloudflare Tunnel. Repo:https://github.com/BSalita")
+    st.caption(f"App:{st.session_state.app_datetime} Streamlit:{st.__version__} Query Params:{st.query_params.to_dict()} Environment:{os.getenv('STREAMLIT_ENV','')}")
+    st.caption(f"Python:{'.'.join(map(str, sys.version_info[:3]))} pandas:{pd.__version__} polars:{pl.__version__} endplay:{endplay.__version__}")
     return
 
 
-def main() -> None:
-    if 'first_time' not in st.session_state:
-        initialize_session_state()
+class BridgeGamePostmortemChatbot(PostmortemBase):
+    """Bridge Game Postmortem Chatbot Streamlit application."""
+    
+    def __init__(self):
+        super().__init__()
+        # App-specific initialization
+    
+    def initialize_session_state(self):
+        """Initialize app-specific session state."""
+        # First initialize common session state
+        self.initialize_common_session_state()
+        
+        # Chatbot-specific initialization
+        if 'player_id' in st.query_params:
+            player_id = st.query_params['player_id']
+            if not isinstance(player_id, str):
+                st.error(f'player_id must be a string {player_id}')
+                st.stop()
+            st.session_state.player_id = player_id
+        else:
+            st.session_state.player_id = None
+
+        # Chatbot-specific session state (debug_mode now handled by base class)
+        # No additional chatbot-specific variables needed at this time
+
+        self.reset_game_data()
+        self.initialize_website_specific()
+        
+    def reset_game_data(self):
+        """Reset game data."""
+        # First reset common game data
+        self.reset_common_game_data()
+        # Chatbot-specific reset handled by global function for now
+        
+    def initialize_website_specific(self):
+        """Initialize app-specific components."""
+        # Call global function for chatbot-specific initialization
+        initialize_website_specific()
+    
+    def create_sidebar(self):
+        """Create app-specific sidebar."""
+        # Call global function for chatbot-specific sidebar
         create_sidebar()
-    else:
-        create_ui()
+
+
+def main() -> None:
+    if 'app' not in st.session_state:
+        st.session_state.app = BridgeGamePostmortemChatbot()
+    st.session_state.app.main()
     return
 
 
