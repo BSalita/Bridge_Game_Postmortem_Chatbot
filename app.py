@@ -1407,6 +1407,13 @@ def create_sidebar() -> None:
             key='single_dummy_sample_count_number_input'
         )
 
+    # Automated Postmortem Apps
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Automated Postmortem Apps**")
+    st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
+    st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
+    #st.sidebar.markdown("🔗 [BridgeWebs Postmortem](https://bridgewebs.postmortem.chat)")
+
     print_to_log_info('create_sidebar time:', time.time()-t)
     return
 
