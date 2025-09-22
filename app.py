@@ -151,25 +151,12 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
 
     # if query doesn't contain 'FROM self', add 'FROM self ' to the beginning of the query.
     # can't just check for startswith 'from self'. Not universal because 'from self' can appear in subqueries or after JOIN.
-    # this syntax makes easy work of adding FROM but isn't compatible with polars SQL. duckdb only.
+    # this syntax makes easy work of adding FROM but is only compatible with DuckDB SQL.
     if f'from {st.session_state.con_register_name}' not in query.lower():
         query = f'FROM {st.session_state.con_register_name} ' + query
 
-    # polars SQL has so many issues that it's impossible to use. disabling until 2030.
-    # try:
-    #     # First try using Polars SQL. However, Polars doesn't support some SQL functions: string_agg(), agg_value(), some joins are not supported.
-    #     if True: # workaround issued by polars. CASE WHEN AVG() ELSE AVG() -> AVG(CASE WHEN ...)
-    #         result_df = get_db_connection().execute(query).pl()
-    #     else:
-    #         result_df = df.sql(query) # todo: enforce FROM self for security concerns?
-    # except Exception as e:
-    #     try:
-    #         # If Polars fails, try DuckDB
-    #         print(f"Polars SQL failed. Trying DuckDB: {e}")
-    #         result_df = get_db_connection().execute(query).pl()
-    #     except Exception as e2:
-    #         st.error(f"Both Polars and DuckDB SQL engines have failed. Polars error: {e}, DuckDB error: {e2}. Query: {query}")
-    #         return None
+    # Choose query engine based on user preference
+    query_engine = st.session_state.get('query_engine', 'DuckDB')
     
     try:
         result_df = get_db_connection().execute(query).pl()
