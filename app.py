@@ -463,6 +463,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             return False
         if len(game_urls) == 0:
             st.error(f"Could not find any club games for {player_id}.")
+            # Don't return False here yet - check tournament sessions first
         elif session_id is None:
             session_id = list(game_urls.keys())[0]  # default to most recent club game
         print_to_log_info('get_club_results_from_acbl_number time:', time.time()-t) # takes 4s
@@ -478,11 +479,20 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             return False
         if len(tournament_session_urls) == 0:
             st.error(f"Could not find any tournament sessions for {player_id}.")
+            # Don't return False here yet - check if we have any games at all
         elif session_id is None:
             session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
         print_to_log_info('get_tournament_sessions_from_acbl_number time:', time.time()-t) # takes 2s
     #tournament_session_urls = {} # just ignore tournament sessions for now
 
+    # Check if we have any valid games or sessions at all
+    has_club_games = game_urls is not None and len(game_urls) > 0
+    has_tournament_sessions = tournament_session_urls is not None and len(tournament_session_urls) > 0
+    
+    if not has_club_games and not has_tournament_sessions:
+        st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
+        return False
+    
     if session_id is None:
         st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
         return False
@@ -902,7 +912,20 @@ def player_id_change() -> None:
     # todo: looks like there's some situation where this is not called because player_id_input is already set. Need to breakpoint here to determine why st.session_state.player_id isn't updated.
     # assign changed textbox value (player_id_input) to player_id
     player_id = st.session_state.player_id_input
-    change_game_state(player_id, None)
+    
+    # If the new player ID is empty or the same as current, don't process
+    if not player_id or player_id == st.session_state.get('player_id'):
+        return
+    
+    # Attempt to change game state with new player ID
+    success = change_game_state(player_id, None)
+    
+    # If validation failed, set a flag to handle UI reset in main flow
+    if success is False:
+        # Set flag to indicate validation failure
+        st.session_state.player_id_validation_failed = True
+        st.session_state.invalid_player_id_input = player_id
+        # Don't update st.session_state.player_id - keep the previous working one
 
 
 
@@ -911,7 +934,13 @@ def debug_player_id_names_change() -> None:
     player_id_name = st.session_state.debug_player_id_names_selectbox
     #if not chat_initialize(player_id_name[0], None):  # grab player number
     #    chat_initialize(st.session_state.player_id, None)
-    change_game_state(player_id_name[0], None)
+    success = change_game_state(player_id_name[0], None)
+    
+    # If validation failed for debug player, set flag to handle UI reset in main flow
+    if success is False:
+        # Set flag to indicate debug validation failure
+        st.session_state.debug_player_id_validation_failed = True
+        st.session_state.debug_player_id_names_selectbox = None
 
 
 def club_session_id_change() -> None:
@@ -1245,8 +1274,51 @@ def create_sidebar() -> None:
 
     st.sidebar.caption(f"Build:{st.session_state.app_datetime}")
 
+    # Check if we need to handle validation failure
+    validation_failed = st.session_state.get('player_id_validation_failed', False)
+    
+    # Determine what value to show in the text input
+    if validation_failed:
+        # Show the previous valid player ID when validation fails
+        input_value = st.session_state.get('player_id', '')
+    else:
+        # Normal case - use whatever is currently in the input
+        input_value = st.session_state.get('player_id_input', st.session_state.get('player_id', ''))
+
     st.sidebar.text_input(
-        "ACBL player number", on_change=player_id_change, placeholder=st.session_state.player_id_default, key='player_id_input')
+        "ACBL player number", 
+        value=input_value,
+        on_change=player_id_change, 
+        placeholder=st.session_state.player_id_default, 
+        key='player_id_input')
+
+    # Handle player ID validation failure (after widget creation)
+    if validation_failed:
+        # Clear any existing report from the main window
+        if hasattr(st.session_state, 'main_section_container'):
+            st.session_state.main_section_container = st.empty()
+            # Create a new container with a helpful message
+            st.session_state.main_section_container = st.container()
+            with st.session_state.main_section_container:
+                st.info("Invalid player ID entered. Please enter a valid ACBL player number in the sidebar to generate a new report.")
+        # Clear SQL query mode and queries to prevent confusion
+        st.session_state.sql_query_mode = False
+        st.session_state.sql_queries = []
+        # Clear player-specific session data to prevent confusion
+        st.session_state.session_id = None
+        st.session_state.df = None
+        if hasattr(st.session_state, 'game_description'):
+            st.session_state.game_description = None
+        if hasattr(st.session_state, 'player_name'):
+            st.session_state.player_name = None
+        if hasattr(st.session_state, 'partner_name'):
+            st.session_state.partner_name = None
+        # Show additional error context if available
+        if 'invalid_player_id_input' in st.session_state:
+            st.sidebar.error(f"Invalid player ID: {st.session_state.invalid_player_id_input}")
+            del st.session_state.invalid_player_id_input
+        # Clear the validation failure flag after handling
+        st.session_state.player_id_validation_failed = False
 
     if st.session_state.player_id is None:
         return
@@ -1364,6 +1436,33 @@ def create_sidebar() -> None:
                 # test player_id is not None else use debug_favorites['SelectBoxes']['player_ids']['placeholder']?
                 st.selectbox("Debug Player List", options=st.session_state.debug_player_id_names, placeholder=st.session_state.player_id, #.debug_favorites['SelectBoxes']['player_ids']['placeholder'],
                                         on_change=debug_player_id_names_change, key='debug_player_id_names_selectbox')
+
+                # Handle debug player ID validation failure
+                if st.session_state.get('debug_player_id_validation_failed', False):
+                    # Clear the validation failure flag
+                    st.session_state.debug_player_id_validation_failed = False
+                    # Clear any existing report from the main window
+                    if hasattr(st.session_state, 'main_section_container'):
+                        st.session_state.main_section_container = st.empty()
+                        # Create a new container with a helpful message
+                        st.session_state.main_section_container = st.container()
+                        with st.session_state.main_section_container:
+                            st.info("Invalid debug player ID selected. Please select a valid player from the debug list to generate a new report.")
+                    # Clear SQL query mode and queries to prevent confusion
+                    st.session_state.sql_query_mode = False
+                    st.session_state.sql_queries = []
+                    # Clear player-specific session data to prevent confusion
+                    st.session_state.session_id = None
+                    st.session_state.df = None
+                    if hasattr(st.session_state, 'game_description'):
+                        st.session_state.game_description = None
+                    if hasattr(st.session_state, 'player_name'):
+                        st.session_state.player_name = None
+                    if hasattr(st.session_state, 'partner_name'):
+                        st.session_state.partner_name = None
+                    st.sidebar.error("Invalid debug player ID selected")
+                    # Clear the validation failure flag after handling
+                    st.session_state.debug_player_id_validation_failed = False
 
         st.checkbox(
             "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
