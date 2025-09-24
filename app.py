@@ -1113,6 +1113,13 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     if df is None:
         return None
 
+    # Debug environment information for Docker troubleshooting
+    import sys
+    import torch
+    print(f"DEBUG: Python version: {sys.version}")
+    print(f"DEBUG: PyTorch version: {torch.__version__}")
+    print(f"DEBUG: SavedModelsPath: {st.session_state.savedModelsPath}")
+    
     club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
 
     # todo: have to fake these columns for mlBridgeAiLib.predict_regression_model() because model was trained on them but they don't exist in df.
@@ -1129,8 +1136,37 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     for y_name in y_names:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
         try:
+            # Add debugging for Docker environment differences
+            model_path = st.session_state.savedModelsPath / f"{model_name}.pth"
+            print(f"DEBUG: Attempting to load model: {model_path}")
+            print(f"DEBUG: Model file exists: {model_path.exists()}")
+            if model_path.exists():
+                print(f"DEBUG: Model file size: {model_path.stat().st_size} bytes")
+                
+                # Try to inspect the model file directly to understand the structure
+                try:
+                    import torch
+                    model_data = torch.load(model_path, map_location='cpu')
+                    print(f"DEBUG: Model data type: {type(model_data)}")
+                    if isinstance(model_data, dict):
+                        print(f"DEBUG: Model data keys: {list(model_data.keys())}")
+                        # Look for common model metadata keys
+                        for key in ['model_type', 'task_type', 'target_type', 'model_class', 'is_classifier']:
+                            if key in model_data:
+                                print(f"DEBUG: Found {key}: {model_data[key]}")
+                    else:
+                        print(f"DEBUG: Model data is not a dict, it's: {type(model_data)}")
+                except Exception as inspect_error:
+                    print(f"DEBUG: Could not inspect model file: {inspect_error}")
+            
+            # Debug the input data being passed to the model
+            print(f"DEBUG: Input DataFrame shape: {df.shape}")
+            print(f"DEBUG: Input DataFrame columns: {df.columns[:10]}...")  # Show first 10 columns
+            print(f"DEBUG: Input DataFrame dtypes sample: {dict(list(zip(df.columns, df.dtypes))[:5])}")
+            
             pred_df = mlBridgeAiLib.predict_model(st.session_state.savedModelsPath, model_name, df)
             df = df.hstack(pred_df)
+            print(f"DEBUG: Successfully loaded model {model_name}")
             match y_name:
                 case 'Pct_NS':
                     y_name_ns = y_name
