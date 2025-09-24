@@ -749,7 +749,11 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
     # todo: add back in
     with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
         t = time.time()
-        df = Predict_Game_Results(df) # returning updated df for con.register()
+        df_with_predictions = Predict_Game_Results(df) # returning updated df for con.register()
+        if df_with_predictions is not None:
+            df = df_with_predictions
+        else:
+            st.warning("AI predictions failed. Continuing without predictions.")
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
 
     # (debug removed)
@@ -1119,9 +1123,9 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
         pl.lit(None).cast(pl.Float32).alias('MasterPoints_W'),
         pl.lit(None).cast(pl.String).alias('board_result_id'),
     )
-
+    
     # create prediction columns using AI model.
-    y_names = [] # todo: broken in streamlit on server. maybe package issue? ['Declarer_Direction', 'Contract']
+    y_names = ['Declarer_Direction', 'Contract', 'Pct_NS']
     for y_name in y_names:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
         try:
@@ -1158,10 +1162,11 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
                     st.error(f"Unexpected target: {y_name}")
                     return None
         except FileNotFoundError:
-            st.warning(f"Model {model_name} not found, skipping predictions for {y_name}")
+            st.warning(f"Model {model_name} not found at {st.session_state.savedModelsPath}, skipping predictions for {y_name}")
             continue
         except Exception as e:
-            st.error(f"Error predicting {y_name}: {str(e)}")
+            st.error(f"Error predicting {y_name} using model {model_name}: {str(e)}")
+            st.info("Continuing without AI predictions. The report will still be generated with actual game data.")
             return None
     #st.session_state.sql_query_mode = True
     return df # return newly created df. created by pl.concat().
@@ -2271,6 +2276,11 @@ class BridgeGamePostmortemChatbot(PostmortemBase):
         """Create app-specific sidebar."""
         # Call global function for chatbot-specific sidebar
         create_sidebar()
+    
+    def write_report(self):
+        """Generate postmortem report using button selection."""
+        # Use the global write_report function that respects selected_button
+        write_report()
 
 
 def main() -> None:
