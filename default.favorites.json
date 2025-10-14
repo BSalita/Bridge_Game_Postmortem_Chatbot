@@ -462,18 +462,29 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Declarer_Name AS Name, CASE WHEN Declarer_Direction IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg_Pct, COUNT(*) AS Count, Number_Declarer AS Declarer, Declarer_Direction AS Direction, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, AVG(CAST(Score_Declarer > Par_Declarer AS INT)) AS Pct_GT_Par, AVG(CAST(Score_Declarer = Par_Declarer AS INT)) AS Pct_EQ_Par FROM self GROUP BY Number_Declarer, Declarer_Name, Declarer_Direction HAVING COUNT(*) >= 4 ORDER BY Avg_Pct DESC"
+						"sql": "SELECT Declarer_Name AS Name, CASE WHEN Declarer_Direction IN ('N', 'S') THEN AVG(Pct_NS) ELSE AVG(Pct_EW) END AS Avg_Pct, COUNT(*) AS Count, Declarer_ID AS Declarer, Declarer_Direction AS Direction, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, AVG(CAST(Score_Declarer > Par_Declarer AS INT)) AS Pct_GT_Par, AVG(CAST(Score_Declarer = Par_Declarer AS INT)) AS Pct_EQ_Par, AVG(CAST(Par_Declarer = DD_Score_Max_Declarer AS INT)) AS Is_Par_Suit, AVG(CAST(Par_Declarer = DD_Score_Declarer AS INT)) AS Is_Par_Contract, SUM(CAST(DD_Score_Declarer = Par_Declarer AND DD_Score_Declarer < 0 AS INT)) AS Sacrifices FROM self GROUP BY Declarer_ID, Declarer_Name, Declarer_Direction HAVING COUNT(*) >= 4 ORDER BY Avg_Pct DESC"
 					}
 				]
 			},
 			"Scoring_Errors": {
-				"title": "Showing Possible Scoring Errors or Adjustments",
-				"help": "**Scoring errors or adjustments.**",
+				"title": "Scoring Errors",
+				"help": "**Showing boards with potential scoring errors.**",
+				"comment": "Check for boards where recorded scores don't match expected scores",
 				"prompts": [
 					{
-						"failed prompt": "show board, contract, score_declarer, computed_score_declarer, score_ns, score_ew when score_declarer <> computed_score_declarer or score_ns <> -score_ew sort by board.",
+						"prompt": "Show boards with potential scoring errors where actual score doesn't match contract result.",
+						"sql": "SELECT Board, Contract, Tricks, Score_NS, Score_EW, Declarer_Direction FROM self WHERE ABS(Score_NS + Score_EW) > 0 ORDER BY Board"
+					}
+				]
+			},
+			"Successful_Sacrifices": {
+				"title": "Successful Sacrifices",
+				"help": "**Showing successful sacrifices as determined using DD and par score.**",
+				"comment": "TODO: Change to show only contracts where the defenders had no better bid than to double (or pass).",
+				"prompts": [
+					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, Board, Contract, Score_Declarer, Computed_Score_Declarer, Score_NS, Score_EW, Result FROM self WHERE Contract IS NULL OR Score_Declarer IS NULL OR Score_Declarer <> Computed_Score_Declarer OR Score_NS <> -Score_EW ORDER BY Board"
+						"sql": "SELECT  Board, Declarer_ID, Declarer_Name, Contract, Par_Declarer, DD_Score_Declarer, CAST(DD_Score_Declarer = Par_Declarer AND DD_Score_Declarer < 0 AS INT) AS Sacrifice FROM self WHERE Sacrifice > 0 ORDER BY Board, Declarer_ID DESC"
 					}
 				]
 			},
@@ -483,11 +494,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Pred_Error) AS Avg_Pct_NS_Pred_Error FROM self GROUP BY Pair_NS ORDER BY Avg_Pct_NS_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Pred_Error) AS Avg_Pct_NS_Pred_Error, ANY_VALUE(Elo_N_NS) AS Elo_N_NS, ANY_VALUE(Elo_R_Pair_NS_EventStart) AS Elo_R_Pair_NS_EventStart FROM self GROUP BY Pair_NS ORDER BY Avg_Pct_NS_Actual DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Pred_Error) AS Avg_Pct_EW_Pred_Error FROM self GROUP BY Pair_EW ORDER BY Avg_Pct_EW_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Pred_Error) AS Avg_Pct_EW_Pred_Error, ANY_VALUE(Elo_N_EW) AS Elo_N_EW, ANY_VALUE(Elo_R_Pair_EW_EventStart) AS Elo_R_Pair_EW_EventStart FROM self GROUP BY Pair_EW ORDER BY Avg_Pct_EW_Actual DESC"
 					}
 				]
 			},
@@ -563,7 +574,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Board, CASE WHEN Opponent_Pair_Direction='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, Contract, Contract_Pred FROM self WHERE Boards_We_Played = True ORDER BY Board, CONCAT(section_name, Pair_Number_NS)"
+						"sql": "SELECT Board, CASE WHEN '{Opponent_Pair_Direction}'='NS' THEN CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) ELSE CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) END AS Opponents, Contract, Contract_Pred FROM self WHERE Boards_We_Played = True ORDER BY Board, CONCAT(section_name, Pair_Number_NS)"
 					}
 				]
 			},

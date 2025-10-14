@@ -33,15 +33,16 @@ from stqdm import stqdm
 #from openai import AsyncOpenAI
 #from openai import openai_object  # used to suppress vscode type checking errors
 import polars as pl
+import importlib
 import duckdb
 import json
+import contextlib
 import os
 from datetime import datetime, timezone
 import platform
 from dotenv import load_dotenv
 #import asyncio
 #from streamlit_profiler import Profiler # Profiler -- temp?
-
 
 def get_db_connection():
     """Get or create a session-specific database connection.
@@ -162,6 +163,20 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
         result_df = get_db_connection().execute(query).pl()
         if show_sql_query and st.session_state.show_sql_query:
             st.text(f"Result is a dataframe of {len(result_df)} rows.")
+            # Debug: if Pct_NS_Pred exists in result, show stats
+            try:
+                if 'Pct_NS_Pred' in result_df.columns:
+                    stats = result_df.select([
+                        pl.col('Pct_NS_Pred').mean().alias('mean'),
+                        pl.col('Pct_NS_Pred').std().alias('std'),
+                        pl.col('Pct_NS_Pred').min().alias('min'),
+                        pl.col('Pct_NS_Pred').max().alias('max'),
+                        pl.col('Pct_NS_Pred').n_unique().alias('unique'),
+                    ])
+                    print(f"DEBUG[APP] ShowDataFrameTable Pct_NS_Pred stats: mean={float(stats[0,'mean']):.6f}, std={float(stats[0,'std']):.6f}, min={float(stats[0,'min']):.6f}, max={float(stats[0,'max']):.6f}, unique={int(stats[0,'unique'])}")
+                    print(f"DEBUG[APP] ShowDataFrameTable Pct_NS_Pred sample head: {result_df.select(pl.col('Pct_NS_Pred')).head(5).to_dict(as_series=False)}")
+            except Exception:
+                pass
         streamlitlib.ShowDataFrameTable(result_df, key) #, color_column=color_column, tooltips=tooltips)
     except Exception as e:
         st.error(f"duckdb exception: error:{e} query:{query}")
@@ -446,6 +461,10 @@ def create_schema_string(df: Any, con: Any) -> str:
 def change_game_state(player_id: str, session_id: str) -> None: # todo: rename to session_id?
     global acbl_api_key
 
+    # Clear prediction cache when loading a new game/session
+    st.session_state.predictions_cached = False
+    st.session_state.predicted_df = None
+
     print_to_log_info(f"Retrieving latest results for {player_id}")
 
     st.markdown('<div style="height: 50px;"><a id="top-of-report" name="top-of-report"></a></div>', unsafe_allow_html=True)
@@ -492,7 +511,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
     if not has_club_games and not has_tournament_sessions:
         st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
         return False
-    
+
     if session_id is None:
         st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
         return False
@@ -557,22 +576,8 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
                 return False
             print_to_log_info('merge_clean_augment_club_dfs time:', time.time()-t) # takes 30s
 
-            if st.session_state.do_not_cache_df:
-                df = augment_df(df)
-            else:
-                acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
-                acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
-                if acbl_session_player_cache_df_file.exists():
-                    df = load_parquet_cached(str(acbl_session_player_cache_df_file))
-                    print(f"Loaded {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
-                else:
-                    df = augment_df(df)
-                    acbl_session_player_cache_dir = pathlib.Path('cache')
-                    acbl_session_player_cache_dir.mkdir(exist_ok=True)  # Creates directory if it doesn't exist
-                    acbl_session_player_cache_df_filename = f'cache/df-{st.session_state.session_id}-{st.session_state.player_id}.parquet'
-                    acbl_session_player_cache_df_file = pathlib.Path(acbl_session_player_cache_df_filename)
-                    df.write_parquet(acbl_session_player_cache_df_file)
-                    print(f"Saved {acbl_session_player_cache_df_filename}: shape:{df.shape} size:{acbl_session_player_cache_df_file.stat().st_size}")
+            # Always run fresh augmentation - no caching to prevent schema mismatch bugs
+            df = augment_df(df)
             with open('df_columns.txt','w') as f:
                 for col in sorted(df.columns):
                     f.write(col+'\n')
@@ -745,16 +750,21 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
 
     # (debug removed)
 
-    # make predictions
-    # todo: add back in
-    with st.spinner(f"Making AI Predictions. Takes 15 seconds."):
-        t = time.time()
-        df_with_predictions = Predict_Game_Results(df) # returning updated df for con.register()
-        if df_with_predictions is not None:
-            df = df_with_predictions
-        else:
-            st.warning("AI predictions failed. Continuing without predictions.")
+    # make predictions only if user pressed the AI Predictions button
+    if st.session_state.get('ai_predictions_requested', False):
+        with st.spinner(f"Making AI Predictions. Takes 20 seconds."):
+            t = time.time()
+            df_with_predictions = Predict_Game_Results(df) # returning updated df for con.register()
+            if df_with_predictions is not None:
+                df = df_with_predictions
+            else:
+                st.error("AI predictions failed. Cannot continue without predictions.")
+                st.stop()
         print_to_log_info('Predict_Game_Results time:', time.time()-t) # takes 10s
+        # reset request flag so predictions are only run on explicit button press
+        st.session_state.ai_predictions_requested = False
+    else:
+        print_to_log_info('AI predictions skipped (button not pressed).')
 
     # (debug removed)
 
@@ -1011,7 +1021,7 @@ def chat_input_on_submit() -> None:
                 # Table exists, execute queries
                 for i, (prompt,sql_query) in enumerate(st.session_state.sql_queries):
                     ShowDataFrameTable(None, query=sql_query, key=f'user_query_main_doit_{i}')
-            except Exception as e:
+            except Exception:
                 st.info(f"Data is loading... Please wait for processing to complete.")
         else:
             st.info("Please enter a player ID to load data and execute queries.")
@@ -1107,69 +1117,532 @@ def recenter_percentage_predictions_for_target(
         target_mean=target_mean,
     )
 
-def Predict_Game_Results(df: Any) -> Optional[Any]:
-    # Predict game results using a saved model.
+def recenter_probability_mean_logit(
+    df: pl.DataFrame,
+    pred_col: str,
+    target_mean: float = 0.5,
+) -> pl.DataFrame:
+    """Recenter probability column to target mean using a logit-domain shift.
 
-    if df is None:
-        return None
+    Preserves distribution shape (std stays approximately the same) better than
+    linear shifting. No effect if column missing/empty or already near target.
+    """
+    if pred_col not in df.columns or df.is_empty():
+        return df
+    try:
+        stats = df.select([
+            pl.col(pred_col).mean().alias("mean"),
+            pl.col(pred_col).std().alias("std"),
+        ])
+        mu = float(stats[0, "mean"]) if stats.height else None
+        sd = float(stats[0, "std"]) if stats.height else None
+        if mu is None or sd is None:
+            return df
+        if abs(mu - target_mean) < 1e-6 or sd < 1e-9:
+            return df
 
-    club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament' # todo: find a better way to determine this.
+        # Extract column as numpy
+        p = df[pred_col].to_numpy()
+        p = p.astype(float)
+        # Clip to avoid infinities in logit
+        eps = 1e-6
+        p = np.clip(p, eps, 1.0 - eps)
+        l = np.log(p / (1.0 - p))
 
-    # todo: have to fake these columns for mlBridgeAiLib.predict_regression_model() because model was trained on them but they don't exist in df.
-    df = df.with_columns(
+        # Bisection on logit shift c so that mean(sigmoid(l - c)) == target_mean
+        lo, hi = -20.0, 20.0
+        for _ in range(40):
+            mid = (lo + hi) / 2.0
+            m = float((1.0 / (1.0 + np.exp(-(l - mid)))).mean())
+            if m > target_mean:
+                lo = mid
+            else:
+                hi = mid
+        c = (lo + hi) / 2.0
+        p_new = 1.0 / (1.0 + np.exp(-(l - c)))
+        # Replace column
+        out = df.with_columns([
+            pl.Series(pred_col, p_new.astype(np.float32))
+        ])
+        # Debug summary
+        try:
+            s = out.select([
+                pl.col(pred_col).mean().alias("mean"),
+                pl.col(pred_col).std().alias("std"),
+                pl.col(pred_col).n_unique().alias("unique"),
+            ])
+            print(f"DEBUG[APP] {pred_col} recentered (logit): mean={float(s[0,'mean']):.6f}, std={float(s[0,'std']):.6f}, unique={int(s[0,'unique'])}")
+            # Show before/after comparison
+            try:
+                s0 = df.select([
+                    pl.col(pred_col).mean().alias("mean"),
+                    pl.col(pred_col).std().alias("std"),
+                    pl.col(pred_col).n_unique().alias("unique"),
+                ])
+                print(f"DEBUG[APP] {pred_col} before:  mean={float(s0[0,'mean']):.6f}, std={float(s0[0,'std']):.6f}, unique={int(s0[0,'unique'])}")
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return out
+    except Exception:
+        return df
+
+def validate_contract_predictions_against_training(df: pl.DataFrame, club_or_tournament: str) -> None:
+    """
+    Validate Contract predictions against saved training data (if available).
+    This helps identify discrepancies between training and inference accuracy.
+    """
+    import pathlib
+    import json
+    
+    # Check for debug files from training module (in the training module's location)
+    acbl_path = pathlib.Path("e:/bridge/data/acbl")
+    debug_input_file = acbl_path / "debug_input_contract.parquet"
+    debug_predictions_file = acbl_path / "debug_predictions_contract.parquet"
+    
+    if not (debug_input_file.exists() and debug_predictions_file.exists()):
+        print("🔍 Training debug files not found - skipping validation")
+        return
+    
+    print("=" * 60)
+    print("🔍 VALIDATING AGAINST TRAINING MODULE RESULTS")
+    print("=" * 60)
+    
+    try:
+        # Load training results
+        training_input_df = pl.read_parquet(debug_input_file)
+        training_predictions_df = pl.read_parquet(debug_predictions_file)
+        
+        # Calculate training accuracy
+        if 'Contract' in training_predictions_df.columns and 'Contract_Pred' in training_predictions_df.columns:
+            training_accuracy = (training_predictions_df['Contract'] == training_predictions_df['Contract_Pred']).mean()
+            training_pred_counts = training_predictions_df['Contract_Pred'].value_counts().sort('Contract_Pred')
+            
+            print(f"📊 TRAINING MODULE RESULTS:")
+            print(f"   Input shape: {training_input_df.shape}")
+            print(f"   Predictions shape: {training_predictions_df.shape}")
+            print(f"   Training accuracy: {training_accuracy:.4f} ({training_accuracy*100:.2f}%)")
+            print(f"   Unique predictions: {training_predictions_df['Contract_Pred'].n_unique()}")
+            print(f"   Top predictions: {training_pred_counts.head(5).to_dict()}")
+            
+            # Re-run prediction on training input using current pipeline
+            print(f"\n🔄 RE-RUNNING ON TRAINING INPUT...")
+            model_name = f'acbl_{club_or_tournament}_predicted_contract_torch_model'
+            
+            # Add fake columns that predict_model expects
+            # todo: put this fake stuff in an earlier step.
+            test_df = training_input_df
+            if 'MasterPoints_N' not in test_df.columns:
+                print(f"Adding fake column MasterPoints_[NESW] to training input dataframe")
+                test_df = test_df.with_columns([
         pl.lit(None).cast(pl.Float32).alias('MasterPoints_N'),
         pl.lit(None).cast(pl.Float32).alias('MasterPoints_E'),
         pl.lit(None).cast(pl.Float32).alias('MasterPoints_S'),
         pl.lit(None).cast(pl.Float32).alias('MasterPoints_W'),
-        pl.lit(None).cast(pl.String).alias('board_result_id'),
-    )
+                ])
+            # Add missing numerical columns (these are all expected to be numerical according to schema)
+            special_fixups = [('board_result_id',pl.Int64),('Club',pl.Int32),('Dealer',pl.Categorical),('Round',pl.UInt8),('Table',pl.UInt8),('section_id',pl.Int64),('tb_count',pl.Float32),('MP_Top',pl.Float32)]
+            special_fixups += [('Pair_Number_EW',pl.UInt8),('Pair_Number_NS',pl.UInt8),('event_id',pl.Int64),('session_id',pl.Int64)] if club_or_tournament == 'club' else [('Pair_Number_EW',pl.Int32),('Pair_Number_NS',pl.Int32),('event_id',pl.String),('session_id',pl.String)]
+            for col,dtype in special_fixups:
+                if col not in test_df.columns:
+                    print(f"Adding fake column {col} to training input dataframe")
+                    # Use sensible defaults per dtype
+                    if dtype in (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64):
+                        default_expr = pl.lit(0).cast(dtype)
+                    elif dtype in (pl.Float32, pl.Float64):
+                        default_expr = pl.lit(0.0).cast(dtype)
+                    elif dtype == pl.Categorical:
+                        default_expr = pl.lit(None).cast(pl.Categorical)
+                    else:
+                        default_expr = pl.lit(None).cast(dtype)
+                    test_df = test_df.with_columns([ default_expr.alias(col) ])
+                else:
+                    if test_df[col].dtype != dtype:
+                        print(f"Converting column {col} from {test_df[col].dtype} to {dtype}")
+                        test_df = test_df.with_columns([
+                            pl.col(col).cast(dtype).alias(col),
+                        ])
+
+            # Run current inference pipeline using training module's saved models
+            training_saved_models_path = acbl_path / "SavedModels"
+            new_prediction_df = mlBridgeAiLib.predict_model(training_saved_models_path, model_name, test_df)
+            
+            # Add actual Contract column for comparison
+            new_prediction_df = new_prediction_df.with_columns([
+                training_predictions_df['Contract'].alias('Contract')
+            ])
+            
+            # Calculate current accuracy
+            if 'Contract_Pred' in new_prediction_df.columns:
+                current_accuracy = (new_prediction_df['Contract'] == new_prediction_df['Contract_Pred']).mean()
+                current_pred_counts = new_prediction_df['Contract_Pred'].value_counts().sort('Contract_Pred')
+                
+                print(f"📊 CURRENT INFERENCE RESULTS:")
+                print(f"   Current accuracy: {current_accuracy:.4f} ({current_accuracy*100:.2f}%)")
+                print(f"   Unique predictions: {new_prediction_df['Contract_Pred'].n_unique()}")
+                print(f"   Top predictions: {current_pred_counts.head(5).to_dict()}")
+                
+                # Compare results
+                accuracy_diff = current_accuracy - training_accuracy
+                print(f"\n📊 COMPARISON:")
+                print(f"   Training accuracy: {training_accuracy:.4f} ({training_accuracy*100:.2f}%)")
+                print(f"   Current accuracy:  {current_accuracy:.4f} ({current_accuracy*100:.2f}%)")
+                print(f"   Difference:        {accuracy_diff:.4f} ({accuracy_diff*100:.2f}%)")
+                
+                if abs(accuracy_diff) > 0.05:  # More than 5% difference
+                    print(f"   ❌ SIGNIFICANT ACCURACY DROP DETECTED!")
+                    print(f"   This indicates a problem with the inference pipeline.")
+                    
+                    # Check schema for debugging
+                    schema_path = training_saved_models_path / f"{model_name}_schema.json"
+                    if schema_path.exists():
+                        with open(schema_path, 'r') as f:
+                            schema = json.load(f)
+                        print(f"   Schema categorical features: {len(schema.get('categorical_feature_cols', []))}")
+                        print(f"   Schema numerical features: {len(schema.get('numerical_feature_cols', []))}")
+                        print(f"   Schema category mappings: {len(schema.get('category_mappings', {}))}")
+                else:
+                    print(f"   ✅ Accuracies match within tolerance.")
+            
+    except Exception as e:
+        print(f"❌ Error during validation: {str(e)}")
     
-    # create prediction columns using AI model.
-    y_names = ['Declarer_Direction', 'Contract', 'Pct_NS']
-    for y_name in y_names:
+    print("=" * 60)
+
+def _recenter_pct_ns_pred(df: pl.DataFrame, y_ns: str, label: str) -> pl.DataFrame:
+    """Recenter Pct_NS_Pred to mean=0.5 with iterative adjustment for clipping effects."""
+    pred_col = f'{y_ns}_Pred'
+    current_mean = float(df[pred_col].mean())
+    current_std = float(df[pred_col].std())
+    n_rows = len(df)
+    print_to_log_debug(f"DEBUG[APP] Recentering {label}: n_rows={n_rows}, BEFORE mean={current_mean:.6f}, std={current_std:.6f}")
+    
+    # Iteratively adjust shift to account for clipping effects
+    target_mean = 0.5
+    shift = target_mean - current_mean
+    max_iterations = 10
+    tolerance = 1e-6
+    
+    for iteration in range(max_iterations):
+        # Apply shift and clip
+        df_temp = df.with_columns([
+            (pl.col(pred_col) + shift).clip(0.0, 1.0).alias(f'{pred_col}_temp')
+        ])
+        actual_mean = float(df_temp[f'{pred_col}_temp'].mean())
+        
+        # Check if we're close enough
+        if abs(actual_mean - target_mean) < tolerance:
+            df = df_temp.with_columns([
+                pl.col(f'{pred_col}_temp').alias(pred_col)
+            ]).drop(f'{pred_col}_temp')
+            break
+        
+        # Adjust shift based on error
+        shift += (target_mean - actual_mean)
+    else:
+        # Max iterations reached, use last result
+        df = df_temp.with_columns([
+            pl.col(f'{pred_col}_temp').alias(pred_col)
+        ]).drop(f'{pred_col}_temp')
+    
+    after_mean = float(df[pred_col].mean())
+    after_std = float(df[pred_col].std())
+    print_to_log_debug(f"DEBUG[APP] Recentering {label}: AFTER mean={after_mean:.6f}, std={after_std:.6f}, shift={shift:.6f}")
+    return df
+
+def Predict_Game_Results(df: Any) -> Optional[Any]:
+    if df is None:
+        return None
+
+    club_or_tournament = 'club' if 'club' in st.session_state.game_results_url else 'tournament'
+
+    def to_pl_dtype(s: str):
+        mapping = {
+            'Float32': pl.Float32,
+            'Float64': pl.Float64,
+            'Int32': pl.Int32,
+            'Int64': pl.Int64,
+            'UInt8': pl.UInt8,
+            'UInt16': pl.UInt16,
+            'UInt32': pl.UInt32,
+            'Boolean': pl.Boolean,
+            'Categorical': pl.Utf8,
+            'Utf8': pl.Utf8,
+            'String': pl.Utf8,
+        }
+        return mapping.get(s, pl.Utf8)
+
+    # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
+    acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_player_elo_ratings.parquet'
+    acbl_club_elo_ratings_file = st.session_state.acblPath.joinpath(acbl_club_elo_ratings_filename)
+    player_elo_df = pl.read_parquet(acbl_club_elo_ratings_file)
+    print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{player_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
+    # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
+    acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_pair_elo_ratings.parquet'
+    acbl_club_elo_ratings_file = st.session_state.acblPath.joinpath(acbl_club_elo_ratings_filename)
+    pair_elo_df = pl.read_parquet(acbl_club_elo_ratings_file)
+    print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{pair_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
+    # todo: assumes elo ratings exist in df.
+    df = df.drop(pl.col('^Elo_.*$')) # todo: don't create Elo in previous step because they're all nulls for inference.
+    # player_elo_df = player_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
+    # pair_elo_df = pair_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
+    # pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-')) # Split on '-' to create pl.List(pl.String)
+    # # Join player ELO ratings for each direction
+    # for direction in 'NESW':
+    #     df = df.join(
+    #         player_elo_df['Date','Player_ID','Elo_N','Elo_R_EventStart'].rename({
+    #             'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
+    #             'Elo_N': f'Elo_R_{direction}'
+    #         }), 
+    #         left_on=['Date', f'Player_ID_{direction}'], 
+    #         right_on=['Date', 'Player_ID'], 
+    #         how='left'
+    #     )
+    # # Join pair ELO ratings for NS and EW
+    # for pair in ['NS', 'EW']:
+    #     df = df.join(
+    #         pair_elo_df['Date','Pair_IDs','Elo_N','Elo_R_EventStart'].rename({
+    #             'Elo_R_EventStart': f'Elo_R_Pair_{pair}_EventStart',
+    #             'Elo_N': f'Elo_N_{pair}'
+    #         }), 
+    #         left_on=['Date', f'Pair_IDs_{pair}'], 
+    #         right_on=['Date', 'Pair_IDs'], 
+    #         how='left'
+    #     )
+
+    for y_name in ['Declarer_Direction', 'Contract', 'Pct_NS']:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
-        try:
-            pred_df = mlBridgeAiLib.predict_model(st.session_state.savedModelsPath, model_name, df)
+        with st.spinner(f"Predicting {y_name}..."):
+            schema_path = st.session_state.savedModelsPath.joinpath(f"{model_name}_schema.json")
+            if not schema_path.exists():
+                st.error(f"Skipping {model_name} because {schema_path} not found.")
+                continue
+            schema = json.load(open(schema_path, 'r'))
+            feature_dtypes = schema.get('feature_dtypes', {})
+            required_features = schema.get('numerical_feature_cols', []) + schema.get('categorical_feature_cols', [])
+            # Ensure required columns present and correctly typed
+            for col in required_features:
+                expected_dtype = to_pl_dtype(str(feature_dtypes.get(col, 'Float32')))
+                if col in df.columns:
+                    if df[col].dtype != expected_dtype:
+                        print(f"Converting column {col} from {df[col].dtype} to {expected_dtype}")
+                        df = df.with_columns([pl.col(col).cast(expected_dtype).alias(col)])
+                    if df[col].is_null().all():
+                        print(f"Column {col} is all nulls.")
+                else:
+                    print(f"Adding fake column {col} of Noneto dataframe")
+                    df = df.with_columns([pl.lit(None).cast(expected_dtype).alias(col)])
+            # Predict using library (schema determines model type)
+            pred_df = mlBridgeAiLib.predict_model(
+                st.session_state.savedModelsPath,
+                model_name,
+                df,
+                top_k=5 if y_name == 'Contract' else 1,
+                return_probs=(y_name == 'Contract')
+            )
+
+            # Debug prediction head/tail and stats for Pct_NS
+            try:
+                    stats_before = pred_df.select([
+                        pl.col(f'{y_name}_Pred').mean().alias('mean'),
+                        pl.col(f'{y_name}_Pred').std().alias('std'),
+                        pl.col(f'{y_name}_Pred').min().alias('min'),
+                        pl.col(f'{y_name}_Pred').max().alias('max'),
+                        pl.col(f'{y_name}_Pred').n_unique().alias('unique'),
+                    ])
+                    print(f"DEBUG[APP] pred_df {y_name}_Pred stats: mean={float(stats_before[0,'mean']):.6f}, std={float(stats_before[0,'std']):.6f}, min={float(stats_before[0,'min']):.6f}, max={float(stats_before[0,'max']):.6f}, unique={int(stats_before[0,'unique'])}")
+                    print(f"DEBUG[APP] pred_df {y_name}_Pred head: {pred_df.select(pl.col(f'{y_name}_Pred')).head(5).to_dict(as_series=False)}")
+                    print(f"DEBUG[APP] pred_df {y_name}_Pred tail: {pred_df.select(pl.col(f'{y_name}_Pred')).tail(5).to_dict(as_series=False)}")
+            except Exception:
+                pass
+
+            # Merge predictions
+            overlapping = [c for c in pred_df.columns if c in df.columns]
+            if overlapping:
+                df = df.drop(overlapping)
             df = df.hstack(pred_df)
-            match y_name:
-                case 'Pct_NS':
-                    y_name_ns = y_name
-                    y_name_ew = y_name.replace('NS','EW')
+
+            # Minimal post-processing per target
+            if y_name == 'Pct_NS' and f'{y_name}_Pred' in df.columns:
+                y_ns = y_name
+                y_ew = y_ns.replace('NS', 'EW')
+                df = df.with_columns([
+                    pl.col(y_ns).alias(f'{y_ns}_Actual'),
+                    (1 - pl.col(y_ns)).alias(y_ew),
+                    (1 - pl.col(y_ns)).alias(f'{y_ew}_Actual'),  # Fixed: use original Pct_NS, not derived y_ew
+                    (1 - pl.col(f'{y_ns}_Pred')).alias(f'{y_ew}_Pred'),
+                ])
+                # Linear recentering to mean=0.5 PER GAME/SECTION (with iterative adjustment for clipping effects)
+                # Must recenter within each game to preserve game-level mean=0.5
+                # Try multiple grouping columns: section_id, event_id, session_id
+                session_col = None
+                for col in ['section_id', 'Section_ID', 'event_id', 'Event_ID', 'session_id', 'Session_ID']:
+                    if col in df.columns:
+                        session_col = col
+                        break
+                
+                if session_col and df[session_col].n_unique() > 1:
+                    # Multiple sessions: recenter each separately
+                    print_to_log_debug(f"DEBUG[APP] Recentering {df[session_col].n_unique()} sessions separately")
+                    recentered_dfs = []
+                    for session_id in df[session_col].unique().sort():
+                        session_df = df.filter(pl.col(session_col) == session_id)
+                        session_df = _recenter_pct_ns_pred(session_df, y_ns, f"session {session_id}")
+                        recentered_dfs.append(session_df)
+                    df = pl.concat(recentered_dfs)
+                else:
+                    # Single session or no session column: recenter all together
+                    df = _recenter_pct_ns_pred(df, y_ns, "all data")
+                
+                # Update EW predictions
                     df = df.with_columns([
-                        pl.col(y_name_ns).alias(f'{y_name_ns}_Actual'),
-                        pl.lit(1).sub(pl.col(f'{y_name_ns}')).alias(f'{y_name_ew}'),
-                        pl.col(y_name_ew).alias(f'{y_name_ew}_Actual'),
-                        pl.lit(1).sub(pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ew}_Pred'),
-                    ]).with_columns([
-                        pl.col(y_name_ns).sub(pl.col(f'{y_name_ns}_Pred')).alias(f'{y_name_ns}_Pred_Error'),
-                        pl.col(y_name_ns).sub(pl.col(f'{y_name_ns}_Pred')).abs().alias(f'{y_name_ns}_Pred_Absolute_Error'),
-                        pl.col(y_name_ew).sub(pl.col(f'{y_name_ew}_Pred')).alias(f'{y_name_ew}_Pred_Error'),
-                        pl.col(y_name_ew).sub(pl.col(f'{y_name_ew}_Pred')).abs().alias(f'{y_name_ew}_Pred_Absolute_Error'),
+                    (1.0 - pl.col(f'{y_ns}_Pred')).alias(f'{y_ew}_Pred')
+                ])
+                
+                after_mean = float(df[f'{y_ns}_Pred'].mean())
+                after_std = float(df[f'{y_ns}_Pred'].std())
+                after_sum = float(df[f'{y_ns}_Pred'].sum())
+                n_rows = len(df)
+                print_to_log_debug(f"DEBUG[APP] Pct_NS_Pred AFTER recenter (overall): n_rows={n_rows}, mean={after_mean:.6f}, std={after_std:.6f}, sum={after_sum:.2f}, min={float(df[f'{y_ns}_Pred'].min()):.6f}, max={float(df[f'{y_ns}_Pred'].max()):.6f}, unique={df[f'{y_ns}_Pred'].n_unique()}")
+                
+                # Debug: Check per-pair averages to see if they preserve mean=0.5
+                pair_col = None
+                for col in ['Pair_NS', 'pair_ns', 'NS_Pair', 'ns_pair', 'Player_Pair_NS', 'player_pair_ns']:
+                    if col in df.columns:
+                        pair_col = col
+                        print_to_log_debug(f"DEBUG[APP] Found pair column: {pair_col}")
+                        break
+                
+                if pair_col:
+                    try:
+                        pair_stats = df.group_by(pair_col).agg([
+                            pl.col(f'{y_ns}_Pred').mean().alias('Avg_Pct_NS_Pred'),
+                            pl.col(f'{y_ns}_Pred').count().alias('Board_Count')
+                        ]).sort('Avg_Pct_NS_Pred', descending=True)
+                        
+                        # Simple mean of pair averages (unweighted)
+                        pair_mean_unweighted = float(pair_stats['Avg_Pct_NS_Pred'].mean())
+                        pair_std = float(pair_stats['Avg_Pct_NS_Pred'].std())
+                        pair_min = float(pair_stats['Avg_Pct_NS_Pred'].min())
+                        pair_max = float(pair_stats['Avg_Pct_NS_Pred'].max())
+                        
+                        # Weighted mean of pair averages (weighted by board count)
+                        total_predictions = pair_stats['Board_Count'].sum()
+                        pair_mean_weighted = float((pair_stats['Avg_Pct_NS_Pred'] * pair_stats['Board_Count']).sum() / total_predictions)
+                        
+                        print_to_log_debug(f"DEBUG[APP] Per-pair NS averages: n_pairs={len(pair_stats)}, unweighted_mean={pair_mean_unweighted:.6f}, weighted_mean={pair_mean_weighted:.6f}, std={pair_std:.6f}, range=[{pair_min:.3f}, {pair_max:.3f}]")
+                        print_to_log_debug(f"DEBUG[APP] Board counts per pair: min={pair_stats['Board_Count'].min()}, max={pair_stats['Board_Count'].max()}, total={total_predictions}")
+                    except Exception as e:
+                        print_to_log_debug(f"DEBUG[APP] Error computing pair stats: {e}")
+                else:
+                    # List all columns that contain 'pair' or 'ns' (case insensitive)
+                    pair_like_cols = [c for c in df.columns if 'pair' in c.lower() or ('ns' in c.lower() and 'pct' not in c.lower())]
+                    print_to_log_debug(f"DEBUG[APP] No standard pair column found. Pair-like columns: {pair_like_cols[:10]}")
+                # Sanity-check after recentering
+                try:
+                    s_after = df.select([
+                        pl.col(f'{y_ns}_Pred').mean().alias('mean'),
+                        pl.col(f'{y_ns}_Pred').std().alias('std'),
+                        pl.col(f'{y_ns}_Pred').n_unique().alias('unique'),
                     ])
-                    # Recenter predictions to have mean 0.5, clip to [0,1], recompute complements and errors
-                    #df = recenter_percentage_predictions_for_target(df, y_name)
-                case 'Declarer_Direction':
-                    # Classification model - predictions are already added by predict_model
-                    # Use the predicted direction (N/E/S/W) to select the corresponding Player_ID and Player_Name
-                    df = df.with_columns([
-                        pl.struct([f'{y_name}_Pred', 'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W']).map_elements(lambda row: row[f'Player_ID_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String).alias('Declarer_ID_Pred'),
-                        pl.struct([f'{y_name}_Pred', 'Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W']).map_elements(lambda row: row[f'Player_Name_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String).alias('Declarer_Name_Pred'),
-                    ])
-                case 'Contract':
-                    # Classification model - predictions are already added by predict_model
+                    print(f"DEBUG[APP] {y_ns}_Pred after recenter: mean={float(s_after[0,'mean']):.6f}, std={float(s_after[0,'std']):.6f}, unique={int(s_after[0,'unique'])}")
+                except Exception:
                     pass
-                case _:
-                    st.error(f"Unexpected target: {y_name}")
-                    return None
-        except FileNotFoundError:
-            st.warning(f"Model {model_name} not found at {st.session_state.savedModelsPath}, skipping predictions for {y_name}")
-            continue
-        except Exception as e:
-            st.error(f"Error predicting {y_name} using model {model_name}: {str(e)}")
-            st.info("Continuing without AI predictions. The report will still be generated with actual game data.")
-            return None
-    #st.session_state.sql_query_mode = True
-    return df # return newly created df. created by pl.concat().
+                df = df.with_columns([
+                    (pl.col(y_ns) - pl.col(f'{y_ns}_Pred')).alias(f'{y_ns}_Pred_Error'),
+                    (pl.col(y_ns) - pl.col(f'{y_ns}_Pred')).abs().alias(f'{y_ns}_Pred_Absolute_Error'),
+                    (pl.col(y_ew) - pl.col(f'{y_ew}_Pred')).alias(f'{y_ew}_Pred_Error'),
+                    (pl.col(y_ew) - pl.col(f'{y_ew}_Pred')).abs().alias(f'{y_ew}_Pred_Absolute_Error'),
+                ])
+            elif y_name == 'Declarer_Direction' and f'{y_name}_Pred' in df.columns:
+                df = df.with_columns([
+                    pl.struct([f'{y_name}_Pred', 'Player_ID_N', 'Player_ID_E', 'Player_ID_S', 'Player_ID_W'])
+                      .map_elements(lambda row: row[f'Player_ID_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String)
+                      .alias('Declarer_ID_Pred'),
+                    pl.struct([f'{y_name}_Pred', 'Player_Name_N', 'Player_Name_E', 'Player_Name_S', 'Player_Name_W'])
+                      .map_elements(lambda row: row[f'Player_Name_{row[f"{y_name}_Pred"]}'] if row[f"{y_name}_Pred"] in 'NESW' else None, return_dtype=pl.String)
+                      .alias('Declarer_Name_Pred'),
+                ])
+
+    return df
+
+def ensure_board_flags(df: pl.DataFrame) -> pl.DataFrame:
+    """Ensure board-scoped boolean flags exist (e.g., Boards_We_Played).
+    Reconstructs from session context if missing.
+    """
+    try:
+        missing_flags = [c for c in ['Boards_We_Played', 'Boards_I_Played', 'Our_Section', 'Our_Pair', 'My_Section', 'My_Pair'] if c not in df.columns]
+        if not missing_flags:
+            return df
+        # Build My_Section if missing
+        if 'My_Section' not in df.columns:
+            df = df.with_columns([
+                (pl.col('section_name') == pl.lit(st.session_state.section_name)).alias('My_Section'),
+            ])
+        # Build My_Pair if missing
+        if 'My_Pair' not in df.columns and st.session_state.get('pair_direction') and st.session_state.get('pair_number') is not None:
+            pair_col = f"Pair_Number_{st.session_state.pair_direction}"
+            if pair_col in df.columns:
+                df = df.with_columns([
+                    (pl.col('My_Section') & (pl.col(pair_col) == pl.lit(st.session_state.pair_number))).alias('My_Pair'),
+                ])
+        # Derive additional flags from My_Pair
+        if 'Our_Section' not in df.columns:
+            df = df.with_columns(pl.col('My_Section').alias('Our_Section'))
+        if 'Our_Pair' not in df.columns:
+            df = df.with_columns(pl.col('My_Pair').alias('Our_Pair'))
+        if 'Boards_I_Played' not in df.columns:
+            df = df.with_columns(pl.col('My_Pair').alias('Boards_I_Played'))
+        if 'Boards_We_Played' not in df.columns:
+            df = df.with_columns(pl.col('My_Pair').alias('Boards_We_Played'))
+        return df
+    except Exception:
+        return df
+
+
+def run_ai_predictions_now() -> None:
+    """Run AI predictions on the currently loaded dataframe and re-register it, or load from cache."""
+
+    # Check if predictions are already cached
+    if st.session_state.get('predictions_cached', False) and st.session_state.get('predicted_df') is not None:
+        st.info("AI predictions already cached. Displaying previous results.")
+        st.session_state.df = st.session_state.predicted_df  # Load cached predictions back into df
+        return
+
+    if 'df' not in st.session_state or st.session_state.df is None:
+        st.warning("Load a game first before running AI predictions.")
+        return
+    df = st.session_state.df
+    with st.spinner('Making AI Predictions. Takes 15 seconds.'):
+        t = time.time()
+        df_with_predictions = Predict_Game_Results(df)
+        if df_with_predictions is None:
+            st.error("AI predictions failed. Cannot continue without predictions.")
+            st.stop()
+        # Cache the predictions
+        st.session_state.predicted_df = df_with_predictions
+        st.session_state.predictions_cached = True
+
+        # Ensure flag columns exist before registering
+        st.session_state.df = ensure_board_flags(df_with_predictions)
+        # Re-register DuckDB table to include new columns
+        con = get_db_connection()
+        table_name = st.session_state.con_register_name
+        try:
+            con.execute(f"DROP TABLE IF EXISTS {table_name}")
+        except Exception:
+            pass
+        assert st.session_state.df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {st.session_state.df.select(pl.col(pl.Object)).columns}"
+        con.register(table_name, st.session_state.df)
+        # Update schema string
+        st.session_state.df_schema_string = create_schema_string(st.session_state.df, con)
+        with open('df_schema.sql','w') as f:
+            f.write(st.session_state.df_schema_string)
+        print_to_log_info('AI Predictions (on-demand) time:', time.time()-t)
+    
+    # Reset the flag so predictions don't run again when switching games/sessions
+    st.session_state.ai_predictions_requested = False
 
 
 # def reset_data():
@@ -1397,6 +1870,10 @@ def create_sidebar() -> None:
             if st.sidebar.button(button['title'], help=button['help'], key=k):
                 st.session_state.sql_query_mode = False
                 st.session_state.selected_button = button
+                # If the button is AI Predictions, set request flag and run predictions now
+                if button['title'].lower().strip() == 'ai predictions':
+                    st.session_state.ai_predictions_requested = True
+                    run_ai_predictions_now()
                 
                 # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
                 # if len(ups) > 4:
@@ -1435,7 +1912,7 @@ def create_sidebar() -> None:
         if st.session_state.debug_favorites is not None:
             # favorite prompts selectboxes
             st.session_state.debug_player_id_names = st.session_state.debug_favorites[
-                'SelectBoxes']['Player_IDs']['options']
+                'SelectBoxes']['Player_IDs']['options'] # todo: rename to Pair_IDs?
             if len(st.session_state.debug_player_id_names):
                 # changed placeholder to player_id because when selectbox gets reset, possibly due to expander auto-collapsing, we don't want an unexpected value.
                 # test player_id is not None else use debug_favorites['SelectBoxes']['player_ids']['placeholder']?
@@ -1985,6 +2462,8 @@ def initialize_website_specific() -> None:
 def perform_hand_augmentations_queue(self: Any, hand_augmentation_work: Any) -> None:
     return streamlitlib.perform_queued_work(self, hand_augmentation_work, "Hand analysis")
 
+
+
 def augment_df(df: Any) -> Any:
     with st.spinner('Augmenting data...'):
         augmenter = AllAugmentations(
@@ -2063,12 +2542,14 @@ def write_report() -> None:
         pdf_assets.append(f"### {report_your_match_info}")
         vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
         sql_query_count = 0
-        for stats in stqdm(st.session_state.selected_button['prompts'], desc='Creating personalized report...'):
+        prompts_list = st.session_state.selected_button['prompts']
+        total = len(prompts_list)
+        progress_bar = st.progress(0.0)
+        for idx, stats in enumerate(prompts_list, start=1):
             assert stats[0] == '@', stats
             stat = vetted_prompts[stats[1:]]
             for i, prompt in enumerate(stat['prompts']):
                 if 'sql' in prompt and prompt['sql']:
-                    #print('sql:',prompt["sql"])
                     if i == 0:
                         streamlit_chat.message(f"Morty: {stat['help']}", key=f'morty_sql_query_{sql_query_count}', logo=st.session_state.assistant_logo)
                         pdf_assets.append(f"### {stat['help']}")
@@ -2081,6 +2562,14 @@ def write_report() -> None:
                     except Exception as e:
                         st.error(f"Query failed: {sql_query[:100]}... Error: {e}")
                     sql_query_count += 1
+            # update progress
+            try:
+                progress_bar.progress(min(idx / max(1, total), 1.0))
+            except Exception:
+                pass
+        # clear progress bar at end
+        with contextlib.suppress(Exception):
+            progress_bar.empty()
 
         # As a text link
         #st.markdown('[Back to Top](#your-personalized-report)')
@@ -2150,7 +2639,6 @@ def initialize_session_state() -> None:
         'single_dummy_sample_count': 10,
         'show_sql_query': True, # os.getenv('STREAMLIT_ENV') == 'development',
         'use_historical_data': False,
-        'do_not_cache_df': True, # todo: set to True for production
         'con_register_name': 'self',
         'main_section_container': st.empty(),
         'app_datetime': datetime.fromtimestamp(pathlib.Path(__file__).stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z'),
@@ -2215,6 +2703,7 @@ def reset_game_data() -> None:
         'sql_queries': [],
         'game_urls_d': {},
         'tournament_session_urls_d': {},
+        'ai_predictions_requested': False,
     }
     
     for key, value in reset_session_vars.items():
