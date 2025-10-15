@@ -1361,17 +1361,24 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
         mapping = {
             'Float32': pl.Float32,
             'Float64': pl.Float64,
+            'Int8': pl.Int8,
+            'Int16': pl.Int16,
             'Int32': pl.Int32,
             'Int64': pl.Int64,
             'UInt8': pl.UInt8,
             'UInt16': pl.UInt16,
             'UInt32': pl.UInt32,
+            'UInt64': pl.UInt64,
             'Boolean': pl.Boolean,
             'Categorical': pl.Utf8,
             'Utf8': pl.Utf8,
             'String': pl.Utf8,
+            'Date': pl.Date,
+            'Datetime': pl.Datetime,
         }
-        return mapping.get(s, pl.Utf8)
+        if s not in mapping:
+            raise ValueError(f"Unknown dtype '{s}' - add it to to_pl_dtype mapping")
+        return mapping[s]
 
     # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
     acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_player_elo_ratings.parquet'
@@ -1421,18 +1428,22 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
             schema = json.load(open(schema_path, 'r'))
             feature_dtypes = schema.get('feature_dtypes', {})
             required_features = schema.get('numerical_feature_cols', []) + schema.get('categorical_feature_cols', [])
-            # Ensure required columns present and correctly typed
+            
+            # First pass: Create None columns for any missing features
             for col in required_features:
-                expected_dtype = to_pl_dtype(str(feature_dtypes.get(col, 'Float32')))
-                if col in df.columns:
-                    if df[col].dtype != expected_dtype:
-                        print(f"Converting column {col} from {df[col].dtype} to {expected_dtype}")
-                        df = df.with_columns([pl.col(col).cast(expected_dtype).alias(col)])
-                    if df[col].is_null().all():
-                        print(f"Column {col} is all nulls.")
-                else:
-                    print(f"Adding fake column {col} of Noneto dataframe")
+                if col not in df.columns:
+                    expected_dtype = to_pl_dtype(str(feature_dtypes[col]))
+                    print(f"Adding fake column {col} of None with dtype {expected_dtype}")
                     df = df.with_columns([pl.lit(None).cast(expected_dtype).alias(col)])
+            
+            # Second pass: Ensure all columns have correct dtypes
+            for col in required_features:
+                expected_dtype = to_pl_dtype(str(feature_dtypes[col]))
+                if df[col].dtype != expected_dtype:
+                    print(f"Converting column {col} from {df[col].dtype} to {expected_dtype}")
+                    df = df.with_columns([pl.col(col).cast(expected_dtype, strict=False).alias(col)])
+                if df[col].is_null().all():
+                    print(f"Column {col} is all nulls.")
             # Predict using library (schema determines model type)
             pred_df = mlBridgeAiLib.predict_model(
                 st.session_state.savedModelsPath,
@@ -2439,7 +2450,8 @@ def initialize_website_specific() -> None:
         st.session_state.rootPath = pathlib.Path('.')
         if not st.session_state.rootPath.exists():
             st.error(f'rootPath does not exist: {st.session_state.rootPath}')
-        st.session_state.savedModelsPath = st.session_state.rootPath.joinpath('SavedModels')
+        st.session_state.acblPath = st.session_state.rootPath
+        st.session_state.savedModelsPath = st.session_state.acblPath.joinpath('SavedModels')
     if not st.session_state.savedModelsPath.exists():
         st.error(f'savedModelsPath does not exist: {st.session_state.savedModelsPath}')
     #st.session_state.favoritesPath = pathlib.joinpath('favorites'),
