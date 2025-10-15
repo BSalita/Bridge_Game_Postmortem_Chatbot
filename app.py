@@ -1370,7 +1370,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
             'UInt32': pl.UInt32,
             'UInt64': pl.UInt64,
             'Boolean': pl.Boolean,
-            'Categorical': pl.Utf8,
+            'Categorical': pl.Categorical,
             'Utf8': pl.Utf8,
             'String': pl.Utf8,
             'Date': pl.Date,
@@ -1392,31 +1392,33 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{pair_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
     # todo: assumes elo ratings exist in df.
     df = df.drop(pl.col('^Elo_.*$')) # todo: don't create Elo in previous step because they're all nulls for inference.
-    # player_elo_df = player_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
-    # pair_elo_df = pair_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
-    # pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-')) # Split on '-' to create pl.List(pl.String)
-    # # Join player ELO ratings for each direction
-    # for direction in 'NESW':
-    #     df = df.join(
-    #         player_elo_df['Date','Player_ID','Elo_N','Elo_R_EventStart'].rename({
-    #             'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
-    #             'Elo_N': f'Elo_R_{direction}'
-    #         }), 
-    #         left_on=['Date', f'Player_ID_{direction}'], 
-    #         right_on=['Date', 'Player_ID'], 
-    #         how='left'
-    #     )
-    # # Join pair ELO ratings for NS and EW
-    # for pair in ['NS', 'EW']:
-    #     df = df.join(
-    #         pair_elo_df['Date','Pair_IDs','Elo_N','Elo_R_EventStart'].rename({
-    #             'Elo_R_EventStart': f'Elo_R_Pair_{pair}_EventStart',
-    #             'Elo_N': f'Elo_N_{pair}'
-    #         }), 
-    #         left_on=['Date', f'Pair_IDs_{pair}'], 
-    #         right_on=['Date', 'Pair_IDs'], 
-    #         how='left'
-    #     )
+    player_elo_df = player_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
+    pair_elo_df = pair_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
+    pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-')) # Split on '-' to create pl.List(pl.String)
+
+    # todo: put Elo code into mlBridgeAcblLib?
+    # Join player ELO ratings for each direction
+    for direction in 'NESW':
+        df = df.join(
+            player_elo_df['Date','Player_ID','Elo_N','Elo_R_EventStart'].rename({
+                'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
+                'Elo_N': f'Elo_R_{direction}'
+            }), 
+            left_on=['Date', f'Player_ID_{direction}'], 
+            right_on=['Date', 'Player_ID'], 
+            how='left'
+        )
+    # Join pair ELO ratings for NS and EW
+    for pair in ['NS', 'EW']:
+        df = df.join(
+            pair_elo_df['Date','Pair_IDs','Elo_N','Elo_R_EventStart'].rename({
+                'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
+                'Elo_N': f'Elo_N_{pair}'
+            }), 
+            left_on=['Date', f'Pair_IDs_{pair}'], 
+            right_on=['Date', 'Pair_IDs'], 
+            how='left'
+        )
 
     for y_name in ['Declarer_Direction', 'Contract', 'Pct_NS']:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
