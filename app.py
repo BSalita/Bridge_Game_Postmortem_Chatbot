@@ -1397,28 +1397,55 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-')) # Split on '-' to create pl.List(pl.String)
 
     # todo: put Elo code into mlBridgeAcblLib?
+    # Deduplicate ELO dataframes to prevent row multiplication during joins
+    # Keep the latest (highest Elo_N) rating when a player has multiple records for same date
+    player_elo_df_dedup = (
+        player_elo_df
+        .sort(['Date', 'Player_ID', 'Elo_N'], descending=[False, False, True])
+        .unique(subset=['Date', 'Player_ID'], keep='first')
+    )
+    pair_elo_df_dedup = (
+        pair_elo_df
+        .sort(['Date', 'Pair_IDs', 'Elo_N'], descending=[False, False, True])
+        .unique(subset=['Date', 'Pair_IDs'], keep='first')
+    )
+    
+    # Track initial row count to verify no duplicates
+    initial_row_count = len(df)
+    
     # Join player ELO ratings for each direction
     for direction in 'NESW':
+        # Select only the exact columns we need to avoid conflicts
+        elo_cols = player_elo_df_dedup.select(['Date','Player_ID','Elo_N','Elo_R_EventStart']).rename({
+            'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
+            'Elo_N': f'Elo_R_{direction}'
+        })
         df = df.join(
-            player_elo_df['Date','Player_ID','Elo_N','Elo_R_EventStart'].rename({
-                'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
-                'Elo_N': f'Elo_R_{direction}'
-            }), 
+            elo_cols, 
             left_on=['Date', f'Player_ID_{direction}'], 
             right_on=['Date', 'Player_ID'], 
             how='left'
         )
+    # Verify no row multiplication
+    if len(df) != initial_row_count:
+        print(f"WARNING: Row count changed from {initial_row_count} to {len(df)} after player ELO joins!")
+    
     # Join pair ELO ratings for NS and EW
     for pair in ['NS', 'EW']:
+        # Select only the exact columns we need to avoid conflicts
+        elo_cols = pair_elo_df_dedup.select(['Date','Pair_IDs','Elo_N','Elo_R_EventStart']).rename({
+            'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
+            'Elo_N': f'Elo_N_{pair}'
+        })
         df = df.join(
-            pair_elo_df['Date','Pair_IDs','Elo_N','Elo_R_EventStart'].rename({
-                'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
-                'Elo_N': f'Elo_N_{pair}'
-            }), 
+            elo_cols, 
             left_on=['Date', f'Pair_IDs_{pair}'], 
             right_on=['Date', 'Pair_IDs'], 
             how='left'
         )
+    # Final verification
+    if len(df) != initial_row_count:
+        print(f"WARNING: Final row count is {len(df)}, expected {initial_row_count}!")
 
     for y_name in ['Declarer_Direction', 'Contract', 'Pct_NS']:
         model_name = f'acbl_{club_or_tournament}_predicted_{y_name.lower()}_torch_model'
@@ -1610,7 +1637,8 @@ def ensure_board_flags(df: pl.DataFrame) -> pl.DataFrame:
         if 'Boards_We_Played' not in df.columns:
             df = df.with_columns(pl.col('My_Pair').alias('Boards_We_Played'))
         return df
-    except Exception:
+    except Exception as e:
+        print(f"Error in ensure_board_flags: {e}")
         return df
 
 
@@ -1621,38 +1649,41 @@ def run_ai_predictions_now() -> None:
     if st.session_state.get('predictions_cached', False) and st.session_state.get('predicted_df') is not None:
         st.info("AI predictions already cached. Displaying previous results.")
         st.session_state.df = st.session_state.predicted_df  # Load cached predictions back into df
-        return
+        # IMPORTANT: Call ensure_board_flags() on cached data too!
+        st.session_state.df = ensure_board_flags(st.session_state.df)
+        # Don't return yet - need to re-register with DuckDB!
+    else:
+        if 'df' not in st.session_state or st.session_state.df is None:
+            st.warning("Load a game first before running AI predictions.")
+            return
+        df = st.session_state.df
+        with st.spinner('Making AI Predictions. Takes 30 seconds.'):
+            t = time.time()
+            df_with_predictions = Predict_Game_Results(df)
+            if df_with_predictions is None:
+                st.error("AI predictions failed. Cannot continue without predictions.")
+                st.stop()
+            # Cache the predictions
+            st.session_state.predicted_df = df_with_predictions
+            st.session_state.predictions_cached = True
 
-    if 'df' not in st.session_state or st.session_state.df is None:
-        st.warning("Load a game first before running AI predictions.")
-        return
-    df = st.session_state.df
-    with st.spinner('Making AI Predictions. Takes 15 seconds.'):
-        t = time.time()
-        df_with_predictions = Predict_Game_Results(df)
-        if df_with_predictions is None:
-            st.error("AI predictions failed. Cannot continue without predictions.")
-            st.stop()
-        # Cache the predictions
-        st.session_state.predicted_df = df_with_predictions
-        st.session_state.predictions_cached = True
-
-        # Ensure flag columns exist before registering
-        st.session_state.df = ensure_board_flags(df_with_predictions)
-        # Re-register DuckDB table to include new columns
-        con = get_db_connection()
-        table_name = st.session_state.con_register_name
-        try:
-            con.execute(f"DROP TABLE IF EXISTS {table_name}")
-        except Exception:
-            pass
-        assert st.session_state.df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {st.session_state.df.select(pl.col(pl.Object)).columns}"
-        con.register(table_name, st.session_state.df)
-        # Update schema string
-        st.session_state.df_schema_string = create_schema_string(st.session_state.df, con)
-        with open('df_schema.sql','w') as f:
-            f.write(st.session_state.df_schema_string)
-        print_to_log_info('AI Predictions (on-demand) time:', time.time()-t)
+            # Ensure flag columns exist before registering
+            st.session_state.df = ensure_board_flags(df_with_predictions)
+            print_to_log_info('AI Predictions (on-demand) time:', time.time()-t)
+    
+    # ALWAYS re-register DuckDB table (whether cached or freshly computed)
+    con = get_db_connection()
+    table_name = st.session_state.con_register_name
+    try:
+        con.execute(f"DROP TABLE IF EXISTS {table_name}")
+    except Exception:
+        pass
+    assert st.session_state.df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {st.session_state.df.select(pl.col(pl.Object)).columns}"
+    con.register(table_name, st.session_state.df)
+    # Update schema string
+    st.session_state.df_schema_string = create_schema_string(st.session_state.df, con)
+    with open('df_schema.sql','w') as f:
+        f.write(st.session_state.df_schema_string)
     
     # Reset the flag so predictions don't run again when switching games/sessions
     st.session_state.ai_predictions_requested = False
