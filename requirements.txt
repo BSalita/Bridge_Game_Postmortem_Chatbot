@@ -19,6 +19,7 @@ duckdb>=0.10.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 urllib3>=2.0.0
+playwright>=1.40.0
 
 # Database
 SQLAlchemy>=2.0.0
@@ -50,7 +51,9 @@ tenacity>=8.2.0
 termcolor>=2.3.0
 tqdm>=4.65.0
 ipython>=8.10.0
+psutil>=5.9.0
 
 # Notes:
 # - torch install varies by platform/accelerator; you may need to install a
 #   specific wheel (CPU/CUDA/ROCm). See https://pytorch.org/get-started/locally/
+# - After installing playwright, run: playwright install chromium
