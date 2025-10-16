@@ -1382,12 +1382,12 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
 
     # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
     acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_player_elo_ratings.parquet'
-    acbl_club_elo_ratings_file = st.session_state.acblPath.joinpath(acbl_club_elo_ratings_filename)
+    acbl_club_elo_ratings_file = st.session_state.savedModelsPath.joinpath(acbl_club_elo_ratings_filename)
     player_elo_df = pl.read_parquet(acbl_club_elo_ratings_file)
     print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{player_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
     # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
     acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_pair_elo_ratings.parquet'
-    acbl_club_elo_ratings_file = st.session_state.acblPath.joinpath(acbl_club_elo_ratings_filename)
+    acbl_club_elo_ratings_file = st.session_state.savedModelsPath.joinpath(acbl_club_elo_ratings_filename)
     pair_elo_df = pl.read_parquet(acbl_club_elo_ratings_file)
     print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{pair_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
     # todo: assumes elo ratings exist in df.
