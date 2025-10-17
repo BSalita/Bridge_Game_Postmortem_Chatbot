@@ -1380,6 +1380,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
             raise ValueError(f"Unknown dtype '{s}' - add it to to_pl_dtype mapping")
         return mapping[s]
 
+    assert df.select(pl.col('^Elo_.*$')).is_empty(), f"Oops. Found Elo columns in df: {df.select(pl.col('^Elo_.*$')).columns}"
     # takes 3s/0s for 13m/1m rows by 5 columns creating a 132MB/1MB? file.
     acbl_club_elo_ratings_filename = f'acbl_{club_or_tournament}_player_elo_ratings.parquet'
     acbl_club_elo_ratings_file = st.session_state.savedModelsPath.joinpath(acbl_club_elo_ratings_filename)
@@ -1390,11 +1391,6 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     acbl_club_elo_ratings_file = st.session_state.savedModelsPath.joinpath(acbl_club_elo_ratings_filename)
     pair_elo_df = pl.read_parquet(acbl_club_elo_ratings_file)
     print(f"Loaded {acbl_club_elo_ratings_filename}: shape:{pair_elo_df.shape} size:{acbl_club_elo_ratings_file.stat().st_size}")
-    # todo: assumes elo ratings exist in df.
-    df = df.drop(pl.col('^Elo_.*$')) # todo: don't create Elo in previous step because they're all nulls for inference.
-    player_elo_df = player_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
-    pair_elo_df = pair_elo_df.with_columns(pl.col('Date').cast(pl.Date)) # todo: Resolve Date inconsistancy between Elo df and inference df?
-    pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-')) # Split on '-' to create pl.List(pl.String)
 
     # todo: put Elo code into mlBridgeAcblLib?
     # Deduplicate ELO dataframes to prevent row multiplication during joins
@@ -1402,12 +1398,14 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     player_elo_df_dedup = (
         player_elo_df
         .sort(['Date', 'Player_ID', 'Elo_N'], descending=[False, False, True])
-        .unique(subset=['Date', 'Player_ID'], keep='first')
+        .unique(subset=['Date', 'Player_ID'], keep='first', maintain_order=True)
     )
+    # todo: change elo creation so there's a sorted Pair_IDs column already?
+    pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-').list.sort().alias('Pair_IDs_Sorted')) # Split on '-' to create pl.List(pl.String). Assumed sorted already.
     pair_elo_df_dedup = (
         pair_elo_df
-        .sort(['Date', 'Pair_IDs', 'Elo_N'], descending=[False, False, True])
-        .unique(subset=['Date', 'Pair_IDs'], keep='first')
+        .sort(['Date', 'Pair_IDs_Sorted', 'Elo_N'], descending=[False, False, True])
+        .unique(subset=['Date', 'Pair_IDs_Sorted'], keep='first', maintain_order=True)
     )
     
     # Track initial row count to verify no duplicates
@@ -1419,7 +1417,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
         elo_cols = player_elo_df_dedup.select(['Date','Player_ID','Elo_N','Elo_R_EventStart']).rename({
             'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
             'Elo_N': f'Elo_R_{direction}'
-        })
+        }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
         df = df.join(
             elo_cols, 
             left_on=['Date', f'Player_ID_{direction}'], 
@@ -1433,14 +1431,15 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     # Join pair ELO ratings for NS and EW
     for pair in ['NS', 'EW']:
         # Select only the exact columns we need to avoid conflicts
-        elo_cols = pair_elo_df_dedup.select(['Date','Pair_IDs','Elo_N','Elo_R_EventStart']).rename({
+        elo_cols = pair_elo_df_dedup.select(['Date','session_id','Pair_IDs_Sorted','Elo_N','Elo_R_EventStart']).rename({
             'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
             'Elo_N': f'Elo_N_{pair}'
-        })
+        }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
+        df = df.with_columns(pl.col(f'Pair_IDs_{pair}').list.sort().alias(f'Pair_IDs_{pair}_Sorted')) # todo: better to sort in previous step?
         df = df.join(
             elo_cols, 
-            left_on=['Date', f'Pair_IDs_{pair}'], 
-            right_on=['Date', 'Pair_IDs'], 
+            left_on=['Date', 'session_id', f'Pair_IDs_{pair}_Sorted'], 
+            right_on=['Date', 'session_id', 'Pair_IDs_Sorted'], 
             how='left'
         )
     # Final verification
@@ -2517,7 +2516,6 @@ def augment_df(df: Any) -> Any:
             sd_productions=st.session_state.single_dummy_sample_count,
             progress=st.progress(0),
             lock_func=perform_hand_augmentations_queue,
-            incorporate_elo_ratings=True,
         )
         df, hrs_cache_df = augmenter.perform_all_augmentations()
         print(df.select(pl.col(pl.Float64)).columns)
