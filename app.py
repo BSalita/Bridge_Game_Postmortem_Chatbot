@@ -932,11 +932,15 @@ def player_id_change() -> None:
         return
     
     # Attempt to change game state with new player ID
+    # This will load games list and auto-select the first game
     success = change_game_state(player_id, None)
     
-    # If validation failed, set a flag to handle UI reset in main flow
-    if success is False:
-        # Set flag to indicate validation failure
+    if success:
+        # Success - set flag and return (Streamlit will auto-rerun after callback)
+        st.session_state.player_id_just_changed = True
+        return
+    else:
+        # If validation failed, set a flag to handle UI reset in main flow
         st.session_state.player_id_validation_failed = True
         st.session_state.invalid_player_id_input = player_id
         # Don't update st.session_state.player_id - keep the previous working one
@@ -1841,7 +1845,75 @@ def create_sidebar() -> None:
         # Clear the validation failure flag after handling
         st.session_state.player_id_validation_failed = False
 
+    # Load configuration files early so Developer Settings has access to debug_favorites
+    # These files are reloaded each time for development purposes. Only takes a second.
+    st.session_state.default_favorites_file = pathlib.Path('default.favorites.json')
+    if st.session_state.player_id is not None:
+        st.session_state.player_id_custom_favorites_file = pathlib.Path(
+            'favorites/'+st.session_state.player_id+'.favorites.json')
+    st.session_state.debug_favorites_file = pathlib.Path('favorites/debug.favorites.json')
+    read_configs()
+
     if st.session_state.player_id is None:
+        # Developer Settings - Always show regardless of player_id
+        with st.sidebar.expander('Developer Settings', False):
+            if st.session_state.debug_favorites is not None:
+                # favorite prompts selectboxes
+                st.session_state.debug_player_id_names = st.session_state.debug_favorites[
+                    'SelectBoxes']['Player_IDs']['options'] # todo: rename to Pair_IDs?
+                if len(st.session_state.debug_player_id_names):
+                    # changed placeholder to player_id because when selectbox gets reset, possibly due to expander auto-collapsing, we don't want an unexpected value.
+                    # test player_id is not None else use debug_favorites['SelectBoxes']['player_ids']['placeholder']?
+                    st.selectbox("Debug Player List", options=st.session_state.debug_player_id_names, placeholder=st.session_state.player_id, #.debug_favorites['SelectBoxes']['player_ids']['placeholder'],
+                                            on_change=debug_player_id_names_change, key='debug_player_id_names_selectbox')
+
+                    # Handle debug player ID validation failure
+                    if st.session_state.get('debug_player_id_validation_failed', False):
+                        # Clear the validation failure flag
+                        st.session_state.debug_player_id_validation_failed = False
+                        # Clear any existing report from the main window
+                        if hasattr(st.session_state, 'main_section_container'):
+                            st.session_state.main_section_container = st.empty()
+                            # Create a new container with a helpful message
+                            st.session_state.main_section_container = st.container()
+                            with st.session_state.main_section_container:
+                                st.info("Invalid debug player ID selected. Please select a valid player from the debug list to generate a new report.")
+                        # Clear SQL query mode and queries to prevent confusion
+                        st.session_state.sql_query_mode = False
+                        st.session_state.sql_queries = []
+                        # Clear player-specific session data to prevent confusion
+                        st.session_state.session_id = None
+                        st.session_state.df = None
+                        if hasattr(st.session_state, 'game_description'):
+                            st.session_state.game_description = None
+                        if hasattr(st.session_state, 'player_name'):
+                            st.session_state.player_name = None
+                        if hasattr(st.session_state, 'partner_name'):
+                            st.session_state.partner_name = None
+                        st.sidebar.error("Invalid debug player ID selected")
+                        # Clear the validation failure flag after handling
+                        st.session_state.debug_player_id_validation_failed = False
+
+            st.checkbox(
+                "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
+
+            # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
+            st.number_input(
+                "Single Dummy Samples Count",
+                min_value=1,
+                max_value=100,
+                value=st.session_state.single_dummy_sample_count,
+                on_change=single_dummy_sample_count_changed,
+                key='single_dummy_sample_count_number_input'
+            )
+
+        # Automated Postmortem Apps - Always show
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("**Automated Postmortem Apps**")
+        st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
+        st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
+
+        print_to_log_info('create_sidebar time:', time.time()-t)
         return
 
     st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
@@ -1850,6 +1922,14 @@ def create_sidebar() -> None:
     st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls_d[st.session_state.player_id].items(
     )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
+    # Check if player ID just changed and we should auto-generate report for the first game
+    if st.session_state.get('player_id_just_changed', False):
+        st.session_state.player_id_just_changed = False
+        # Clear the flag and generate the report automatically
+        if st.session_state.session_id is not None:
+            # Report will be generated in create_ui()
+            pass
+    
     if st.session_state.session_id is None:
         st.error(f'Please choose a new game or tournament session from the left sidebar.')
         return
@@ -1861,16 +1941,6 @@ def create_sidebar() -> None:
     #         key='personalized_report_download_button'):
     #     st.warning('Personalized report downloaded.')
 
-    # These files are reloaded each time for development purposes. Only takes a second.
-    # todo: put filenames into a .json or .toml file?
-    st.session_state.default_favorites_file = pathlib.Path(
-        'default.favorites.json')
-    st.session_state.player_id_custom_favorites_file = pathlib.Path(
-        'favorites/'+st.session_state.player_id+'.favorites.json')
-    st.session_state.debug_favorites_file = pathlib.Path(
-        'favorites/debug.favorites.json')
-    read_configs()
-
     help_file = pathlib.Path('help.md')
     if help_file.exists():
         with open(help_file, 'r') as f:
@@ -1881,8 +1951,10 @@ def create_sidebar() -> None:
         with open(release_notes_file, 'r') as f:
             st.session_state.release_notes = f.read()  # text string
 
+    # Create placeholder for PDF link (will be populated after report is generated)
     st.session_state.pdf_link = st.sidebar.empty()
-
+    
+    # Show ACBL results page link
     if st.session_state.session_id is not None:
         if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
             st.session_state.acbl_results_page = st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]
@@ -1950,8 +2022,8 @@ def create_sidebar() -> None:
     #                     ups.append(up)
     #             # ask_questions_without_context(ups, st.session_state.ai_api)
 
+    # Developer Settings - Always show regardless of player_id (at bottom of sidebar)
     with st.sidebar.expander('Developer Settings', False):
-
         if st.session_state.debug_favorites is not None:
             # favorite prompts selectboxes
             st.session_state.debug_player_id_names = st.session_state.debug_favorites[
@@ -1992,23 +2064,7 @@ def create_sidebar() -> None:
         st.checkbox(
             "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
 
-        # todo: reimplement ability to select individual prompts
-        # # favorite prompts selectboxes
-        # if len(st.session_state.vetted_prompt_titles):
-        #     st.selectbox("Vetted Prompts", index=None, options=st.session_state.vetted_prompt_titles.keys(),
-        #                             on_change=prompts_selectbox_change, key='prompts_selectbox')
-
-        # if st.button("Clear Conversation", key='clear_chat_button'):
-        #     reset_messages()
-        #     streamlitlib.move_focus()
-
-        # todo: feature removed
-        # if len(st.session_state.ai_apis):
-        #     st.selectbox("AI API Model Used for Prompts", index=st.session_state.ai_apis.index(st.session_state.ai_api),options=st.session_state.ai_apis,
-        #                             on_change=ai_api_selectbox_change, key='ai_api_selectbox')
-
         # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
-
         st.number_input(
             "Single Dummy Samples Count",
             min_value=1,
@@ -2018,12 +2074,11 @@ def create_sidebar() -> None:
             key='single_dummy_sample_count_number_input'
         )
 
-    # Automated Postmortem Apps
+    # Automated Postmortem Apps - Always show (at bottom of sidebar)
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Automated Postmortem Apps**")
     st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
     st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
-    #st.sidebar.markdown("🔗 [BridgeWebs Postmortem](https://bridgewebs.postmortem.chat)")
 
     print_to_log_info('create_sidebar time:', time.time()-t)
     return
