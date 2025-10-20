@@ -255,7 +255,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             st.error(f"Player number {player_id} not found.")
             return False
         if len(game_urls) == 0:
-            st.error(f"Could not find any club games for {player_id}.")
+            st.info(f"No club games found for {player_id}.")
             # Don't return False here yet - check tournament sessions first
         elif session_id is None:
             session_id = list(game_urls.keys())[0]  # default to most recent club game
@@ -271,7 +271,7 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
             st.error(f"Player number {player_id} not found.")
             return False
         if len(tournament_session_urls) == 0:
-            st.error(f"Could not find any tournament sessions for {player_id}.")
+            st.info(f"No tournament sessions found for {player_id}.")
             # Don't return False here yet - check if we have any games at all
         elif session_id is None:
             session_id = list(tournament_session_urls.keys())[0]  # default to most recent tournament session
@@ -1178,51 +1178,94 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
         .sort(['Date', 'Player_ID', 'Elo_N'], descending=[False, False, True])
         .unique(subset=['Date', 'Player_ID'], keep='first', maintain_order=True)
     )
-    # todo: change elo creation so there's a sorted Pair_IDs column already?
-    pair_elo_df = pair_elo_df.with_columns(pl.col('Pair_IDs').str.split('-').list.sort().alias('Pair_IDs_Sorted')) # Split on '-' to create pl.List(pl.String). Assumed sorted already.
+    # todo: change elo creation so there's a sorted Pair_IDs column already existing?
+    # Convert list to sorted string for joining (join_asof doesn't support list columns)
+    pair_elo_df = pair_elo_df.with_columns(
+        pl.col('Pair_IDs').str.split('-').list.sort().list.join('-').alias('Pair_IDs_Sorted_Str')
+    )
     pair_elo_df_dedup = (
         pair_elo_df
-        .sort(['Date', 'Pair_IDs_Sorted', 'Elo_N'], descending=[False, False, True])
-        .unique(subset=['Date', 'Pair_IDs_Sorted'], keep='first', maintain_order=True)
+        .sort(['Date', 'Pair_IDs_Sorted_Str', 'Elo_N'], descending=[False, False, True])
+        .unique(subset=['Date', 'Pair_IDs_Sorted_Str'], keep='first', maintain_order=True)
     )
     
     # Track initial row count to verify no duplicates
     initial_row_count = len(df)
     
+    # Debug: Check data types before joining
+    print(f"DEBUG: Main df dtypes - Date: {df['Date'].dtype}")
+    print(f"DEBUG: Player ELO dtypes - Date: {player_elo_df_dedup['Date'].dtype}")
+    print(f"DEBUG: Main df sample join keys:\n{df.select(['Date', 'Player_ID_N', 'Player_ID_E']).head(3)}")
+    print(f"DEBUG: Player ELO sample join keys:\n{player_elo_df_dedup.select(['Date', 'Player_ID', 'Elo_N']).head(3)}")
+    
+    # Check if the specific date exists in ELO data
+    main_date = df['Date'][0]
+    print(f"\nDEBUG: Looking for Date={main_date}")
+    matching_elo = player_elo_df_dedup.filter(pl.col('Date') == main_date)
+    print(f"DEBUG: Found {len(matching_elo)} matching rows in player ELO for this date")
+    if len(matching_elo) > 0:
+        print(f"DEBUG: Sample matching ELO data:\n{matching_elo.head(5)}")
+    
+    # Check date range in ELO data
+    print(f"DEBUG: Player ELO date range: {player_elo_df_dedup['Date'].min()} to {player_elo_df_dedup['Date'].max()}")
+    
     # Join player ELO ratings for each direction
+    # Note: We use join_asof to get the most recent ELO rating on or before the game date
+    # This handles cases where the exact game date doesn't exist in the ELO data
+    # ELO tracks a player's rating across all games, so we use the last known rating
     for direction in 'NESW':
         # Select only the exact columns we need to avoid conflicts
-        elo_cols = player_elo_df_dedup.select(['Date','session_id','Player_ID','Elo_N','Elo_R_EventStart','MasterPoints']).rename({
+        elo_cols = player_elo_df_dedup.select(['Date','Player_ID','Elo_N','Elo_R_EventStart','MasterPoints']).rename({
             'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
             'Elo_N': f'Elo_N_{direction}',
             'MasterPoints': f'MasterPoints_{direction}',
-        }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
-        df = df.join(
+        }).with_columns(pl.col('Date').cast(pl.Date)) # Ensure Date type matches for join
+        
+        # Use join_asof to get the most recent ELO rating on or before the game date
+        df = df.join_asof(
             elo_cols, 
-            left_on=['Date', 'session_id', f'Player_ID_{direction}'], 
-            right_on=['Date', 'session_id', 'Player_ID'], 
-            how='left'
+            left_on='Date',
+            right_on='Date',
+            by_left=f'Player_ID_{direction}',
+            by_right='Player_ID',
+            strategy='backward'  # Get the most recent date <= game date
         )
         assert df.select(pl.col(f'^.*_right$')).is_empty()
+        print(f"DEBUG: After joining {direction}, null count for Elo_N_{direction}: {df[f'Elo_N_{direction}'].null_count()}")
     # Verify no row multiplication
     if len(df) != initial_row_count:
         print(f"WARNING: Row count changed from {initial_row_count} to {len(df)} after player ELO joins!")
     
     # Join pair ELO ratings for NS and EW
+    # Note: We use join_asof to get the most recent ELO rating on or before the game date
+    # This handles cases where the exact game date doesn't exist in the ELO data
     for pair in ['NS', 'EW']:
         # Select only the exact columns we need to avoid conflicts
-        elo_cols = pair_elo_df_dedup.select(['Date','session_id','Pair_IDs_Sorted','Elo_N','Elo_R_EventStart']).rename({
+        elo_cols = pair_elo_df_dedup.select(['Date','Pair_IDs_Sorted_Str','Elo_N','Elo_R_EventStart']).rename({
             'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
             'Elo_N': f'Elo_N_{pair}',
-        }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
-        df = df.with_columns(pl.col(f'Pair_IDs_{pair}').list.sort().alias(f'Pair_IDs_{pair}_Sorted')) # todo: better to sort in previous step?
-        df = df.join(
-            elo_cols, 
-            left_on=['Date', 'session_id', f'Pair_IDs_{pair}_Sorted'], 
-            right_on=['Date', 'session_id', 'Pair_IDs_Sorted'], 
-            how='left'
+        }).with_columns(pl.col('Date').cast(pl.Date))
+        
+        # Create sorted string version of Pair_IDs for joining
+        df = df.with_columns(
+            pl.col(f'Pair_IDs_{pair}').list.sort().list.join('-').alias(f'Pair_IDs_{pair}_Sorted_Str')
         )
+        
+        # Use join_asof to get the most recent ELO rating on or before the game date
+        df = df.join_asof(
+            elo_cols, 
+            left_on='Date',
+            right_on='Date',
+            by_left=f'Pair_IDs_{pair}_Sorted_Str',
+            by_right='Pair_IDs_Sorted_Str',
+            strategy='backward'  # Get the most recent date <= game date
+        )
+        
+        # Drop the temporary string column used for joining
+        df = df.drop(f'Pair_IDs_{pair}_Sorted_Str')
+        
         assert df.select(pl.col(f'^.*_right$')).is_empty()
+        print(f"DEBUG: After joining {pair}, null count for Elo_N_{pair}: {df[f'Elo_N_{pair}'].null_count()}")
 
     # Final verification
     if len(df) != initial_row_count:
@@ -1316,8 +1359,8 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
                     # Single session or no session column: recenter all together
                     df = _recenter_pct_ns_pred(df, y_ns, "all data")
                 
-                # Update EW predictions
-                    df = df.with_columns([
+                # Update EW predictions after recentering (must be done for both branches)
+                df = df.with_columns([
                     (1.0 - pl.col(f'{y_ns}_Pred')).alias(f'{y_ew}_Pred')
                 ])
                 
