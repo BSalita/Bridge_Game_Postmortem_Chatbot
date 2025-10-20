@@ -1432,11 +1432,13 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     return df
 
 def ensure_board_flags(df: pl.DataFrame) -> pl.DataFrame:
-    """Ensure board-scoped boolean flags exist (e.g., Boards_We_Played).
+    """Ensure board-scoped boolean flags exist (e.g., Boards_We_Played, Boards_I_Declared).
     Reconstructs from session context if missing.
     """
     try:
-        missing_flags = [c for c in ['Boards_We_Played', 'Boards_I_Played', 'Our_Section', 'Our_Pair', 'My_Section', 'My_Pair'] if c not in df.columns]
+        all_flags = ['Boards_We_Played', 'Boards_I_Played', 'Our_Section', 'Our_Pair', 'My_Section', 'My_Pair',
+                     'Boards_I_Declared', 'Boards_Partner_Declared', 'Boards_We_Declared', 'Boards_Opponent_Declared', 'Our_Boards']
+        missing_flags = [c for c in all_flags if c not in df.columns]
         if not missing_flags:
             return df
         # Build My_Section if missing
@@ -1456,10 +1458,33 @@ def ensure_board_flags(df: pl.DataFrame) -> pl.DataFrame:
             df = df.with_columns(pl.col('My_Section').alias('Our_Section'))
         if 'Our_Pair' not in df.columns:
             df = df.with_columns(pl.col('My_Pair').alias('Our_Pair'))
+        if 'Our_Boards' not in df.columns:
+            df = df.with_columns(pl.col('My_Pair').alias('Our_Boards'))
         if 'Boards_I_Played' not in df.columns:
             df = df.with_columns(pl.col('My_Pair').alias('Boards_I_Played'))
         if 'Boards_We_Played' not in df.columns:
             df = df.with_columns(pl.col('My_Pair').alias('Boards_We_Played'))
+        
+        # Build declarer-specific flags (requires Declarer_ID column)
+        if 'Declarer_ID' in df.columns:
+            if 'Boards_I_Declared' not in df.columns and st.session_state.get('player_id'):
+                df = df.with_columns(
+                    (pl.col('My_Pair') & (pl.col('Declarer_ID') == st.session_state.player_id)).alias('Boards_I_Declared')
+                )
+            if 'Boards_Partner_Declared' not in df.columns and st.session_state.get('partner_id'):
+                df = df.with_columns(
+                    (pl.col('My_Pair') & (pl.col('Declarer_ID') == st.session_state.partner_id)).alias('Boards_Partner_Declared')
+                )
+            if 'Boards_Opponent_Declared' not in df.columns and st.session_state.get('opponent_pair_direction'):
+                opponent_pair_direction = st.session_state.opponent_pair_direction
+                df = df.with_columns(
+                    (pl.col('My_Pair') & ((pl.col('Declarer_Direction') == opponent_pair_direction[0]) | 
+                     (pl.col('Declarer_Direction') == opponent_pair_direction[1]))).alias('Boards_Opponent_Declared')
+                )
+            if 'Boards_We_Declared' not in df.columns and 'Boards_I_Declared' in df.columns and 'Boards_Partner_Declared' in df.columns:
+                df = df.with_columns(
+                    (pl.col('Boards_I_Declared') | pl.col('Boards_Partner_Declared')).alias('Boards_We_Declared')
+                )
         return df
     except Exception as e:
         print(f"Error in ensure_board_flags: {e}")
