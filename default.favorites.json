@@ -494,11 +494,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Pred_Error) AS Avg_Pct_NS_Pred_Error, ANY_VALUE(Elo_N_NS) AS Elo_N_NS, ANY_VALUE(Elo_R_NS_EventStart) AS Elo_R_NS_EventStart FROM self GROUP BY Pair_NS ORDER BY Avg_Pct_NS_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_NS, ' - ', Player_Name_N, ' - ', Player_Name_S) AS Pair_NS, AVG(Pct_NS_Actual) AS Avg_Pct_NS_Actual, AVG(Pct_NS_Pred) AS Avg_Pct_NS_Pred, AVG(Pct_NS_Pred_Error) AS Avg_Pct_NS_Pred_Error, ANY_VALUE(Elo_N_NS) AS Elo_N_NS, ANY_VALUE(Elo_R_NS_EventStart) AS Elo_R_NS_EventStart, ANY_VALUE(MasterPoints_N) AS MasterPoints_N, ANY_VALUE(MasterPoints_S) AS MasterPoints_S FROM self GROUP BY Pair_NS ORDER BY Avg_Pct_NS_Actual DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Pred_Error) AS Avg_Pct_EW_Pred_Error, ANY_VALUE(Elo_N_EW) AS Elo_N_EW, ANY_VALUE(Elo_R_EW_EventStart) AS Elo_R_EW_EventStart FROM self GROUP BY Pair_EW ORDER BY Avg_Pct_EW_Actual DESC"
+						"sql": "SELECT CONCAT(section_name, Pair_Number_EW, ' - ', Player_Name_E, ' - ', Player_Name_W) AS Pair_EW, AVG(Pct_EW_Actual) AS Avg_Pct_EW_Actual, AVG(Pct_EW_Pred) AS Avg_Pct_EW_Pred, AVG(Pct_EW_Pred_Error) AS Avg_Pct_EW_Pred_Error, ANY_VALUE(Elo_N_EW) AS Elo_N_EW, ANY_VALUE(Elo_R_EW_EventStart) AS Elo_R_EW_EventStart, ANY_VALUE(MasterPoints_E) AS MasterPoints_E, ANY_VALUE(MasterPoints_W) AS MasterPoints_W FROM self GROUP BY Pair_EW ORDER BY Avg_Pct_EW_Actual DESC"
 					}
 				]
 			},
@@ -552,7 +552,7 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT CONCAT(Number_Declarer, ' - ', Declarer_Name, ' - ', Declarer_Direction) AS Player, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Declared_Not_Pred_Boards, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM self GROUP BY Number_Declarer, Declarer_Name, Declarer_Direction ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
+						"sql": "SELECT CONCAT(Declarer_ID, ' - ', Declarer_Name, ' - ', Declarer_Direction) AS Player, SUM(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN 1 ELSE 0 END) AS Correct_Preds, COUNT() AS Boards_Declared, STRING_AGG(CASE WHEN Declarer_Direction = Declarer_Direction_Pred THEN Board END, ', ') AS Correctly_Pred_Boards, STRING_AGG(CASE WHEN Declarer_Direction <> Declarer_Direction_Pred THEN Board END, ', ') AS Declared_Not_Pred_Boards, Correct_Preds/Boards_Declared AS Correct_Direction_Pct, SUM(CASE WHEN (Declarer_Direction IN ('N','S') AND Declarer_Direction_Pred IN ('N', 'S')) OR (Declarer_Direction IN ('E','W') AND Declarer_Direction_Pred IN ('E', 'W')) THEN 1 ELSE 0 END) AS Correct_Pair_Preds, Correct_Pair_Preds/Boards_Declared AS Correct_Pair_Pct FROM self GROUP BY Declarer_ID, Declarer_Name, Declarer_Direction ORDER BY Correct_Direction_Pct DESC, Boards_Declared DESC"
 					}
 				]
 			},
@@ -605,11 +605,11 @@
 				"prompts": [
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_NS, Declarer_Name AS Name_NS, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, ANY_VALUE(Elo_N_NS) AS Elo_N_NS,  ANY_VALUE(Elo_R_NS_EventStart) AS Elo_R_NS_EventStart, ANY_VALUE(Elo_R_N_EventStart) AS Elo_R_N_EventStart, ANY_VALUE(Elo_R_S_EventStart) AS Elo_R_S_EventStart FROM self WHERE Declarer_Pair_Direction='NS' GROUP BY Number_Declarer, Declarer_Name ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Declarer_ID AS Declarer_NS, Declarer_Name AS Name_NS, AVG(Pct_NS) AS Pct_NS_Actual, AVG(Pct_NS_Pred) AS Pct_NS_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, ANY_VALUE(Elo_N_NS) AS Elo_N_NS,  ANY_VALUE(Elo_R_NS_EventStart) AS Elo_R_NS_EventStart, ANY_VALUE(Elo_R_N_EventStart) AS Elo_R_N_EventStart, ANY_VALUE(Elo_R_S_EventStart) AS Elo_R_S_EventStart FROM self WHERE Declarer_Pair_Direction='NS' GROUP BY Declarer_ID, Declarer_Name ORDER BY Pct_NS_Actual DESC, Boards_Declared DESC"
 					},
 					{
 						"prompt": "",
-						"sql": "SELECT Number_Declarer AS Declarer_EW, Declarer_Name AS Name_EW, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, ANY_VALUE(Elo_N_EW) AS Elo_N_EW, ANY_VALUE(Elo_R_EW_EventStart) AS Elo_R_EW_EventStart, ANY_VALUE(Elo_R_E_EventStart) AS Elo_R_E_EventStart, ANY_VALUE(Elo_R_W_EventStart) AS Elo_R_W_EventStart FROM self WHERE Declarer_Pair_Direction='EW' GROUP BY Number_Declarer, Declarer_Name ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
+						"sql": "SELECT Declarer_ID AS Declarer_EW, Declarer_Name AS Name_EW, AVG(Pct_EW) AS Pct_EW_Actual, AVG(Pct_EW_Pred) AS Pct_EW_Pred,  COUNT() AS Boards_Declared, AVG(CAST(Tricks > DD_Tricks AS INT)) AS Pct_GT_DD, AVG(CAST(Tricks = DD_Tricks AS INT)) AS Pct_EQ_DD, ANY_VALUE(Elo_N_EW) AS Elo_N_EW, ANY_VALUE(Elo_R_EW_EventStart) AS Elo_R_EW_EventStart, ANY_VALUE(Elo_R_E_EventStart) AS Elo_R_E_EventStart, ANY_VALUE(Elo_R_W_EventStart) AS Elo_R_W_EventStart FROM self WHERE Declarer_Pair_Direction='EW' GROUP BY Declarer_ID, Declarer_Name ORDER BY Pct_EW_Actual DESC, Boards_Declared DESC"
 					}
 				]
 			}

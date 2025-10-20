@@ -185,232 +185,6 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
     return result_df
 
 
-# todo: obsolete in favor of complete_messages
-
-# async def create_chat_completion(messages, model=DEFAULT_AI_MODEL, functions=None, function_call='auto', temperature=DEFAULT_AI_MODEL_TEMPERATURE, response_format={"type":"json_object"}):
-#     return await openai_async_client.chat.completions.create(messages=messages, model=model, functions=functions, function_call=function_call, temperature=temperature, response_format=response_format if model.startswith('gpt-4-') else None)
-
-
-# def ask_database(query):
-#     print_to_log_info('ask_database query:', query)
-#     con = get_db_connection()
-#     #"""Function to query duckdb database with a provided SQL query."""
-#     try:
-#         results = con.execute(query)
-#     except Exception as e:
-#         results = f"query failed with error: {e}"
-#     print_to_log_info('ask_database: results:', results)
-#     return results
-
-
-# def execute_function_call(message):
-#     # todo: use try except?
-#     if message["function_call"]["name"] == "ask_database":
-#         query = json.loads(message["function_call"]["arguments"])["query"]
-#         results = ask_database(query)
-#     else:
-#         results = f"Error: function {message['function_call']['name']} does not exist"
-#     return results
-
-
-# todo: similar to process_prompt_macros
-# def prompt_keyword_replacements(s):
-#     replacement_strings = [
-#         # todo: generalize {} replacements by using df.columns lookup?
-#         (r'\{Pair_Direction\}', st.session_state.pair_direction),
-#         (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
-#     ]
-#     for original, new in replacement_strings:
-#         s = re.sub(original, new, s.replace(
-#             '  ', ' '), flags=re.IGNORECASE)
-#     return s
-
-
-# def chat_up_user(up, messages, function_calls, model=None):
-#     return asyncio.run(async_chat_up_user({'prompt':up}, messages, function_calls, model))
-
-# async def async_chat_up_user(prompt_sql, messages, function_calls, model=None):
-
-#     if model is None:
-#         model = st.session_state.ai_api
-#     up = prompt_sql['prompt']
-#     # internal commands
-#     if up == '/about':
-#         content = slash_about()
-#         messages.append({"role": "assistant", "content": up+' '+content})
-#         prompt_sql['sql'] = content # will always return same sql for same query from now on. Is this what we want?
-#         return True
-
-#     if 'sql' in prompt_sql and prompt_sql['sql']: # already has sql. no need for chat-to-sql call.
-#         sql_query = prompt_sql['sql']
-#         sql_query = prompt_keyword_replacements(sql_query)
-#         if up == '':
-#             up = sql_query
-#         else:
-#             up = prompt_keyword_replacements(up)
-#         messages.append({"role": "user", "content": up})
-#         # fake message
-#         assistant_message = {'function_call':{'name':'ask_database'}}
-
-#     else:
-
-#         i = len(messages)
-
-#         # help out AI by enhancing prompt before calling. Replace undesired characters or replace common phrases with actual column names.
-#         if up[0] == '"': # escape 'Prefer ...' appending
-#             enhanced_prompt = ''
-#         else:
-#             if 'opponent' in up.lower():  # assumes any prompt containing 'opponent' is a prompt requesting opponent_pair_direction
-#                 enhanced_prompt = f"Prefer appending {st.session_state.opponent_pair_direction} instead of {st.session_state.pair_direction}. "
-#             else:
-#                 enhanced_prompt = f"Prefer appending {st.session_state.pair_direction} instead of {st.session_state.opponent_pair_direction}. "
-#             #enhanced_prompt = f"Try appending _Declarer or "+enhanced_prompt+up.replace("'", "").replace('"', '')
-#         enhanced_prompt += up.replace("'", "").replace('"', '')
-#         # todo: put this into config file.
-#         replacement_strings = [
-#             (r'boards i declared', 'Boards_I_Declared = True'),
-#             (r'boards i played', 'Boards_I_Played = True'),
-#             (r'boards we played', 'Boards_We_Played = True'),
-#             (r'boards we declared', 'Boards_We_Declared = True'),
-#             (r'my boards', 'Boards_I_Played = True'),
-#             (r'boards partner declared', 'Boards_Partner_Declared = True'),
-#             (r'boards my partner declared', 'Boards_Partner_Declared = True'),
-#             (r'boards opponent declared', 'Boards_Opponent_Declared = True'),
-#             # todo: generalize {} replacements by columnn lookup?
-#             (r'\{Pair_Direction\}', st.session_state.pair_direction),
-#             (r'\{Opponent_Pair_Direction\}', st.session_state.opponent_pair_direction),
-#         ]
-#         for original, new in replacement_strings:
-#             enhanced_prompt = re.sub(original, new, enhanced_prompt.replace(
-#                 '  ', ' '), flags=re.IGNORECASE)
-#         print_to_log_info('enhanced_prompt:', enhanced_prompt)
-#         # add enhanced prompt to messages
-#         messages.append({"role": "user", "content": enhanced_prompt})
-
-#         # request chat completion of user message
-#         chat_response = await create_chat_completion( # chat_completion_request(
-#             messages, model, function_calls)  # chat's response from user input
-#         print_to_log_info('chat_response status:', type(chat_response), chat_response)
-#         chat_response_json = json.loads(chat_response.model_dump_json()) # create_chat_completion returns json directly
-#         print_to_log_info('chat_response_json:', type(chat_response_json), chat_response_json)
-#         print_to_log_info('chat_response_json id:', type(chat_response_json['id']), chat_response_json['id'])
-#         print_to_log_info('chat_response_json choices:', type(chat_response_json['choices']), chat_response_json['choices'])
-
-#         # restore original user prompt
-#         messages[-1] = {"role": "user", "content": up}
-
-#         if "choices" not in chat_response_json or not isinstance(chat_response_json['choices'], list) or len(chat_response_json['choices']) == 0:
-#             # fake message
-#             if 'error' in chat_response_json and 'message' in chat_response_json['error']:
-#                 messages.append(
-#                     {"role": "assistant", "content": chat_response_json['error']['message']})
-#             else:
-#                 messages.append(
-#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices or zero length choices). Try again later."})
-#             return False
-#         # chat's first and best response message.
-#         first_choice = chat_response_json["choices"][0]
-#         if 'message' not in first_choice:
-#             # fake message
-#             messages.append(
-#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing message). Try again later."})
-#             return False
-#         assistant_message = first_choice['message']
-#         print_to_log_info('assistant_message:', assistant_message)
-#         if 'role' not in assistant_message or assistant_message['role'] != 'assistant':
-#             # fake message
-#             messages.append(
-#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].role or unexpected role). Try again later."})
-#             return False
-#         if 'content' not in assistant_message:  # content of None is ok
-#             # fake message
-#             messages.append(
-#                 {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].content). Try again later."})
-#             return False
-#         if "function_call" not in assistant_message:
-#             assert first_choice['finish_reason'] == 'stop'
-#             if assistant_message["message"]['content'][0] == '{': # added for 1106 response_format={"type":"json_object"}
-#                 try:
-#                     function_call_json = json.loads(
-#                         assistant_message["message"]["content"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
-#                 except Exception as e:
-#                     print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
-#                     # fake message
-#                     messages.append(
-#                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
-#                     return False
-#                 assert 'query' in function_call_json
-#                 sql_query = function_call_json['query']
-#             else:
-#                 # ?="} is a lookahead assertion
-#                 # must remove newlines for regex to work
-#                 match = re.search(r'SELECT .*(?="})?$',
-#                                 assistant_message['content'].replace('\n', ''))
-#                 if match is None:
-#                     messages.append(
-#                         {"role": "assistant", "content": assistant_message['content']})
-#                     # fake message
-#                     messages.append(
-#                         {"role": "assistant", "content": f"Unexpected response from {model} (missing function_call). Try again later."})
-#                     return False
-#                 sql_query = match[0]
-#         else:
-#             if first_choice['finish_reason'] == 'length':
-#                 # fake message
-#                 messages.append(
-#                     {"role": "assistant", "content": f"Unexpected finish_reason from {model} ({first_choice['finish_reason']}). Try again later."})
-#                 return False
-#             assert first_choice['finish_reason'] == 'function_call'
-#             if 'name' not in assistant_message["function_call"] or assistant_message["function_call"]['name'] != 'ask_database':
-#                 # fake message
-#                 messages.append(
-#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call or unexpected name). Try again later."})
-#                 return False
-#             if 'arguments' not in assistant_message["function_call"]:
-#                 # fake message
-#                 messages.append(
-#                     {"role": "assistant", "content": f"Unexpected response from {model} (missing choices[0].function_call.arguments). Try again later."})
-#                 return False
-#             if assistant_message["function_call"]['arguments'][0] == '{':
-#                 try:
-#                     function_call_json = json.loads(
-#                         assistant_message["function_call"]["arguments"].replace('\n',''))  # rarely, but sometimes, there are newlines in the json.
-#                 except Exception as e:
-#                     print_to_log_info(f"Exception: Invalid JSON. Error: {e}")
-#                     # fake message
-#                     messages.append(
-#                         {"role": "assistant", "content": f"Invalid JSON. Error: {e}"})
-#                     return False
-#                 assert 'query' in function_call_json
-#                 sql_query = function_call_json['query']
-#             else:
-#                 # here's hoping it's a SELECT or other SQL statement
-#                 sql_query = assistant_message["function_call"]['arguments']
-
-#     # todo: execute via function call, not explicitly
-#     ask_database_results = ask_database(sql_query)
-#     print_to_log_info('ask_database_results:', ask_database_results)
-#     if not isinstance(ask_database_results, duckdb.DuckDBPyConnection):
-#         # fake message
-#         messages.append(
-#             {"role": "assistant", "content": ask_database_results})
-#         return False
-#     df = ask_database_results.pl()
-#     #df.index.name = 'Row'
-#     st.session_state.dataframes[sql_query].append(df)
-
-#     if 'function_call' in assistant_message:
-#         messages.append(
-#             {"role": "function", "name": assistant_message["function_call"]["name"], "content": sql_query})  # todo: what is the content suppose to be? and elsewhere?
-#     else:
-#         messages.append({"role": "assistant", "content": sql_query})
-    
-#     prompt_sql['sql'] = sql_query # will always return same sql for same query from now on. Is this what we want?
-#     print_to_log_info('prompt_sql:', prompt_sql)
-
-#     return True
-
-
 def call_create_club_dfs(player_id: str, event_url: str) -> None:
     data = get_club_results_details_data(event_url)
     if data is None:
@@ -1418,16 +1192,18 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
     # Join player ELO ratings for each direction
     for direction in 'NESW':
         # Select only the exact columns we need to avoid conflicts
-        elo_cols = player_elo_df_dedup.select(['Date','Player_ID','Elo_N','Elo_R_EventStart']).rename({
+        elo_cols = player_elo_df_dedup.select(['Date','session_id','Player_ID','Elo_N','Elo_R_EventStart','MasterPoints']).rename({
             'Elo_R_EventStart': f'Elo_R_{direction}_EventStart',
-            'Elo_N': f'Elo_R_{direction}'
+            'Elo_N': f'Elo_N_{direction}',
+            'MasterPoints': f'MasterPoints_{direction}',
         }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
         df = df.join(
             elo_cols, 
-            left_on=['Date', f'Player_ID_{direction}'], 
-            right_on=['Date', 'Player_ID'], 
+            left_on=['Date', 'session_id', f'Player_ID_{direction}'], 
+            right_on=['Date', 'session_id', 'Player_ID'], 
             how='left'
         )
+        assert df.select(pl.col(f'^.*_right$')).is_empty()
     # Verify no row multiplication
     if len(df) != initial_row_count:
         print(f"WARNING: Row count changed from {initial_row_count} to {len(df)} after player ELO joins!")
@@ -1437,7 +1213,7 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
         # Select only the exact columns we need to avoid conflicts
         elo_cols = pair_elo_df_dedup.select(['Date','session_id','Pair_IDs_Sorted','Elo_N','Elo_R_EventStart']).rename({
             'Elo_R_EventStart': f'Elo_R_{pair}_EventStart',
-            'Elo_N': f'Elo_N_{pair}'
+            'Elo_N': f'Elo_N_{pair}',
         }).with_columns(pl.col('Date').cast(pl.Date)) # create elo uses datetime (might be ok) so need to cast to date for join.
         df = df.with_columns(pl.col(f'Pair_IDs_{pair}').list.sort().alias(f'Pair_IDs_{pair}_Sorted')) # todo: better to sort in previous step?
         df = df.join(
@@ -1446,6 +1222,8 @@ def Predict_Game_Results(df: Any) -> Optional[Any]:
             right_on=['Date', 'session_id', 'Pair_IDs_Sorted'], 
             how='left'
         )
+        assert df.select(pl.col(f'^.*_right$')).is_empty()
+
     # Final verification
     if len(df) != initial_row_count:
         print(f"WARNING: Final row count is {len(df)}, expected {initial_row_count}!")
