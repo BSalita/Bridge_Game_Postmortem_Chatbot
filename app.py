@@ -1701,174 +1701,125 @@ def create_sidebar() -> None:
     read_configs()
 
     if st.session_state.player_id is None:
-        # Developer Settings - Always show regardless of player_id
-        with st.sidebar.expander('Developer Settings', False):
-            if st.session_state.debug_favorites is not None:
-                # favorite prompts selectboxes
-                st.session_state.debug_player_id_names = st.session_state.debug_favorites[
-                    'SelectBoxes']['Player_IDs']['options'] # todo: rename to Pair_IDs?
-                if len(st.session_state.debug_player_id_names):
-                    # changed placeholder to player_id because when selectbox gets reset, possibly due to expander auto-collapsing, we don't want an unexpected value.
-                    # test player_id is not None else use debug_favorites['SelectBoxes']['player_ids']['placeholder']?
-                    st.selectbox("Debug Player List", options=st.session_state.debug_player_id_names, placeholder=st.session_state.player_id, #.debug_favorites['SelectBoxes']['player_ids']['placeholder'],
-                                            on_change=debug_player_id_names_change, key='debug_player_id_names_selectbox')
+        # Show message and then fall through to Developer Settings at bottom
+        st.sidebar.info("Enter a player ID above to view game reports.")
+        # Don't return early - let Developer Settings and Automated Postmortem Apps show at bottom
+    else:
+        # Player ID is set - show game selection and other player-specific UI
+        st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
+        )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
 
-                    # Handle debug player ID validation failure
-                    if st.session_state.get('debug_player_id_validation_failed', False):
-                        # Clear the validation failure flag
-                        st.session_state.debug_player_id_validation_failed = False
-                        # Clear any existing report from the main window
-                        if hasattr(st.session_state, 'main_section_container'):
-                            st.session_state.main_section_container = st.empty()
-                            # Create a new container with a helpful message
-                            st.session_state.main_section_container = st.container()
-                            with st.session_state.main_section_container:
-                                st.info("Invalid debug player ID selected. Please select a valid player from the debug list to generate a new report.")
-                        # Clear SQL query mode and queries to prevent confusion
-                        st.session_state.sql_query_mode = False
-                        st.session_state.sql_queries = []
-                        # Clear player-specific session data to prevent confusion
-                        st.session_state.session_id = None
-                        st.session_state.df = None
-                        if hasattr(st.session_state, 'game_description'):
-                            st.session_state.game_description = None
-                        if hasattr(st.session_state, 'player_name'):
-                            st.session_state.player_name = None
-                        if hasattr(st.session_state, 'partner_name'):
-                            st.session_state.partner_name = None
-                        st.sidebar.error("Invalid debug player ID selected")
-                        # Clear the validation failure flag after handling
-                        st.session_state.debug_player_id_validation_failed = False
+        st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls_d[st.session_state.player_id].items(
+        )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
 
-            st.checkbox(
-                "Show SQL Queries", value=st.session_state.show_sql_query, on_change=show_sql_query_change, key='sql_query_checkbox')
+        # Check if player ID just changed and we should auto-generate report for the first game
+        if st.session_state.get('player_id_just_changed', False):
+            st.session_state.player_id_just_changed = False
+            # Clear the flag and generate the report automatically
+            if st.session_state.session_id is not None:
+                # Report will be generated in create_ui()
+                pass
+        
+        if st.session_state.session_id is None:
+            st.error(f'Please choose a new game or tournament session from the left sidebar.')
+            # Don't return - fall through to Developer Settings at bottom
+        else:
+            # Session is selected - show session-specific UI
+            # if st.sidebar.download_button(label="Download Personalized Report",
+            #         data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
+            #         file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
+            #        mime='application/octet-stream',
+            #         key='personalized_report_download_button'):
+            #     st.warning('Personalized report downloaded.')
 
-            # Not at all fast to calculate. approximately .25 seconds per unique pbn overhead is minimum + .05 seconds per observation per unique pbn. e.g. time for 24 boards = 24 * (.25 + num of observations * .05).
-            st.number_input(
-                "Single Dummy Samples Count",
-                min_value=1,
-                max_value=100,
-                value=st.session_state.single_dummy_sample_count,
-                on_change=single_dummy_sample_count_changed,
-                key='single_dummy_sample_count_number_input'
-            )
+            help_file = pathlib.Path('help.md')
+            if help_file.exists():
+                with open(help_file, 'r') as f:
+                    st.session_state.help = f.read()  # text string
 
-        # Automated Postmortem Apps - Always show
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("**Automated Postmortem Apps**")
-        st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
-        st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
+            release_notes_file = pathlib.Path('release_notes.md')
+            if release_notes_file.exists():
+                with open(release_notes_file, 'r') as f:
+                    st.session_state.release_notes = f.read()  # text string
 
-        print_to_log_info('create_sidebar time:', time.time()-t)
-        return
-
-    st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
-    )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
-
-    st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls_d[st.session_state.player_id].items(
-    )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
-
-    # Check if player ID just changed and we should auto-generate report for the first game
-    if st.session_state.get('player_id_just_changed', False):
-        st.session_state.player_id_just_changed = False
-        # Clear the flag and generate the report automatically
-        if st.session_state.session_id is not None:
-            # Report will be generated in create_ui()
-            pass
-    
-    if st.session_state.session_id is None:
-        st.error(f'Please choose a new game or tournament session from the left sidebar.')
-        return
-
-    # if st.sidebar.download_button(label="Download Personalized Report",
-    #         data=streamlitlib.create_pdf(st.session_state.pdf_assets, title=f"Bridge Game Postmortem Report Personalized for {st.session_state.player_id}"),
-    #         file_name = f"{st.session_state.session_id}-{st.session_state.player_id}-morty.pdf",
-    #        mime='application/octet-stream',
-    #         key='personalized_report_download_button'):
-    #     st.warning('Personalized report downloaded.')
-
-    help_file = pathlib.Path('help.md')
-    if help_file.exists():
-        with open(help_file, 'r') as f:
-            st.session_state.help = f.read()  # text string
-
-    release_notes_file = pathlib.Path('release_notes.md')
-    if release_notes_file.exists():
-        with open(release_notes_file, 'r') as f:
-            st.session_state.release_notes = f.read()  # text string
-
-    # Create placeholder for PDF link (will be populated after report is generated)
-    st.session_state.pdf_link = st.sidebar.empty()
-    
-    # Show ACBL results page link
-    if st.session_state.session_id is not None:
-        if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
-            st.session_state.acbl_results_page = st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]
-            markdown_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.acbl_results_page})"
-            st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
-        elif st.session_state.session_id in st.session_state.tournament_session_urls_d[st.session_state.player_id]:
-            st.session_state.acbl_results_page = st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]
-            markdown_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.acbl_results_page})"
-            st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
-
-    st.sidebar.divider()
-
-    st.sidebar.write(
-        'Below are favorite prompts. Either click a button below or enter a question in the prompt box at the bottom of the main section to the right.')
-
-    if st.session_state.favorites is not None:
-        st.sidebar.write('Favorite Prompts')
-
-        # favorite buttons
-        selected_boxes_vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
-        st.session_state.vetted_prompt_titles = {prompt['title']:prompt for prompt in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].values()}
-        #st.session_state.vetted_prompts = {}
-        for k, button in st.session_state.favorites['Buttons'].items():
-            # create dict of vetted prompts
-            # default list of vetted prompts is
-            if k == st.session_state.button_title_default:
-                st.session_state.selected_button = button
-            if st.sidebar.button(button['title'], help=button['help'], key=k):
-                st.session_state.sql_query_mode = False
-                st.session_state.selected_button = button
-                # If the button is AI Predictions, set request flag and run predictions now
-                if button['title'].lower().strip() == 'ai predictions':
-                    st.session_state.ai_predictions_requested = True
-                    run_ai_predictions_now()
-                
-                # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
-                # if len(ups) > 4:
-                #     reset_messages()
-                #     ask_questions_without_context(
-                #         ups, st.session_state.ai_api)
-                #     #st.rerun() # this caused some systems to loop. not sure why.
-                # else:
-                #     ask_questions_without_context(ups, st.session_state.ai_api)
+            # Create placeholder for PDF link (will be populated after report is generated)
+            st.session_state.pdf_link = st.sidebar.empty()
             
-        st.session_state.dataframe_tooltips = {
-            col: tip for col, tip in st.session_state.favorites['ToolTips'].items()
-        }
+            # Show ACBL results page link
+            if st.session_state.session_id is not None:
+                if st.session_state.session_id in st.session_state.game_urls_d[st.session_state.player_id]:
+                    st.session_state.acbl_results_page = st.session_state.game_urls_d[st.session_state.player_id][st.session_state.session_id][1]
+                    markdown_acbl_results_page = f"[ACBL Club Result Page]({st.session_state.acbl_results_page})"
+                    st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
+                elif st.session_state.session_id in st.session_state.tournament_session_urls_d[st.session_state.player_id]:
+                    st.session_state.acbl_results_page = st.session_state.tournament_session_urls_d[st.session_state.player_id][st.session_state.session_id][1]
+                    markdown_acbl_results_page = f"[ACBL Tournament Result Page]({st.session_state.acbl_results_page})"
+                    st.sidebar.markdown(markdown_acbl_results_page, unsafe_allow_html=True)
 
-    # todo: reimplement user-specific favorites
-    # if st.session_state.player_id_favorites is not None:
-    #     st.sidebar.write(
-    #         f"Player Number {st.session_state.player_id} Favorites")
+            st.sidebar.divider()
 
-    #     # player number favorite buttons
-    #     for k, button in st.session_state.player_id_favorites['Buttons'].items():
-    #         if st.sidebar.button(button['title'], help=button['help'], key=k):
-    #             # temp - re-read for every button click for realtime debugging.
-    #             #read_favorites()
-    #             ups = []
-    #             for up in st.session_state.player_id_favorites['Buttons'][k]['prompts']:
-    #                 if up.startswith('@'):
-    #                     box = st.session_state.vetted_prompts[up[1:]]
-    #                     ups.append(box['prompts']) # create list of lists in case prompts are dependent on previous prompts
-    #                 else:
-    #                     ups.append(up)
-    #             # ask_questions_without_context(ups, st.session_state.ai_api)
+            st.sidebar.write(
+                'Below are favorite prompts. Either click a button below or enter a question in the prompt box at the bottom of the main section to the right.')
 
-    # Developer Settings - Always show regardless of player_id (at bottom of sidebar)
+            if st.session_state.favorites is not None:
+                st.sidebar.write('Favorite Prompts')
+
+                # favorite buttons
+                selected_boxes_vetted_prompts = st.session_state.favorites['SelectBoxes']['Vetted_Prompts']
+                st.session_state.vetted_prompt_titles = {prompt['title']:prompt for prompt in st.session_state.favorites['SelectBoxes']['Vetted_Prompts'].values()}
+                #st.session_state.vetted_prompts = {}
+                for k, button in st.session_state.favorites['Buttons'].items():
+                    # create dict of vetted prompts
+                    # default list of vetted prompts is
+                    if k == st.session_state.button_title_default:
+                        st.session_state.selected_button = button
+                    if st.sidebar.button(button['title'], help=button['help'], key=k):
+                        st.session_state.sql_query_mode = False
+                        st.session_state.selected_button = button
+                        # If the button is AI Predictions, set request flag and run predictions now
+                        if button['title'].lower().strip() == 'ai predictions':
+                            st.session_state.ai_predictions_requested = True
+                            run_ai_predictions_now()
+                        
+                        # 4 is arbitrary. clearning conversation so it doesn't become overwhelming to user or ai.
+                        # if len(ups) > 4:
+                        #     reset_messages()
+                        #     ask_questions_without_context(
+                        #         ups, st.session_state.ai_api)
+                        #     #st.rerun() # this caused some systems to loop. not sure why.
+                        # else:
+                        #     ask_questions_without_context(ups, st.session_state.ai_api)
+                
+                st.session_state.dataframe_tooltips = {
+                    col: tip for col, tip in st.session_state.favorites['ToolTips'].items()
+                }
+
+            # todo: reimplement user-specific favorites
+            # if st.session_state.player_id_favorites is not None:
+            #     st.sidebar.write(
+            #         f"Player Number {st.session_state.player_id} Favorites")
+
+            #     # player number favorite buttons
+            #     for k, button in st.session_state.player_id_favorites['Buttons'].items():
+            #         if st.sidebar.button(button['title'], help=button['help'], key=k):
+            #             # temp - re-read for every button click for realtime debugging.
+            #             #read_favorites()
+            #             ups = []
+            #             for up in st.session_state.player_id_favorites['Buttons'][k]['prompts']:
+            #                 if up.startswith('@'):
+            #                     box = st.session_state.vetted_prompts[up[1:]]
+            #                     ups.append(box['prompts']) # create list of lists in case prompts are dependent on previous prompts
+            #                 else:
+            #                     ups.append(up)
+            #             # ask_questions_without_context(ups, st.session_state.ai_api)
+
+    # Automated Postmortem Apps - Always show (above Developer Settings at bottom of sidebar)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Automated Postmortem Apps**")
+    st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
+    st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
+
+    # Developer Settings - Always show regardless of player_id (at very bottom of sidebar)
     with st.sidebar.expander('Developer Settings', False):
         if st.session_state.debug_favorites is not None:
             # favorite prompts selectboxes
@@ -1919,12 +1870,6 @@ def create_sidebar() -> None:
             on_change=single_dummy_sample_count_changed,
             key='single_dummy_sample_count_number_input'
         )
-
-    # Automated Postmortem Apps - Always show (at bottom of sidebar)
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Automated Postmortem Apps**")
-    st.sidebar.markdown("🔗 [ACBL Postmortem](https://acbl.postmortem.chat)")
-    st.sidebar.markdown("🔗 [French ffbridge Postmortem](https://ffbridge.postmortem.chat)")
 
     print_to_log_info('create_sidebar time:', time.time()-t)
     return
