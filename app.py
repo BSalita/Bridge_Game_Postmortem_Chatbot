@@ -2319,7 +2319,6 @@ def initialize_website_specific() -> None:
     st.session_state.game_results_url_default = None
     st.session_state.game_name = 'acbl'
     st.session_state.game_results_url = st.session_state.game_results_url_default
-    # todo: put filenames into a .json or .toml file?
     st.session_state.rootPath = pathlib.Path('e:/bridge/data')
     if st.session_state.rootPath.exists():
         st.session_state.acblPath = st.session_state.rootPath.joinpath('acbl')
@@ -2328,12 +2327,7 @@ def initialize_website_specific() -> None:
         st.session_state.rootPath = pathlib.Path('.')
         if not st.session_state.rootPath.exists():
             st.error(f'rootPath does not exist: {st.session_state.rootPath}')
-        st.session_state.acblPath = st.session_state.rootPath
-        st.session_state.savedModelsPath = st.session_state.acblPath.joinpath('SavedModels')
-    if not st.session_state.savedModelsPath.exists():
-        st.error(f'savedModelsPath does not exist: {st.session_state.savedModelsPath}')
-    #st.session_state.favoritesPath = pathlib.joinpath('favorites'),
-    
+        st.session_state.savedModelsPath = st.session_state.rootPath.joinpath('SavedModels')
     streamlit_chat.message(
         "Hi. I'm Morty. Your friendly postmortem chatbot. I only want to chat about ACBL pair matchpoint games using a Mitchell movement.", key='intro_message_1', logo=st.session_state.assistant_logo)
     streamlit_chat.message(
