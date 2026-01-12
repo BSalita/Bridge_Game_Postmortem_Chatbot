@@ -123,7 +123,7 @@ sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requi
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 
 # streamlitlib, mlBridgeLib must be placed after sys.path.append. vscode re-format likes to move them to the top
-from mlBridgeLib.mlBridgeAcblLib import (
+from mlBridge.mlBridgeAcblLib import (
     get_club_results_from_acbl_number,
     get_tournament_sessions_from_acbl_number,
     get_tournament_session_results,
@@ -133,11 +133,11 @@ from mlBridgeLib.mlBridgeAcblLib import (
     merge_clean_augment_tournament_dfs,
 )
 import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
-from mlBridgeLib.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
-from mlBridgeLib.mlBridgeAugmentLib import (
+from mlBridge.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
+from mlBridge.mlBridgeAugmentLib import (
     AllAugmentations,
 )
-from mlBridgeLib.mlBridgePostmortemLib import PostmortemBase
+from mlBridge.mlBridgePostmortemLib import PostmortemBase
 
 # override pandas display options
 pd_options_display()
