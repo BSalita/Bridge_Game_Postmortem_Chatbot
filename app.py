@@ -108,10 +108,10 @@ assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Auth
 #import acbllib.acbllib
 #import streamlitlib.streamlitlib
 #import chatlib.chatlib
-#import mlBridgeLib.mlBridgeLib
+#import mlBridge.mlBridgeLib
 
 
-# import mlBridgeLib.mlBridgeLib
+# import mlBridge.mlBridgeLib
 # import mlBridgeLib.mlBridgeAugmentLib
 # import acbllib.acbllib
 # import chatlib.chatlib
@@ -119,10 +119,10 @@ assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Auth
 
 # mlBridgeLib.pd_options_display()
 
-sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridgeLib')))  # global Requires "./mlBridgeLib" be in extraPaths in .vscode/settings.json
+sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridge')))  # global Requires "./mlBridge" be in extraPaths in .vscode/settings.json
 sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
 
-# streamlitlib, mlBridgeLib must be placed after sys.path.append. vscode re-format likes to move them to the top
+# streamlitlib, mlBridge must be placed after sys.path.append. vscode re-format likes to move them to the top
 from mlBridge.mlBridgeAcblLib import (
     get_club_results_from_acbl_number,
     get_tournament_sessions_from_acbl_number,
