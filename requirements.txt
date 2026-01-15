@@ -6,7 +6,7 @@ streamlit>=1.30.0
 streamlit-extras>=0.4.0
 streamlit-chat>=0.1.1
 stqdm>=0.0.5
-streamlit-aggrid>=0.3.4.post3
+streamlit-aggrid==1.1.8.post1
 
 # Data processing and analysis
 pandas>=2.2.0
