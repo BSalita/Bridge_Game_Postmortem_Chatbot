@@ -24,6 +24,7 @@
 # Rename to title case for column names. e.g. session_id to Session_ID
 # change Number_Declarer to Declarer or Declarer_ID or Player_ID_Declarer. Same with Declarer_Name or Player_Name_Declarer. Same with OnLead or OnLead_ID or Player_ID_OnLead.
 
+import pathlib
 import polars as pl
 import numpy as np
 import warnings
@@ -37,6 +38,9 @@ from endplay.parsers import pbn, lin, json
 from endplay.types import Deal, Contract, Denom, Player, Penalty, Vul
 from endplay.dds import calc_dd_table, calc_all_tables, par
 from endplay.dealer import generate_deals
+from mlBridge.dds_ddss import DDSS_AVAILABLE as _DDSS_AVAILABLE
+if _DDSS_AVAILABLE:
+    from mlBridge import dds_ddss as _dds_ddss
 
 from mlBridge.mlBridgeLib import (
     NESW, SHDC, CDHSN,NS_EW,
@@ -1170,55 +1174,80 @@ def display_dd_deals(deals: list[Deal], dd_result_tables: list[Any], deal_index:
         rt.pprint()
 
 
-# todo: could save a couple seconds by creating dict of deals
-def solve_dd_for_deals(deals: list[Deal], batch_size: int = 40, output_progress: bool = False, progress: Optional[Any] = None) -> list[Any]:
-    """Compute double-dummy tables for a list of `Deal`s in batches.
+def _log_dd_progress(b: int, total: int, output_progress: bool, progress: Optional[Any], final: bool = False) -> None:
+    """Emit a progress update for DD computation."""
+    if not output_progress:
+        return
+    if final:
+        msg = f"100%: Double dummies calculated for {total} unique deals."
+    else:
+        pct = int(b * 100 / total)
+        msg = f"{pct}%: Double dummies calculated for {b} of {total} unique deals."
+    if progress:
+        if hasattr(progress, 'progress'):
+            progress.progress(100 if final else pct, msg)
+            if final:
+                progress.empty()
+        elif hasattr(progress, 'set_description'):
+            progress.set_description(msg)
+    else:
+        logger.info(msg)
 
-    Purpose:
-    - Calculate double-dummy analysis results for multiple bridge deals efficiently
-    - Process deals in batches to optimize memory usage and performance
-    - Provide progress tracking for long-running computations
-    - Interface with endplay library's calc_all_tables function
+
+def _solve_dd_endplay(deals: list[Deal], batch_size: int, output_progress: bool, progress: Optional[Any]) -> list:
+    """Original endplay-based DD solver."""
+    all_result_tables = []
+    for i, b in enumerate(range(0, len(deals), batch_size)):
+        if output_progress and i % 100 == 0:
+            _log_dd_progress(b, len(deals), output_progress, progress)
+        result_tables = calc_all_tables(deals[b:b + batch_size])
+        all_result_tables.extend(result_tables)
+    if output_progress:
+        _log_dd_progress(0, len(deals), output_progress, progress, final=True)
+    return all_result_tables
+
+
+def _solve_dd_ddss(deals: list[Deal], batch_size: int, output_progress: bool, progress: Optional[Any]) -> list:
+    """ddss-based DD solver using CalcAllTablesPBNx."""
+    pbn_strings = [deal.to_pbn() for deal in deals]
+    all_result_tables = []
+    for i, b in enumerate(range(0, len(pbn_strings), batch_size)):
+        if output_progress and i % 10 == 0:
+            _log_dd_progress(b, len(pbn_strings), output_progress, progress)
+        batch = pbn_strings[b:b + batch_size]
+        result_tables = _dds_ddss.calc_all_tables_pbnx(batch)
+        all_result_tables.extend(result_tables)
+    if output_progress:
+        _log_dd_progress(0, len(pbn_strings), output_progress, progress, final=True)
+    return all_result_tables
+
+
+def solve_dd_for_deals(deals: list[Deal], batch_size: int = None, use_ddss: bool = True, output_progress: bool = False, progress: Optional[Any] = None) -> list[Any]:
+    """Compute double-dummy tables for a list of `Deal`s in batches.
 
     Parameters:
     - deals: tuple/list of endplay `Deal`.
-    - batch_size: number of deals per `calc_all_tables` call.
+    - batch_size: number of deals per batch. Default 1000 for ddss, 40 for endplay.
+    - use_ddss: prefer ddss if available. Falls back to endplay if unavailable.
     - output_progress: show progress to stdout or provided progress handler.
     - progress: tqdm/streamlit-like object with `set_description`/`progress`.
 
-    Input columns:
-    - None (operates on Deal objects, not DataFrame columns).
-
-    Output columns:
-    - None (returns result tables, not DataFrame columns).
-
     Returns:
-    - List of result tables, in the same order as deals.
+    - List of result tables (DDSSResult or DDTable), in the same order as deals.
     """
-    all_result_tables = []
-    for i,b in enumerate(range(0,len(deals),batch_size)):
-        if output_progress:
-            if i % 100 == 0: # only show progress every 100 batches
-                percent_complete = int(b*100/len(deals))
-                if progress:
-                    if hasattr(progress, 'progress'): # streamlit
-                        progress.progress(percent_complete, f"{percent_complete}%: Double dummies calculated for {b} of {len(deals)} unique deals.")
-                    elif hasattr(progress, 'set_description'): # tqdm
-                        progress.set_description(f"{percent_complete}%: Double dummies calculated for {b} of {len(deals)} unique deals.")
-                else:
-                    logger.info(f"{percent_complete}%: Double dummies calculated for {b} of {len(deals)} unique deals.")
-        result_tables = calc_all_tables(deals[b:b+batch_size])
-        all_result_tables.extend(result_tables)
-    if output_progress: 
-        if progress:
-            if hasattr(progress, 'progress'): # streamlit
-                progress.progress(100, f"100%: Double dummies calculated for {len(deals)} unique deals.")
-                progress.empty() # hmmm, this removes the progress bar so fast that 100% message won't be seen.
-            elif hasattr(progress, 'set_description'): # tqdm
-                progress.set_description(f"100%: Double dummies calculated for {len(deals)} unique deals.")
-        else:
-            logger.info(f"100%: Double dummies calculated for {len(deals)} unique deals.")
-    return all_result_tables
+    if len(deals) == 0:
+        return []
+
+    if use_ddss and _DDSS_AVAILABLE:
+        if batch_size is None:
+            batch_size = 1000
+        return _solve_dd_ddss(deals, batch_size, output_progress, progress)
+    else:
+        if batch_size is None:
+            batch_size = 40
+        if use_ddss and not _DDSS_AVAILABLE:
+            logger.info("ddss requested but not available; falling back to endplay")
+        return _solve_dd_endplay(deals, batch_size, output_progress, progress)
 
 
 def compute_dd_trick_tables(hrs_df: pl.DataFrame, hrs_cache_df: pl.DataFrame, max_dd_adds: Optional[int] = None, output_progress: bool = True, progress: Optional[Any] = None) -> Tuple[pl.DataFrame, Dict[str, Any]]:
@@ -1631,7 +1660,37 @@ def estimate_sd_trick_distributions(deal: str, produce: int = 100) -> Tuple[Dict
 #     return sd_cache_d
 
 
-def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_productions: int = 100, max_sd_adds=100, progress: Optional[Any] = None) -> Tuple[Dict[str, pl.DataFrame], pl.DataFrame]:
+SD_CACHE_PERSIST_EVERY = 50_000
+
+
+def _build_sd_probs_df(sd_d: Dict[str, Any]) -> pl.DataFrame:
+    """Convert accumulated SD probability results into the cache DataFrame shape."""
+    if sd_d:
+        pbns = list(sd_d.keys())
+        productions_list = [sd_d[pbn][0] for pbn in pbns]
+
+        sd_probs_d = {'PBN': pbns, 'Probs_Trials': productions_list}
+        for col_name in PROB_COLUMNS:
+            sd_probs_d[col_name] = []
+
+        for pbn in pbns:
+            _, probs_d = sd_d[pbn]
+            pbn_probs = {}
+            for (pair_direction, declarer_direction, suit), probs in probs_d.items():
+                for i, t in enumerate(probs):
+                    col_name = f'Probs_{pair_direction}_{declarer_direction}_{suit}_{i}'
+                    pbn_probs[col_name] = t
+
+            for col_name in PROB_COLUMNS:
+                sd_probs_d[col_name].append(pbn_probs.get(col_name, 0.0))
+    else:
+        sd_probs_d = {'PBN': [], 'Probs_Trials': []}
+
+    sd_probs_df = pl.DataFrame(sd_probs_d, orient='row')
+    return sd_probs_df.with_columns(pl.col(pl.Float64).cast(pl.Float32))
+
+
+def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_productions: int = 100, max_sd_adds=100, progress: Optional[Any] = None, cache_file_path: Optional[pathlib.Path] = None, persist_every: int = SD_CACHE_PERSIST_EVERY) -> Tuple[Dict[str, pl.DataFrame], pl.DataFrame]:
     """Compute and cache single-dummy probabilities for PBNs needing them.
 
     Purpose:
@@ -1646,6 +1705,8 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
     - sd_productions: number of generated deals per side.
     - max_sd_adds: cap on number of PBNs processed.
     - progress: optional progress sink.
+    - cache_file_path: optional parquet path; if provided, persist cache updates during long SD runs.
+    - persist_every: number of PBNs to process between cache persists.
 
     Input columns:
     - `PBN`: Bridge deal notation string for analysis
@@ -1663,25 +1724,29 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
     # todo: reduce Python set/dict usage; prefer Polars joins/group_bys for pbns_to_add/replace and probability assembly.
     sd_d = {}
     sd_dfs_d = {}
+    sd_probs_chunks = []
     assert hrs_cache_df.height == hrs_cache_df.unique(subset=['PBN', 'Dealer', 'Vul']).height, "PBN+Dealer+Vul combinations in hrs_cache_df must be unique"
     
     # Calculate which PBNs to add vs replace
     # Note: Single dummy calculations are the same for a given PBN regardless of Dealer/Vul
     # So we work at the PBN level, but need to handle multiple Dealer/Vul combinations properly
     
-    # Find PBNs to add (in df but not in hrs_cache_df)
-    df_pbns = set(df['PBN'].to_list())
-    hrs_cache_pbns = set(hrs_cache_df['PBN'].to_list())
-    pbns_to_add = df_pbns - hrs_cache_pbns
+    # Find PBNs to add (in df but not in hrs_cache_df) via anti-join
+    t_filter = time.time()
+    df_unique_pbns = df.select('PBN').unique()
+    cache_unique_pbns = hrs_cache_df.select('PBN').unique()
+
+    pbns_to_add = set(
+        df_unique_pbns.join(cache_unique_pbns, on='PBN', how='anti')['PBN'].to_list()
+    )
     logger.info(f"PBNs to add: {len(pbns_to_add)}")
-    
-    # Find PBNs to replace (in both, but with null Probs_Trials in hrs_cache_df)
-    # todo: this step takes 3m. find a faster way. perhaps using join?
-    pbns_to_replace = set(hrs_cache_df.filter(
-        pl.col('PBN').is_in(df['PBN'].to_list()) & 
-        pl.col('Probs_Trials').is_null()
-    )['PBN'].to_list())
-    logger.info(f"PBNs to replace: {len(pbns_to_replace)}")
+
+    # Find PBNs to replace (in both, but with null Probs_Trials) via semi-join
+    pbns_to_replace = set(
+        hrs_cache_df.filter(pl.col('Probs_Trials').is_null())
+        .join(df_unique_pbns, on='PBN', how='semi')['PBN'].to_list()
+    )
+    logger.info(f"PBNs to replace: {len(pbns_to_replace)}  (filter time: {time.time()-t_filter:.1f}s)")
     
     # Combine all PBNs that need processing
     pbns_to_process = list(pbns_to_add.union(pbns_to_replace))
@@ -1691,25 +1756,109 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
         logger.info(f"limit: {max_sd_adds=} {len(pbns_to_process)=}")
     cleaned_pbns = [Deal(pbn) for pbn in pbns_to_process]
     assert all([pbn == dpbn.to_pbn() for pbn,dpbn in zip(pbns_to_process,cleaned_pbns)]), [(pbn,dpbn.to_pbn()) for pbn,dpbn in zip(pbns_to_process,cleaned_pbns) if pbn != dpbn.to_pbn()] # usually a sort order issue which should have been fixed in previous step
+    SD_SOLVE_BATCH_PBNS = 200
     estimated_processing_time_per_hour = 8000
     logger.info(f"processing time assuming {estimated_processing_time_per_hour}/hour:{len(pbns_to_process)/estimated_processing_time_per_hour} hours")
-    for i,pbn in enumerate(pbns_to_process):
+    logger.info(f"Batched SD pipeline: {SD_SOLVE_BATCH_PBNS} PBNs per DD-solve batch")
+    total_pbns = len(pbns_to_process)
+    last_persist_count = 0
+
+    for batch_start in range(0, total_pbns, SD_SOLVE_BATCH_PBNS):
+        batch_end = min(batch_start + SD_SOLVE_BATCH_PBNS, total_pbns)
+        batch_pbns = pbns_to_process[batch_start:batch_end]
+
+        percent_complete = int(batch_start * 100 / total_pbns)
         if progress:
-            percent_complete = int(i*100/len(pbns_to_process))
-            if hasattr(progress, 'progress'): # streamlit
-                progress.progress(percent_complete, f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal. This step takes 30 seconds...")
-            elif hasattr(progress, 'set_description'): # tqdm
-                progress.set_description(f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal. This step takes 30 seconds...")
+            msg = f"{percent_complete}%: Single dummies calculated for {batch_start} of {total_pbns} unique deals using {sd_productions} samples per deal."
+            if hasattr(progress, 'progress'):
+                progress.progress(percent_complete, msg)
+            elif hasattr(progress, 'set_description'):
+                progress.set_description(msg)
         else:
-            if i < 10 or i % estimated_processing_time_per_hour == 0:
-                percent_complete = int(i*100/len(pbns_to_process))
-                logger.info(f"{percent_complete}%: Single dummies calculated for {i} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
-        if not progress and (i < 10 or i % estimated_processing_time_per_hour == 0):
-            t = time.time()
-        sd_dfs_d[pbn], sd_d[pbn] = estimate_sd_trick_distributions(pbn, sd_productions) # all combinations of declarer pair direction, declarer direction, suit, tricks taken
-        if not progress and (i < 10 or i % estimated_processing_time_per_hour == 0):
-            logger.info(f"compute_sd_probabilities: time:{time.time()-t} seconds")
-        #error
+            logger.info(f"{percent_complete}%: Single dummies calculated for {batch_start} of {total_pbns} unique deals using {sd_productions} samples per deal.")
+
+        t_batch = time.time()
+
+        # --- Phase 1: generate deals for every PBN × {NS,EW} (no DD solving) ---
+        all_deals = []
+        deal_groups = []
+        for pbn in batch_pbns:
+            for ns_ew in ['NS', 'EW']:
+                s = pbn[2:].split()
+                if ns_ew == 'NS':
+                    s[1] = '...'
+                    s[3] = '...'
+                else:
+                    s[0] = '...'
+                    s[2] = '...'
+                predeal_string = 'N:' + ' '.join(s)
+                predeal = Deal(predeal_string)
+                deals_t = generate_deals(
+                    deal_generation_constraints,
+                    predeal=predeal,
+                    swapping=0,
+                    show_progress=False,
+                    produce=sd_productions,
+                    seed=42,
+                    max_attempts=1000000,
+                    env={},
+                    strict=True,
+                )
+                deals = tuple(deals_t)
+                start_idx = len(all_deals)
+                all_deals.extend(deals)
+                deal_groups.append((pbn, ns_ew, start_idx, len(deals), deals))
+
+        # --- Phase 2: solve ALL deals in one large batch ---
+        all_tables = solve_dd_for_deals(all_deals)
+
+        # --- Phase 3: regroup results and build probability tables ---
+        sd_tricks_schema = {'SD_Deal': pl.String}
+        sd_tricks_schema.update({f'SD_Tricks_{d}_{suit}': pl.UInt8
+                                 for suit in 'SHDCN' for d in 'NESW'})
+
+        for pbn, ns_ew, start_idx, count, deals in deal_groups:
+            tables = all_tables[start_idx:start_idx + count]
+
+            data_rows = []
+            for sddeal, t in zip(deals, tables):
+                row = [sddeal.to_pbn()]
+                row.extend([val for dd_col in t.to_list() for val in dd_col])
+                data_rows.append(row)
+
+            side_df = pl.DataFrame(data_rows, schema=sd_tricks_schema, orient='row')
+
+            sd_dfs_d.setdefault(pbn, {})[ns_ew] = side_df
+
+            ns_ew_rows_for_pbn = sd_d.get(pbn, (sd_productions, {}))[1] if pbn in sd_d else {}
+            for d in 'NESW':
+                for suit in 'SHDCN':
+                    col_name = f'SD_Tricks_{d}_{suit}'
+                    vc = dict(side_df[col_name].value_counts(normalize=True).rows())
+                    ns_ew_rows_for_pbn[(ns_ew, d, suit)] = [vc.get(i, 0.0) for i in range(14)]
+            sd_d[pbn] = (sd_productions, ns_ew_rows_for_pbn)
+
+        logger.info(
+            f"Batch {batch_start}-{batch_end}: {len(all_deals)} deals solved in "
+            f"{time.time()-t_batch:.1f}s"
+        )
+
+        # --- Cache persistence ---
+        processed = batch_end
+        if (cache_file_path is not None and persist_every > 0
+                and processed - last_persist_count >= persist_every and sd_d):
+            t_flush = time.time()
+            sd_probs_chunk_df = _build_sd_probs_df(sd_d)
+            sd_probs_chunks.append(sd_probs_chunk_df)
+            hrs_cache_df = update_hand_records_cache(hrs_cache_df, sd_probs_chunk_df)
+            hrs_cache_df.write_parquet(cache_file_path)
+            logger.info(
+                f"Persisted SD cache after {processed} PBNs: {cache_file_path} "
+                f"shape:{hrs_cache_df.shape} ({time.time()-t_flush:.1f}s)"
+            )
+            sd_d.clear()
+            last_persist_count = processed
+
     if progress:
         if hasattr(progress, 'progress'): # streamlit
             progress.progress(100, f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
@@ -1718,38 +1867,9 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
     else:
         logger.info(f"100%: Single dummies calculated for {len(pbns_to_process)} of {len(pbns_to_process)} unique deals using {sd_productions} samples per deal.")
 
-    # create single dummy trick taking probability distribution columns - vectorized approach
-    if sd_d:
-        # Extract PBNs and productions efficiently
-        pbns = list(sd_d.keys())
-        productions_list = [sd_d[pbn][0] for pbn in pbns]
-                
-        # Build data dictionary efficiently
-        sd_probs_d = {'PBN': pbns, 'Probs_Trials': productions_list}
-        
-        # Initialize all probability columns with empty lists
-        for col_name in PROB_COLUMNS:
-            sd_probs_d[col_name] = []
-        
-        # Fill probability data efficiently
-        for pbn in pbns:
-            _, probs_d = sd_d[pbn]
-            # Create a lookup dict for this PBN's probabilities
-            pbn_probs = {}
-            for (pair_direction, declarer_direction, suit), probs in probs_d.items():
-                for i, t in enumerate(probs):
-                    col_name = f'Probs_{pair_direction}_{declarer_direction}_{suit}_{i}'
-                    pbn_probs[col_name] = t
-            
-            # Append values for all columns (0.0 for missing ones)
-            for col_name in PROB_COLUMNS:
-                sd_probs_d[col_name].append(pbn_probs.get(col_name, 0.0))
-    else:
-        # Handle empty case
-        sd_probs_d = {'PBN': [], 'Probs_Trials': []}
-        
-    sd_probs_df = pl.DataFrame(sd_probs_d, orient='row')
-    sd_probs_df = sd_probs_df.with_columns(pl.col(pl.Float64).cast(pl.Float32))
+    sd_probs_df = _build_sd_probs_df(sd_d)
+    if not sd_probs_df.is_empty():
+        sd_probs_chunks.append(sd_probs_df)
 
     # update sd_df with sd_probs_df # doesn't work because sd_df isn't updated unless returned.
     # if sd_df.is_empty():
@@ -1762,7 +1882,12 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
     if progress and hasattr(progress, 'empty'):
         progress.empty()
 
-    return sd_dfs_d, sd_probs_df
+    if sd_probs_chunks:
+        combined_sd_probs_df = pl.concat(sd_probs_chunks, how='vertical_relaxed')
+    else:
+        combined_sd_probs_df = sd_probs_df
+
+    return sd_dfs_d, combined_sd_probs_df
 
 
 
@@ -5416,7 +5541,7 @@ class HandAugmenter:
 
 
 class DD_SD_Augmenter:
-    def __init__(self, df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_productions: int = 40, max_dd_adds: Optional[int] = None, max_sd_adds: Optional[int] = None, output_progress: Optional[bool] = True, progress: Optional[Any] = None, lock_func: Optional[Callable[..., pl.DataFrame]] = None):
+    def __init__(self, df: pl.DataFrame, hrs_cache_df: pl.DataFrame, sd_productions: int = 40, max_dd_adds: Optional[int] = None, max_sd_adds: Optional[int] = None, output_progress: Optional[bool] = True, progress: Optional[Any] = None, lock_func: Optional[Callable[..., pl.DataFrame]] = None, cache_file_path: Optional[pathlib.Path] = None):
         self.df = df
         self.hrs_cache_df = hrs_cache_df
         self.sd_productions = sd_productions
@@ -5425,12 +5550,22 @@ class DD_SD_Augmenter:
         self.output_progress = output_progress
         self.progress = progress
         self.lock_func = lock_func
+        self.cache_file_path = cache_file_path
 
     def _time_operation(self, operation_name: str, func: Callable[..., Any], *args, **kwargs) -> Any:
         t = time.time()
         result = func(*args, **kwargs)
         logger.info(f"{operation_name}: time:{time.time()-t} seconds")
         return result
+
+    def _persist_cache(self, stage: str) -> None:
+        """Write hrs_cache_df to disk so progress survives interruptions."""
+        if self.cache_file_path is None:
+            return
+        t = time.time()
+        self.hrs_cache_df.write_parquet(self.cache_file_path)
+        logger.info(f"Persisted cache after {stage}: {self.cache_file_path} "
+                     f"shape:{self.hrs_cache_df.shape} ({time.time()-t:.1f}s)")
 
     def _process_scores_and_tricks(self) -> pl.DataFrame:
         # Assert required columns exist
@@ -5448,6 +5583,7 @@ class DD_SD_Augmenter:
 
         if not dd_df.is_empty():
             self.hrs_cache_df = self._time_operation("update cache with DD", update_hand_records_cache, self.hrs_cache_df, dd_df)
+            self._persist_cache("DD")
         
         # Calculate par scores using the double dummy results
         par_df = self._time_operation(
@@ -5458,11 +5594,12 @@ class DD_SD_Augmenter:
 
         if not par_df.is_empty():
             self.hrs_cache_df = self._time_operation("update cache with Par", update_hand_records_cache, self.hrs_cache_df, par_df)
+            self._persist_cache("Par")
 
         sd_dfs_d, sd_df = self._time_operation(
             "calculate_sd_probs",
             estimate_sd_trick_distributions_for_df,
-            self.df, self.hrs_cache_df, self.sd_productions, self.max_sd_adds, self.progress
+            self.df, self.hrs_cache_df, self.sd_productions, self.max_sd_adds, self.progress, self.cache_file_path
         )
 
         if not sd_df.is_empty():
@@ -6426,7 +6563,8 @@ class AllHandRecordAugmentations:
                  max_sd_adds: Optional[int] = None,
                  output_progress: Optional[bool] = True,
                  progress: Optional[Any] = None,
-                 lock_func: Optional[Callable[..., pl.DataFrame]] = None):
+                 lock_func: Optional[Callable[..., pl.DataFrame]] = None,
+                 cache_file_path: Optional[pathlib.Path] = None):
         """Initialize the AllAugmentations class with a DataFrame and optional parameters.
         
         Args:
@@ -6438,6 +6576,7 @@ class AllHandRecordAugmentations:
             output_progress: Whether to output progress
             progress: Optional progress indicator object
             lock_func: Optional function for thread safety
+            cache_file_path: Path to write hrs_cache_df after DD/Par steps
         """
         self.df = df
         self.hrs_cache_df = hrs_cache_df
@@ -6447,6 +6586,7 @@ class AllHandRecordAugmentations:
         self.output_progress = output_progress
         self.progress = progress
         self.lock_func = lock_func
+        self.cache_file_path = cache_file_path
 
         # instance initialization
 
@@ -6510,7 +6650,8 @@ class AllHandRecordAugmentations:
             self.max_sd_adds, 
             self.output_progress,
             self.progress,
-            self.lock_func
+            self.lock_func,
+            cache_file_path=self.cache_file_path,
         )
         self.df, self.hrs_cache_df = dd_sd_augmenter.perform_dd_sd_augmentations()
 
