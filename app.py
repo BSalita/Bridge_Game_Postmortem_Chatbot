@@ -290,6 +290,19 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
         st.error(f"No game or tournament sessions found for {player_id}. Please make sure {player_id} is a valid player number.")
         return False
 
+    # Normalize session_id type so URL-supplied values (always strings) match the
+    # dict keys used by either club games (ints) or tournament sessions (strings).
+    if session_id not in game_urls and session_id not in tournament_session_urls:
+        try:
+            if isinstance(session_id, str):
+                alt_session_id = int(session_id)
+            else:
+                alt_session_id = str(session_id)
+            if alt_session_id in game_urls or alt_session_id in tournament_session_urls:
+                session_id = alt_session_id
+        except (ValueError, TypeError):
+            pass
+
     # clear games state aninitialize values which are known to be valid at this point
     reset_game_data() # wipe out all game state data
     st.session_state.player_id = player_id
@@ -696,6 +709,71 @@ def slash_about() -> str:
 #     st.session_state.messages = messages
 
 
+# ---- URL Query Parameter Sync ----
+# Sidebar options below are kept in sync with the browser URL so links are
+# shareable/bookmarkable: ?player_id=...&session_id=...&show_sql_query=1&sd_samples=10
+_URL_PARAM_KEYS = ('player_id', 'session_id', 'show_sql_query', 'sd_samples')
+
+
+def _set_query_param(name: str, value: Any) -> None:
+    """Set or remove a single URL query parameter to match a session state value."""
+    if value is None or value == '':
+        if name in st.query_params:
+            del st.query_params[name]
+    else:
+        st.query_params[name] = str(value)
+
+
+def sync_url_params_from_state() -> None:
+    """Write the currently selected sidebar options back to the URL query string."""
+    _set_query_param('player_id', st.session_state.get('player_id'))
+    _set_query_param('session_id', st.session_state.get('session_id'))
+    show_sql = st.session_state.get('show_sql_query')
+    _set_query_param(
+        'show_sql_query',
+        None if show_sql is None else ('1' if show_sql else '0'),
+    )
+    _set_query_param('sd_samples', st.session_state.get('single_dummy_sample_count'))
+
+
+def apply_url_params_to_state() -> None:
+    """Seed sidebar-related session state from URL query parameters.
+
+    Safe to call multiple times; missing/blank params are ignored. Call after the
+    normal session defaults are initialized so URL values take precedence.
+    """
+    qp = st.query_params
+
+    if 'player_id' in qp:
+        pid = qp['player_id']
+        if isinstance(pid, str) and pid.strip():
+            st.session_state.player_id = pid.strip()
+
+    if 'session_id' in qp:
+        sid = qp['session_id']
+        if isinstance(sid, str) and sid.strip():
+            sid = sid.strip()
+            # Club session_ids are ints in game_urls_d; tournament session_ids are
+            # strings in tournament_session_urls_d. Prefer int when possible and
+            # let change_game_state normalize as needed.
+            try:
+                st.session_state.session_id = int(sid)
+            except ValueError:
+                st.session_state.session_id = sid
+
+    if 'show_sql_query' in qp:
+        v = str(qp['show_sql_query']).strip().lower()
+        st.session_state.show_sql_query = v in ('1', 'true', 'yes', 'on')
+
+    if 'sd_samples' in qp:
+        try:
+            n = int(qp['sd_samples'])
+            if 1 <= n <= 100:
+                st.session_state.single_dummy_sample_count = n
+        except (ValueError, TypeError):
+            pass
+
+
 def player_id_change() -> None:
     # todo: looks like there's some situation where this is not called because player_id_input is already set. Need to breakpoint here to determine why st.session_state.player_id isn't updated.
     # assign changed textbox value (player_id_input) to player_id
@@ -712,12 +790,14 @@ def player_id_change() -> None:
     if success:
         # Success - set flag and return (Streamlit will auto-rerun after callback)
         st.session_state.player_id_just_changed = True
+        sync_url_params_from_state()
         return
     else:
         # If validation failed, set a flag to handle UI reset in main flow
         st.session_state.player_id_validation_failed = True
         st.session_state.invalid_player_id_input = player_id
         # Don't update st.session_state.player_id - keep the previous working one
+        sync_url_params_from_state()
 
 
 
@@ -733,6 +813,7 @@ def debug_player_id_names_change() -> None:
         # Set flag to indicate debug validation failure
         st.session_state.debug_player_id_validation_failed = True
         st.session_state.debug_player_id_names_selectbox = None
+    sync_url_params_from_state()
 
 
 def club_session_id_change() -> None:
@@ -742,6 +823,7 @@ def club_session_id_change() -> None:
         session_id = int(selection.split(',')[0]) # split selectbox item on commas. only want first split.
         if not change_game_state(st.session_state.player_id, session_id):
             st.session_state.session_id = None
+    sync_url_params_from_state()
 
 
 def tournament_session_id_change() -> None:
@@ -751,11 +833,13 @@ def tournament_session_id_change() -> None:
         session_id = selection.split(',')[0] # split selectbox item on commas. only want first split.
         if not change_game_state(st.session_state.player_id, session_id):
             st.session_state.session_id = None
+    sync_url_params_from_state()
 
 
 def show_sql_query_change() -> None:
     # toggle whether to show sql query
     st.session_state.show_sql_query = st.session_state.sql_query_checkbox
+    sync_url_params_from_state()
 
 
 # todo: feature removed
@@ -778,6 +862,7 @@ def prompts_selectbox_change() -> None:
 def single_dummy_sample_count_changed() -> None:
     st.session_state.single_dummy_sample_count = st.session_state.single_dummy_sample_count_number_input
     change_game_state(st.session_state.player_id, st.session_state.session_id)
+    sync_url_params_from_state()
 
 
 def chat_input_on_submit() -> None:
@@ -1705,12 +1790,41 @@ def create_sidebar() -> None:
         st.sidebar.info("Enter a player ID above to view game reports.")
         # Don't return early - let Developer Settings and Automated Postmortem Apps show at bottom
     else:
-        # Player ID is set - show game selection and other player-specific UI
-        st.sidebar.selectbox("Choose a club game.", index=0, options=[f"{k}, {v[2]}" for k, v in st.session_state.game_urls_d[st.session_state.player_id].items(
-        )], on_change=club_session_id_change, key='club_session_ids_selectbox')  # options are event_id + event description
+        # Player ID is set - show game selection and other player-specific UI.
+        # Compute selectbox indices from the currently active session_id so a
+        # URL-supplied or callback-set session_id is reflected in the dropdowns.
+        player_games = st.session_state.game_urls_d.get(st.session_state.player_id, {})
+        player_tournaments = st.session_state.tournament_session_urls_d.get(st.session_state.player_id, {})
+        current_sid = st.session_state.get('session_id')
 
-        st.sidebar.selectbox("Choose a tournament session.", index=None, options=[f"{k}, {v[2]}" for k, v in st.session_state.tournament_session_urls_d[st.session_state.player_id].items(
-        )], on_change=tournament_session_id_change, key='tournament_session_ids_selectbox')  # options are event_id + event description
+        club_index = 0 if player_games else None
+        tournament_index = None
+        if current_sid is not None:
+            sid_str = str(current_sid)
+            for i, key in enumerate(player_games.keys()):
+                if str(key) == sid_str:
+                    club_index = i
+                    break
+            for i, key in enumerate(player_tournaments.keys()):
+                if str(key) == sid_str:
+                    tournament_index = i
+                    break
+
+        st.sidebar.selectbox(
+            "Choose a club game.",
+            index=club_index,
+            options=[f"{k}, {v[2]}" for k, v in player_games.items()],
+            on_change=club_session_id_change,
+            key='club_session_ids_selectbox',
+        )  # options are event_id + event description
+
+        st.sidebar.selectbox(
+            "Choose a tournament session.",
+            index=tournament_index,
+            options=[f"{k}, {v[2]}" for k, v in player_tournaments.items()],
+            on_change=tournament_session_id_change,
+            key='tournament_session_ids_selectbox',
+        )  # options are event_id + event description
 
         # Check if player ID just changed and we should auto-generate report for the first game
         if st.session_state.get('player_id_just_changed', False):
@@ -2411,6 +2525,24 @@ def write_report() -> None:
         report_game_results_webpage = f"Results Page: {st.session_state.game_results_url}"
         report_your_match_info = f"Your pair was {st.session_state.pair_id}{st.session_state.pair_direction} in section {st.session_state.section_name}. You played {st.session_state.player_direction}. Your partner was {st.session_state.partner_name} ({st.session_state.partner_id}) who played {st.session_state.partner_direction}."
         st.markdown('<div style="height: 50px;"><a id="top-of-report" name="top-of-report"></a></div>', unsafe_allow_html=True)
+        # Hidden machine-readable metadata for automation tools (e.g. acbl_postmortem_generator.py).
+        # The ISO date lets the daily scheduler decide whether the player actually
+        # played on a given date before sending out an email.
+        game_date_iso = ''
+        try:
+            gd = st.session_state.get('game_date')
+            if gd is not None:
+                game_date_iso = gd.isoformat() if hasattr(gd, 'isoformat') else str(gd)
+        except Exception:
+            game_date_iso = ''
+        st.markdown(
+            f'<span id="cli-game-meta" '
+            f'data-game-date="{game_date_iso}" '
+            f'data-player-id="{st.session_state.get("player_id") or ""}" '
+            f'data-session-id="{st.session_state.get("session_id") or ""}" '
+            f'style="display:none;"></span>',
+            unsafe_allow_html=True,
+        )
         st.markdown(f"### {report_title}")
         st.markdown(f"##### {report_creator}")
         st.markdown(f"#### {report_event_info}")
@@ -2615,15 +2747,9 @@ class BridgeGamePostmortemChatbot(PostmortemBase):
         """Initialize app-specific session state."""
         # First initialize common session state
         self.initialize_common_session_state()
-        
-        # Chatbot-specific initialization
-        if 'player_id' in st.query_params:
-            player_id = st.query_params['player_id']
-            if not isinstance(player_id, str):
-                st.error(f'player_id must be a string {player_id}')
-                st.stop()
-            st.session_state.player_id = player_id
-        else:
+
+        # Default player_id placeholder; URL value (if any) is applied below.
+        if 'player_id' not in st.session_state:
             st.session_state.player_id = None
 
         # Chatbot-specific session state (debug_mode now handled by base class)
@@ -2631,6 +2757,32 @@ class BridgeGamePostmortemChatbot(PostmortemBase):
 
         self.reset_game_data()
         self.initialize_website_specific()
+
+        # Apply URL query parameters AFTER reset_game_data (which wipes
+        # player_id/session_id) so they take effect on a fresh load.
+        apply_url_params_to_state()
+
+        # If the URL supplied a player_id, eagerly load that player's games so
+        # the sidebar and report render without requiring manual input.
+        url_player_id = st.session_state.get('player_id')
+        loaded_from_url = False
+        if url_player_id:
+            url_session_id = st.session_state.get('session_id')
+            if change_game_state(url_player_id, url_session_id):
+                loaded_from_url = True
+            else:
+                # Invalid player_id in URL - clear it so the sidebar doesn't crash
+                st.session_state.player_id = None
+                st.session_state.session_id = None
+
+        # Reflect whatever state we ended up in back to the URL.
+        sync_url_params_from_state()
+
+        # On the very first run the framework only renders the sidebar (see
+        # PostmortemBase.main); when we loaded a session from the URL we want
+        # the report to render too, so force one rerun.
+        if loaded_from_url:
+            st.rerun()
         
     def reset_game_data(self):
         """Reset game data."""

@@ -37,6 +37,8 @@ import endplay # for __version__
 from endplay.parsers import pbn, lin, json
 from endplay.types import Deal, Contract, Denom, Player, Penalty, Vul
 from endplay.dds import calc_dd_table, calc_all_tables, par
+from endplay.dds.ddtable import DDTable as _DDTable
+from endplay._dds import ddTableResults as _ddTableResults
 from endplay.dealer import generate_deals
 from mlBridge.dds_ddss import DDSS_AVAILABLE as _DDSS_AVAILABLE
 if _DDSS_AVAILABLE:
@@ -56,6 +58,15 @@ logger = setup_logger(__name__)
 
 
 # todo: use versions in mlBridge
+def _list_to_ddtable(dd_list: list[list[int]]) -> _DDTable:
+    """Convert a 4x5 nested list (NESW x SHDCN) to an endplay DDTable object."""
+    data = _ddTableResults()
+    for dir_idx in range(4):
+        for suit_idx in range(5):
+            data.resTable[suit_idx][dir_idx] = dd_list[dir_idx][suit_idx]
+    return _DDTable(data)
+
+
 VulToEndplayVul_d = { # convert mlBridge Vul to endplay Vul
     'None':Vul.none,
     'Both':Vul.both,
@@ -995,15 +1006,16 @@ def update_hand_records_cache(hrs_cache_df: pl.DataFrame, new_df: pl.DataFrame) 
         logger.info("No new data to process, returning original cache")
         return hrs_cache_df
     
-    # Calculate which PBNs will be updated vs added
-    existing_pbns = set(hrs_cache_df['PBN'].to_list())
-    new_pbns = set(new_df['PBN'].to_list())
-    
-    pbns_to_update = existing_pbns & new_pbns  # intersection
-    pbns_to_add = new_pbns - existing_pbns      # difference
-    
-    logger.info(f"PBNs to update (existing): {len(pbns_to_update)}")
-    logger.info(f"PBNs to add (new): {len(pbns_to_add)}")
+    join_keys = ['PBN', 'Dealer', 'Vul'] if {'PBN', 'Dealer', 'Vul'}.issubset(set(new_df.columns)) else ['PBN']
+    logger.info(f"Using cache join keys: {join_keys}")
+
+    existing_keys_df = hrs_cache_df.select(join_keys).unique()
+    new_keys_df = new_df.select(join_keys).unique()
+    keys_to_update_df = new_keys_df.join(existing_keys_df, on=join_keys, how='inner')
+    keys_to_add_df = new_keys_df.join(existing_keys_df, on=join_keys, how='anti')
+
+    logger.info(f"Keys to update (existing): {keys_to_update_df.height}")
+    logger.info(f"Keys to add (new): {keys_to_add_df.height}")
     
     # Check for duplicate PBNs in new_df with different Dealer/Vul combinations
     new_df_pbn_counts = new_df['PBN'].value_counts()
@@ -1012,11 +1024,8 @@ def update_hand_records_cache(hrs_cache_df: pl.DataFrame, new_df: pl.DataFrame) 
         logger.warning(f"Note: {duplicate_pbns_in_new.height} PBNs in new data have multiple Dealer/Vul combinations")
         logger.warning(f"      This will result in more rows than unique PBNs")
     
-    # Calculate expected final row count more accurately
-    # The update operation replaces existing rows with matching PBNs
-    # Then we add all rows from new_df that don't exist in hrs_cache_df
-    expected_final_rows = hrs_cache_df.height - len(pbns_to_update) + new_df.height
-    logger.info(f"Expected final rows: {expected_final_rows} (existing: {hrs_cache_df.height} - updated: {len(pbns_to_update)} + new: {len(pbns_to_add)})")
+    expected_final_rows = hrs_cache_df.height + keys_to_add_df.height
+    logger.info(f"Expected final rows: {expected_final_rows}")
 
     # check for differing dtypes
     common_cols = set(hrs_cache_df.columns) & set(new_df.columns)
@@ -1028,15 +1037,27 @@ def update_hand_records_cache(hrs_cache_df: pl.DataFrame, new_df: pl.DataFrame) 
     assert len(dtype_diffs) == 0, f"Differing dtypes: {dtype_diffs}"
 
     # Update existing rows (only columns from new_df)
-    hrs_cache_df = hrs_cache_df.update(new_df, on='PBN')
+    hrs_cache_df = hrs_cache_df.update(new_df, on=join_keys)
     
     # Add missing columns to new_df ONLY for new rows
     missing_columns = set(hrs_cache_df.columns) - set(new_df.columns)
-    new_rows = new_df.join(hrs_cache_df.select('PBN'), on='PBN', how='anti')
+    new_rows = new_df.join(hrs_cache_df.select(join_keys).unique(), on=join_keys, how='anti')
     if new_rows.height > 0:
-        new_rows = new_rows.with_columns([
-            pl.lit(None).alias(col) for col in missing_columns
-        ])
+        if join_keys == ['PBN', 'Dealer', 'Vul']:
+            # Seed new Dealer/Vul combinations from an existing row with the same PBN,
+            # then overlay the newly computed columns for the exact composite key.
+            template_rows = (
+                hrs_cache_df
+                .group_by('PBN')
+                .first()
+                .drop(['Dealer', 'Vul'])
+            )
+            seeded_rows = new_rows.select(join_keys).join(template_rows, on='PBN', how='left')
+            new_rows = seeded_rows.update(new_df, on=join_keys)
+        if missing_columns:
+            new_rows = new_rows.with_columns([
+                pl.lit(None).alias(col) for col in missing_columns if col not in new_rows.columns
+            ])
         hrs_cache_df = pl.concat([hrs_cache_df, new_rows.select(hrs_cache_df.columns)])
         logger.info(f"Added {len(missing_columns)} missing columns to {new_rows.height} new rows")
     
@@ -1423,24 +1444,57 @@ def compute_par_scores_for_missing(hrs_df: pl.DataFrame, hrs_cache_df: pl.DataFr
     #     else:
     #         logger.info("No PBNs found with DD data but missing ParScore")
     
-    # Find PBNs that need par score calculation (only those that have DD calculations)
-    unique_hrs_df_pbns = set(hrs_df['PBN'])
-    logger.info(f"{len(unique_hrs_df_pbns)=}")
+    # Find exact PBN+Dealer+Vul combinations that are missing or need Par recalculation.
+    join_keys = ['PBN', 'Dealer', 'Vul']
+    df_unique_keys = hrs_df.select(join_keys).unique()
+    cache_unique_keys = hrs_cache_df.select(join_keys).unique()
+    missing_key_rows = df_unique_keys.join(cache_unique_keys, on=join_keys, how='anti')
+    logger.info(f"Missing cache key rows for Par: {missing_key_rows.height}")
+
     hrs_cache_with_nulls_df = hrs_cache_df.filter(pl.col('ParScore').is_null())
     logger.info(f"{len(hrs_cache_with_nulls_df)=}")
-    hrs_cache_with_nulls_pbns = set(hrs_cache_with_nulls_df['PBN'])
-    logger.info(f"{len(hrs_cache_with_nulls_pbns)=}")
-    
-    hrs_cache_all_pbns = set(hrs_cache_df['PBN'])
-    pbns_to_add = set(unique_hrs_df_pbns) - hrs_cache_all_pbns
+    replace_key_rows = (
+        hrs_cache_with_nulls_df
+        .select(join_keys)
+        .unique()
+        .join(df_unique_keys, on=join_keys, how='semi')
+    )
+    logger.info(f"Null Par cache key rows to replace: {replace_key_rows.height}")
+
+    pbns_to_add = set(missing_key_rows['PBN'].unique().to_list()) if missing_key_rows.height > 0 else set()
     logger.info(f"{len(pbns_to_add)=}")
-    pbns_to_replace = set(unique_hrs_df_pbns).intersection(hrs_cache_with_nulls_pbns)
+    pbns_to_replace = set(replace_key_rows['PBN'].unique().to_list()) if replace_key_rows.height > 0 else set()
     logger.info(f"{len(pbns_to_replace)=}")
     pbns_to_process = pbns_to_add.union(pbns_to_replace)
     logger.info(f"{len(pbns_to_process)=}")
+
+    # If DD tables were not recalculated in this run, reconstruct them from cache so
+    # newly observed Dealer/Vul combinations can still receive Par values.
+    missing_dd_pbns = pbns_to_process - set(unique_dd_tables_d.keys())
+    if missing_dd_pbns:
+        dd_cols = [
+            'DD_N_S', 'DD_N_H', 'DD_N_D', 'DD_N_C', 'DD_N_N',
+            'DD_E_S', 'DD_E_H', 'DD_E_D', 'DD_E_C', 'DD_E_N',
+            'DD_S_S', 'DD_S_H', 'DD_S_D', 'DD_S_C', 'DD_S_N',
+            'DD_W_S', 'DD_W_H', 'DD_W_D', 'DD_W_C', 'DD_W_N',
+        ]
+        cache_dd_rows = (
+            hrs_cache_df
+            .filter(pl.col('PBN').is_in(list(missing_dd_pbns)) & pl.col('DD_N_C').is_not_null())
+            .group_by('PBN')
+            .first()
+            .select(['PBN'] + dd_cols)
+            .rows(named=True)
+        )
+        for row in cache_dd_rows:
+            unique_dd_tables_d[row['PBN']] = _list_to_ddtable([
+                [row[f'DD_{direction}_{suit}'] for suit in ['S', 'H', 'D', 'C', 'N']]
+                for direction in ['N', 'E', 'S', 'W']
+            ])
+        logger.info(f"Built DD tables for {len(cache_dd_rows)} PBNs from cache")
     
     # Check which PBNs missing ParScore have DD tables available
-    pbns_missing_par = set(hrs_cache_with_nulls_pbns)  # Use the already calculated set
+    pbns_missing_par = set(replace_key_rows['PBN'].unique().to_list()) if replace_key_rows.height > 0 else set()
     pbns_with_dd_tables = set(unique_dd_tables_d.keys())
     pbns_missing_par_and_dd = pbns_missing_par - pbns_with_dd_tables
     pbns_missing_par_with_dd = pbns_missing_par & pbns_with_dd_tables
@@ -1457,12 +1511,12 @@ def compute_par_scores_for_missing(hrs_df: pl.DataFrame, hrs_cache_df: pl.DataFr
     # Get Dealer/Vul from appropriate source for each PBN type - optimized with Polars operations
     source_dfs = []
     
-    if pbns_to_add:
-        source_dfs.append(hrs_df.filter(pl.col('PBN').is_in(list(pbns_to_add)))[['PBN','Dealer','Vul']].unique())
+    if missing_key_rows.height > 0:
+        source_dfs.append(missing_key_rows)
     
-    if pbns_to_replace:
+    if replace_key_rows.height > 0:
         # Get rows from hrs_cache_df, but for None values in Dealer/Vul, get them from hrs_df
-        cache_rows = hrs_cache_df.filter(pl.col('PBN').is_in(list(pbns_to_replace)))[['PBN','Dealer','Vul']].unique()
+        cache_rows = replace_key_rows
         
         # Find rows with None values in Dealer or Vul
         rows_with_none = cache_rows.filter(pl.col('Dealer').is_null() | pl.col('Vul').is_null())
@@ -1481,7 +1535,7 @@ def compute_par_scores_for_missing(hrs_df: pl.DataFrame, hrs_cache_df: pl.DataFr
     
     # Combine all DataFrames efficiently and convert to rows only at the end
     if source_dfs:
-        combined_df = pl.concat(source_dfs)
+        combined_df = pl.concat(source_dfs).unique(subset=['PBN', 'Dealer', 'Vul'])
         source_rows = combined_df.rows()
     else:
         source_rows = []
@@ -1727,11 +1781,9 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
     sd_probs_chunks = []
     assert hrs_cache_df.height == hrs_cache_df.unique(subset=['PBN', 'Dealer', 'Vul']).height, "PBN+Dealer+Vul combinations in hrs_cache_df must be unique"
     
-    # Calculate which PBNs to add vs replace
-    # Note: Single dummy calculations are the same for a given PBN regardless of Dealer/Vul
-    # So we work at the PBN level, but need to handle multiple Dealer/Vul combinations properly
-    
-    # Find PBNs to add (in df but not in hrs_cache_df) via anti-join
+    # SD calculations are PBN-invariant (independent of Dealer/Vul), so we only need
+    # to compute SD for genuinely new PBNs. Missing Dealer/Vul combos for existing PBNs
+    # are handled by update_hand_records_cache seeding from existing rows.
     t_filter = time.time()
     df_unique_pbns = df.select('PBN').unique()
     cache_unique_pbns = hrs_cache_df.select('PBN').unique()
@@ -1740,6 +1792,13 @@ def estimate_sd_trick_distributions_for_df(df: pl.DataFrame, hrs_cache_df: pl.Da
         df_unique_pbns.join(cache_unique_pbns, on='PBN', how='anti')['PBN'].to_list()
     )
     logger.info(f"PBNs to add: {len(pbns_to_add)}")
+
+    # Also detect missing Dealer/Vul combos so we can seed them after SD completes
+    join_keys = ['PBN', 'Dealer', 'Vul']
+    df_unique_keys = df.select(join_keys).unique()
+    cache_unique_keys = hrs_cache_df.select(join_keys).unique()
+    missing_key_rows = df_unique_keys.join(cache_unique_keys, on=join_keys, how='anti')
+    logger.info(f"Missing cache key rows for SD (Dealer/Vul combos to seed): {missing_key_rows.height}")
 
     # Find PBNs to replace (in both, but with null Probs_Trials) via semi-join
     pbns_to_replace = set(
@@ -3506,6 +3565,9 @@ def compute_pair_matchpoint_elo_ratings(
     elo_scale: float = 400.0,
     score_amplifier: float = 1.0,
     replace_existing: bool = True,
+    max_section_pairs: float = 60.0,   # cap Section_Pairs before scale = sqrt((p-1)/11)
+    min_rating: float = 200.0,         # hard floor for the running rating
+    max_rating: float = 3000.0,        # hard ceiling for the running rating
 ) -> pl.DataFrame:
     """Compute Elo-style ratings for pairs on matchpoint events.
 
@@ -3524,6 +3586,13 @@ def compute_pair_matchpoint_elo_ratings(
     - elo_scale: denominator in logistic expectation (chess default 400.0).
     - score_amplifier: amplifies per-board score around 0.5 (1.0 = no change).
     - replace_existing: if True, drop existing output columns before adding new ones.
+    - max_section_pairs: hard cap applied to `Section_Pairs`/`Num_Pairs`/`MP_Top`
+      before computing the K-factor scale `sqrt((pairs-1)/11)`. Bad upstream
+      values (e.g. a junk MP_Top) used to push the scale to absurd multiples
+      and blow ratings into ±100k territory. Default 60 -> max scale ≈ 2.32.
+    - min_rating / max_rating: hard clamp band for the running rating. Belt-and-
+      suspenders guard so a single pathological row can't poison every future
+      board for that pair. See TODO.md "K-factor / Elo outlier blow-up".
 
     Input columns:
     - `Pair_Number_NS`, `Pair_Number_EW`, `Pct_NS`, `session_id` (and optionally `Section_Pairs`/`Num_Pairs`/`MP_Top`).
@@ -3543,15 +3612,68 @@ def compute_pair_matchpoint_elo_ratings(
     # TODO(polars): Consider chunking by session and preparing arrays via Polars
     # group_by to minimize Python overhead; full vectorization of Elo updates is
     # non-trivial due to sequential dependency.
-    # Ensure schema
-    need_cols = {"Pair_Number_NS", "Pair_Number_EW", "Pct_NS", "session_id"}
+    # Ensure schema. Pair_Number_NS / Pair_Number_EW are session-scoped table
+    # numbers (Pair #1 in session A is a completely different partnership from
+    # Pair #1 in session B). Using them as the running-Elo key conflates many
+    # unrelated pairs into a single rating bucket — see TODO.md "Pair-level
+    # Elo column is broken". Prefer stable Player_ID-derived pair IDs when the
+    # caller has Player_ID_<seat> columns; fall back with a warning otherwise.
+    need_cols = {"Pct_NS", "session_id"}
     missing = need_cols - set(df_sorted.columns)
     if missing:
         raise ValueError(f"Missing columns: {missing}")
 
+    has_player_ids = all(
+        c in df_sorted.columns
+        for c in ("Player_ID_N", "Player_ID_S", "Player_ID_E", "Player_ID_W")
+    )
+    if has_player_ids:
+        df_sorted = df_sorted.with_columns(
+            _Pair_ID_NS=pl.concat_str([
+                pl.min_horizontal(
+                    pl.col("Player_ID_N").cast(pl.Utf8),
+                    pl.col("Player_ID_S").cast(pl.Utf8),
+                ),
+                pl.lit("-"),
+                pl.max_horizontal(
+                    pl.col("Player_ID_N").cast(pl.Utf8),
+                    pl.col("Player_ID_S").cast(pl.Utf8),
+                ),
+            ]),
+            _Pair_ID_EW=pl.concat_str([
+                pl.min_horizontal(
+                    pl.col("Player_ID_E").cast(pl.Utf8),
+                    pl.col("Player_ID_W").cast(pl.Utf8),
+                ),
+                pl.lit("-"),
+                pl.max_horizontal(
+                    pl.col("Player_ID_E").cast(pl.Utf8),
+                    pl.col("Player_ID_W").cast(pl.Utf8),
+                ),
+            ]),
+        )
+        ns_pair_col, ew_pair_col = "_Pair_ID_NS", "_Pair_ID_EW"
+        _added_temp_pair_cols = True
+    else:
+        if not {"Pair_Number_NS", "Pair_Number_EW"}.issubset(df_sorted.columns):
+            raise ValueError(
+                "compute_pair_matchpoint_elo_ratings: need either "
+                "Player_ID_<N|S|E|W> (preferred) or Pair_Number_NS/EW (fallback)."
+            )
+        import warnings
+        warnings.warn(
+            "compute_pair_matchpoint_elo_ratings: Player_ID_<seat> columns "
+            "not found. Falling back to session-scoped Pair_Number_NS/EW — "
+            "this conflates unrelated partnerships across sessions and is "
+            "INCORRECT. See TODO.md 'Pair-level Elo column is broken'.",
+            stacklevel=2,
+        )
+        ns_pair_col, ew_pair_col = "Pair_Number_NS", "Pair_Number_EW"
+        _added_temp_pair_cols = False
+
     n_rows = df_sorted.height
-    ns_pairs = df_sorted["Pair_Number_NS"].to_numpy()
-    ew_pairs = df_sorted["Pair_Number_EW"].to_numpy()
+    ns_pairs = df_sorted[ns_pair_col].to_numpy()
+    ew_pairs = df_sorted[ew_pair_col].to_numpy()
     pct_ns = df_sorted["Pct_NS"].to_numpy()
     session_ids = df_sorted["session_id"].to_numpy()
 
@@ -3566,14 +3688,20 @@ def compute_pair_matchpoint_elo_ratings(
     else:
         pairs = None
     if pairs is not None:
+        # Sanitize: NaN/inf -> 1.0 (no scale boost). Then cap to max_section_pairs
+        # so a junk upstream value can't drive K to absurd multiples (the original
+        # bug behind ±100k Elo outliers — see TODO.md).
+        pairs = np.where(np.isfinite(pairs), pairs, 1.0)
+        pairs = np.minimum(pairs, np.float32(max_section_pairs))
         with np.errstate(invalid="ignore"):
             valid = pairs > 1.0
         scale_valid = np.sqrt(np.maximum(pairs[valid] - 1.0, 1.0) / 11.0)
         scale[valid] = scale_valid
 
-    # Map pair ids to contiguous indices per direction
-    ns_unique = df_sorted["Pair_Number_NS"].unique().to_list()
-    ew_unique = df_sorted["Pair_Number_EW"].unique().to_list()
+    # Map pair ids to contiguous indices per direction. Uses the stable
+    # Player_ID-derived key when available, session-scoped Pair_Number otherwise.
+    ns_unique = df_sorted[ns_pair_col].unique().to_list()
+    ew_unique = df_sorted[ew_pair_col].unique().to_list()
     ns_index = {pid: i for i, pid in enumerate(ns_unique)}
     ew_index = {pid: i for i, pid in enumerate(ew_unique)}
 
@@ -3637,10 +3765,20 @@ def compute_pair_matchpoint_elo_ratings(
                     s_ns_f = 1.0
             s_ew_f = 1.0 - s_ns_f
             
-            # Update ratings using Elo formula
+            # Update ratings using Elo formula, then hard-clamp to [min_rating,
+            # max_rating]. Without this guard a single pathological (k, residual)
+            # combination poisons the running rating for every future board.
             r_ns += k_ns * (s_ns_f - e_ns)
             r_ew += k_ew * (s_ew_f - e_ew)
-            
+            if r_ns < min_rating:
+                r_ns = min_rating
+            elif r_ns > max_rating:
+                r_ns = max_rating
+            if r_ew < min_rating:
+                r_ew = min_rating
+            elif r_ew > max_rating:
+                r_ew = max_rating
+
             # Update arrays
             ratings_ns[idx_ns] = r_ns
             ratings_ew[idx_ew] = r_ew
@@ -3685,6 +3823,10 @@ def compute_pair_matchpoint_elo_ratings(
         cols = [c for c in out_df.columns if c in df_sorted.columns]
         if cols:
             df_sorted = df_sorted.drop(cols)
+    if _added_temp_pair_cols:
+        df_sorted = df_sorted.drop(
+            [c for c in ("_Pair_ID_NS", "_Pair_ID_EW") if c in df_sorted.columns]
+        )
     return df_sorted.hstack(out_df)
 
 
@@ -3698,6 +3840,9 @@ def compute_player_matchpoint_elo_ratings(
     elo_scale: float = 400.0,
     score_amplifier: float = 1.0,
     replace_existing: bool = True,
+    max_section_pairs: float = 60.0,   # cap Section_Pairs before scale = sqrt((p-1)/11)
+    min_rating: float = 200.0,         # hard floor for the running rating
+    max_rating: float = 3000.0,        # hard ceiling for the running rating
 ) -> pl.DataFrame:
     """Compute player Elo-style ratings for duplicate boards.
 
@@ -3716,6 +3861,12 @@ def compute_player_matchpoint_elo_ratings(
     - elo_scale: denominator in logistic expectation (chess default 400.0)
     - score_amplifier: amplifies per-board score around 0.5 (1.0 = no change)
     - replace_existing: if True, drop existing output columns before adding new ones.
+    - max_section_pairs: hard cap on `Section_Pairs`/`Num_Pairs`/`MP_Top` before
+      computing the K-factor scale `sqrt((pairs-1)/11)`. Default 60 -> max
+      scale ≈ 2.32. Prevents bad upstream values from blowing up K.
+    - min_rating / max_rating: hard clamp band for the running rating; guards
+      against numerical-stability blow-ups. See TODO.md "K-factor / Elo
+      outlier blow-up".
 
     Input columns:
     - `Date`: Game date for temporal ordering (any comparable type)
@@ -3769,6 +3920,11 @@ def compute_player_matchpoint_elo_ratings(
     else:
         pairs = None
     if pairs is not None:
+        # Same sanitize+cap as the pair Elo: NaN/inf -> 1.0, then clip to
+        # max_section_pairs so a junk Section_Pairs/MP_Top can't drive K to
+        # absurd multiples (root cause of ±100k Elo outliers — see TODO.md).
+        pairs = np.where(np.isfinite(pairs), pairs, 1.0)
+        pairs = np.minimum(pairs, np.float32(max_section_pairs))
         with np.errstate(invalid="ignore"):
             valid = pairs > 1.0
         scale_valid = np.sqrt(np.maximum(pairs[valid] - 1.0, 1.0) / 11.0)
@@ -3866,6 +4022,15 @@ def compute_player_matchpoint_elo_ratings(
             r_s_ns = r_s_ns + 0.5 * k_s * delta_ns
             r_e_ew = r_e_ew + 0.5 * k_e * delta_ew  # Use EW delta, not NS delta
             r_w_ew = r_w_ew + 0.5 * k_w * delta_ew  # Use EW delta, not NS delta
+            # Hard-clamp every player rating; see compute_pair_matchpoint_elo_ratings.
+            if r_n_ns < min_rating: r_n_ns = min_rating
+            elif r_n_ns > max_rating: r_n_ns = max_rating
+            if r_s_ns < min_rating: r_s_ns = min_rating
+            elif r_s_ns > max_rating: r_s_ns = max_rating
+            if r_e_ew < min_rating: r_e_ew = min_rating
+            elif r_e_ew > max_rating: r_e_ew = max_rating
+            if r_w_ew < min_rating: r_w_ew = min_rating
+            elif r_w_ew > max_rating: r_w_ew = max_rating
             ratings_ns[idx_n] = r_n_ns
             ratings_ns[idx_s] = r_s_ns
             ratings_ew[idx_e] = r_e_ew
@@ -5572,6 +5737,44 @@ class DD_SD_Augmenter:
         assert 'PBN' in self.df.columns, "Required column 'PBN' not found in DataFrame"
         assert 'Dealer' in self.df.columns, "Required column 'Dealer' not found in DataFrame"
         assert 'Vul' in self.df.columns, "Required column 'Vul' not found in DataFrame"
+
+        # Migrate legacy null-Dealer/Vul cache rows to composite keys.
+        # Old cache entries pre-date composite keying and have null Dealer/Vul,
+        # making them invisible to the inner join on ['PBN','Dealer','Vul'].
+        null_key_mask = pl.col('Dealer').is_null() | pl.col('Vul').is_null()
+        null_key_rows = self.hrs_cache_df.filter(null_key_mask)
+        if null_key_rows.height > 0:
+            input_keys = self.df.select(['PBN', 'Dealer', 'Vul']).unique()
+            null_pbns_needing_migration = input_keys.select('PBN').unique().join(
+                null_key_rows.select('PBN').unique(), on='PBN', how='semi'
+            )
+            if null_pbns_needing_migration.height > 0:
+                logger.info(f"Migrating {null_pbns_needing_migration.height} null-key PBNs to composite keys "
+                            f"(out of {null_key_rows.height} total null-key cache rows)")
+                templates = (
+                    null_key_rows
+                    .join(null_pbns_needing_migration, on='PBN', how='semi')
+                    .group_by('PBN').first()
+                    .drop(['Dealer', 'Vul'])
+                )
+                non_null_cache = self.hrs_cache_df.filter(~null_key_mask)
+                keys_to_seed = input_keys.join(null_pbns_needing_migration, on='PBN', how='semi')
+                # Avoid duplicating combos already present with non-null keys
+                existing_nonnull_keys = non_null_cache.select(['PBN', 'Dealer', 'Vul']).unique()
+                keys_to_seed = keys_to_seed.join(existing_nonnull_keys, on=['PBN', 'Dealer', 'Vul'], how='anti')
+                migrated = keys_to_seed.join(templates, on='PBN', how='inner')
+
+                unmigrated_nulls = null_key_rows.join(
+                    null_pbns_needing_migration, on='PBN', how='anti'
+                )
+                self.hrs_cache_df = pl.concat([
+                    non_null_cache,
+                    unmigrated_nulls,
+                    migrated.select(self.hrs_cache_df.columns),
+                ])
+                logger.info(f"Cache after migration: {self.hrs_cache_df.height} rows, "
+                            f"null Dealer remaining: {self.hrs_cache_df['Dealer'].null_count()}")
+
         all_scores_d, scores_d, scores_df = self._time_operation("calculate_scores", precompute_contract_score_tables)
         
         # Calculate double dummy scores first

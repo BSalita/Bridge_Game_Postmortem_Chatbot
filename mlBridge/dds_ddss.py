@@ -17,6 +17,7 @@ from typing import List, Optional
 
 import endplay._dds as endplay_dds
 
+# TODO: how can ddss dll be made available? Does it ddss need to be made available as a package like endplay?
 _DLL_PATH = pathlib.Path(r"C:\sw\bridge\ML-Contract-Bridge\src\ddss\build-cmake\Release\dds.dll")
 
 DDSS_AVAILABLE = False
