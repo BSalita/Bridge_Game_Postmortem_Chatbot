@@ -161,8 +161,8 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
     
     try:
         result_df = get_db_connection().execute(query).pl()
+        st.text(f"Result is a dataframe of {len(result_df)} rows.")
         if show_sql_query and st.session_state.show_sql_query:
-            st.text(f"Result is a dataframe of {len(result_df)} rows.")
             # Debug: if Pct_NS_Pred exists in result, show stats
             try:
                 if 'Pct_NS_Pred' in result_df.columns:
