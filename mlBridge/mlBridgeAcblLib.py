@@ -1456,6 +1456,100 @@ def create_acbl_browser_context(p, headless=True):
     return browser, context
 
 
+# Markers that identify a Cloudflare challenge/interstitial page.
+_CLOUDFLARE_CHALLENGE_MARKERS = (
+    'just a moment',
+    'checking your browser',
+    'challenge-platform',
+    '_cf_chl_opt',
+    'cf-challenge',
+    'cf_chl_',
+    'turnstile',
+    'cloudflare',
+)
+
+# Where timeout diagnostics (HTML + screenshot) are written.
+ACBL_DIAGNOSTICS_DIR = pathlib.Path('playwright_diagnostics')
+
+
+def _goto_with_diagnostics(page, url, verbose=True):
+    """
+    Navigate with page.goto(wait_until='networkidle') and, on timeout, capture
+    diagnostics (page HTML + screenshot) and re-raise with a verdict on whether
+    a Cloudflare challenge page is responsible.
+
+    A Cloudflare managed challenge keeps polling its challenge-platform
+    endpoints, so 'networkidle' is never reached and goto raises TimeoutError
+    without an HTTP status. Capturing the page content at that moment tells us
+    definitively whether we're stuck on a challenge or the page is just chatty.
+
+    Args:
+        page: Playwright page object
+        url: URL to navigate to
+        verbose: Print progress messages
+
+    Returns:
+        Playwright Response object (same as page.goto)
+
+    Raises:
+        RuntimeError: On navigation timeout, with diagnosis and paths to saved artifacts.
+    """
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    try:
+        return page.goto(url, wait_until='networkidle', timeout=ACBL_PAGE_LOAD_TIMEOUT)
+    except PlaywrightTimeoutError as e:
+        # The page object is still alive after a goto timeout; capture what loaded.
+        html_content = None
+        html_path = None
+        screenshot_path = None
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        try:
+            ACBL_DIAGNOSTICS_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                html_content = page.content()
+                html_path = ACBL_DIAGNOSTICS_DIR / f'goto_timeout_{timestamp}.html'
+                html_path.write_text(html_content, encoding='utf-8')
+            except Exception as capture_err:
+                print_to_log_info(f'Could not capture page HTML after timeout: {capture_err}')
+            try:
+                screenshot_path = ACBL_DIAGNOSTICS_DIR / f'goto_timeout_{timestamp}.png'
+                page.screenshot(path=str(screenshot_path))
+            except Exception as capture_err:
+                screenshot_path = None
+                print_to_log_info(f'Could not capture screenshot after timeout: {capture_err}')
+        except Exception as diag_err:
+            print_to_log_info(f'Could not write timeout diagnostics: {diag_err}')
+
+        if html_content:
+            html_lower = html_content.lower()
+            matched = [m for m in _CLOUDFLARE_CHALLENGE_MARKERS if m in html_lower]
+            if matched:
+                verdict = (
+                    f"Cloudflare challenge detected (markers: {', '.join(matched)}). "
+                    "The site is blocking this automated browser; the page never finishes "
+                    "loading because the challenge script keeps polling."
+                )
+            else:
+                verdict = (
+                    "No Cloudflare challenge markers found in the loaded HTML. "
+                    "The page likely has ongoing network activity (analytics/polling) "
+                    "that prevents 'networkidle' from being reached."
+                )
+        else:
+            verdict = "Page content could not be captured, so the cause is undetermined."
+
+        artifacts = ', '.join(str(p_) for p_ in (html_path, screenshot_path) if p_ is not None) or 'none'
+        message = (
+            f"Timed out ({ACBL_PAGE_LOAD_TIMEOUT/1000:.0f}s) loading {url}. "
+            f"{verdict} Diagnostics saved: {artifacts}"
+        )
+        if verbose:
+            print(f"  {message}")
+        print_to_log_info(message)
+        raise RuntimeError(message) from e
+
+
 def _run_in_thread_with_new_loop(func, *args, **kwargs):
     """Run function in a thread with a fresh event loop (Windows-compatible)."""
     import sys
@@ -1495,7 +1589,7 @@ def _get_club_results_sync(acbl_number, headless=True, save_screenshot=None, lim
     Internal sync version that runs Playwright. 
     Use get_club_results_from_acbl_number_playwright() instead.
     """
-    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.sync_api import sync_playwright
     
     url = f"https://my.acbl.org/club-results/my-results/{acbl_number}"
     if verbose:
@@ -1512,7 +1606,7 @@ def _get_club_results_sync(acbl_number, headless=True, save_screenshot=None, lim
             # Navigate to the page
             if verbose:
                 print("  Loading page...")
-            response = page.goto(url, wait_until='networkidle', timeout=ACBL_PAGE_LOAD_TIMEOUT)
+            response = _goto_with_diagnostics(page, url, verbose=verbose)
             
             if response.status != 200:
                 raise Exception(f"Failed to load page. Status code: {response.status}")
@@ -1743,7 +1837,7 @@ def _get_club_results_details_sync(url, headless=True, verbose=True):
         page = context.new_page()
         
         try:
-            response = page.goto(url, wait_until='networkidle', timeout=ACBL_PAGE_LOAD_TIMEOUT)
+            response = _goto_with_diagnostics(page, url, verbose=verbose)
             
             if response.status != 200:
                 raise Exception(f"Failed to load page. Status code: {response.status}")
