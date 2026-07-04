@@ -22,6 +22,7 @@ import urllib
 from collections import defaultdict
 import time
 import json
+import os
 import pathlib
 import sys
 import asyncio
@@ -1436,23 +1437,112 @@ ACBL_USER_AGENT = (
     "Chrome/131.0.0.0 Safari/537.36"
 )
 
+# Launch args that reduce headless-automation fingerprints (Cloudflare mitigation).
+# --disable-blink-features=AutomationControlled makes navigator.webdriver report false.
+ACBL_BROWSER_LAUNCH_ARGS = [
+    '--disable-blink-features=AutomationControlled',
+    '--disable-infobars',
+    '--no-first-run',
+    '--no-default-browser-check',
+]
+
+# Patch the JS environment before any page script runs, hiding the most common
+# headless-Chromium tells that bot-detection scripts (e.g. Cloudflare) probe for.
+ACBL_STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+window.chrome = window.chrome || { runtime: {} };
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+if (navigator.plugins.length === 0) {
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+}
+"""
+
+# --- Persistent real-Chrome profile (Cloudflare Turnstile workaround) ---------
+# my.acbl.org sits behind an interactive Cloudflare Turnstile challenge that
+# headless Chromium cannot pass. A real, headed Chrome with a persistent
+# user-data-dir can: a human solves the checkbox ONCE (see
+# acbl_solve_challenge.py) and the resulting cf_clearance cookie (observed
+# lifetime: 1 year) lets all later automated runs through. The Chrome window
+# is pushed off-screen so it never bothers the user.
+#
+# The profile directory is resolved from the ACBL_BROWSER_PROFILE_DIR env var,
+# else from known default locations. If no profile exists (or launching real
+# Chrome fails, e.g. inside a Linux container), we fall back to the plain
+# headless-Chromium context, which will fail with a clear diagnostic on
+# challenged pages.
+ACBL_PROFILE_DIR_ENV = 'ACBL_BROWSER_PROFILE_DIR'
+ACBL_DEFAULT_PROFILE_DIRS = (
+    pathlib.Path('e:/bridge/data/acbl/playwright_profile'),  # shared with acbl_club_download_to_json.py
+    pathlib.Path('playwright_profile'),
+)
+_OFFSCREEN_WINDOW_POS = '-32000,-32000'
+
+
+def resolve_acbl_browser_profile_dir():
+    """
+    Return the persistent Chrome profile directory to use, or None if none is
+    configured/present (caller should fall back to headless Chromium).
+    """
+    env_dir = os.getenv(ACBL_PROFILE_DIR_ENV)
+    if env_dir:
+        return pathlib.Path(env_dir)
+    for candidate in ACBL_DEFAULT_PROFILE_DIRS:
+        if candidate.exists():
+            return candidate
+    return None
+
 
 def create_acbl_browser_context(p, headless=True):
     """
     Helper to create browser context with consistent settings for ACBL scraping.
-    
+
+    Preferred path: persistent real-Chrome context (headed, off-screen window)
+    whose profile carries the cf_clearance cookie that clears Cloudflare's
+    Turnstile challenge. Falls back to stealth-hardened headless Chromium when
+    no profile is configured or real Chrome cannot launch.
+
     Args:
         p: Playwright instance
-        headless: Run browser in headless mode
-    
+        headless: Run browser in headless mode (fallback path only; the
+            persistent-profile path is always headed because Cloudflare
+            blocks headless Chrome)
+
     Returns:
-        tuple: (browser, context) objects
+        tuple: (closeable, context) where closeable.close() shuts the browser
+        down. For the persistent path both elements are the same
+        BrowserContext (it has no separate Browser object).
     """
-    browser = p.chromium.launch(headless=headless)
+    profile_dir = resolve_acbl_browser_profile_dir()
+    if profile_dir is not None:
+        try:
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(profile_dir),
+                channel='chrome',  # genuine TLS/JS fingerprint; do NOT spoof the UA
+                headless=False,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    f'--window-position={_OFFSCREEN_WINDOW_POS}',
+                    f'--window-size={ACBL_VIEWPORT_WIDTH},{ACBL_VIEWPORT_HEIGHT}',
+                ],
+                no_viewport=True,
+            )
+            print_to_log_info(f'Using persistent Chrome profile: {profile_dir}')
+            return context, context
+        except Exception as e:
+            print_to_log_info(f'Persistent Chrome launch failed ({e}); falling back to headless Chromium')
+
+    browser = p.chromium.launch(headless=headless, args=ACBL_BROWSER_LAUNCH_ARGS)
     context = browser.new_context(
         viewport={'width': ACBL_VIEWPORT_WIDTH, 'height': ACBL_VIEWPORT_HEIGHT},
-        user_agent=ACBL_USER_AGENT
+        user_agent=ACBL_USER_AGENT,
+        locale='en-US',
+        timezone_id='America/New_York',
+        extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
     )
+    context.add_init_script(ACBL_STEALTH_INIT_SCRIPT)
     return browser, context
 
 
@@ -1527,8 +1617,10 @@ def _goto_with_diagnostics(page, url, verbose=True):
             if matched:
                 verdict = (
                     f"Cloudflare challenge detected (markers: {', '.join(matched)}). "
-                    "The site is blocking this automated browser; the page never finishes "
-                    "loading because the challenge script keeps polling."
+                    "The site is blocking this automated browser. Fix: run "
+                    "'python acbl_solve_challenge.py' once on this machine to solve the "
+                    "challenge manually and warm the persistent Chrome profile "
+                    f"(configure its location with the {ACBL_PROFILE_DIR_ENV} env var)."
                 )
             else:
                 verdict = (
