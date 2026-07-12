@@ -15,19 +15,33 @@ Usage:
     python acbl_solve_challenge.py                  # default profile location
     set ACBL_BROWSER_PROFILE_DIR=D:\\some\\dir && python acbl_solve_challenge.py
 """
+import os
 import pathlib
 import sys
 import time
 
 from playwright.sync_api import sync_playwright
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from mlBridge.mlBridgeAcblLib import (
-    ACBL_DEFAULT_PROFILE_DIRS,
-    ACBL_VIEWPORT_HEIGHT,
-    ACBL_VIEWPORT_WIDTH,
-    resolve_acbl_browser_profile_dir,
+# Deliberately self-contained: importing mlBridge.mlBridgeAcblLib would drag in
+# the whole app dependency chain (logging_config, pandas, ...), which breaks
+# outside the Streamlit app's sys.path setup. Keep these constants in sync with
+# mlBridge/mlBridgeAcblLib.py.
+ACBL_PROFILE_DIR_ENV = 'ACBL_BROWSER_PROFILE_DIR'
+ACBL_DEFAULT_PROFILE_DIRS = (
+    pathlib.Path('e:/bridge/data/acbl/playwright_profile'),
+    pathlib.Path('playwright_profile'),
 )
+
+
+def resolve_acbl_browser_profile_dir():
+    env_dir = os.getenv(ACBL_PROFILE_DIR_ENV)
+    if env_dir:
+        return pathlib.Path(env_dir)
+    for candidate in ACBL_DEFAULT_PROFILE_DIRS:
+        if candidate.exists():
+            return candidate
+    return None
+
 
 CHECK_URL = "https://my.acbl.org/club-results"
 SOLVE_TIMEOUT_SECONDS = 300
@@ -59,7 +73,10 @@ def main() -> int:
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
-                f'--window-size={ACBL_VIEWPORT_WIDTH},{ACBL_VIEWPORT_HEIGHT}',
+                '--window-size=1280,900',
+                # Chrome refuses to run as root (typical in containers) with
+                # its sandbox enabled.
+                *(['--no-sandbox'] if os.name == 'posix' and os.geteuid() == 0 else []),
             ],
             no_viewport=True,
         )
