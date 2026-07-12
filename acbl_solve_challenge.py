@@ -45,18 +45,46 @@ def resolve_acbl_browser_profile_dir():
 
 CHECK_URL = "https://my.acbl.org/club-results"
 SOLVE_TIMEOUT_SECONDS = 300
-CHALLENGE_MARKERS = ('just a moment', 'challenge-platform', '_cf_chl_opt', 'cf_chl_', 'turnstile')
+# Markers that appear on the Cloudflare interstitial itself — not on the live
+# results page (which may still embed turnstile scripts after clearance).
+INTERSTITIAL_MARKERS = (
+    'just a moment',
+    'checking your browser',
+    'challenge-platform',
+    '_cf_chl_opt',
+    'cf-challenge',
+    'cf_chl_',
+)
 
 
-def is_challenged(page) -> bool:
+def _has_cf_clearance(context) -> bool:
+    return any(c['name'] == 'cf_clearance' for c in context.cookies('https://my.acbl.org'))
+
+
+def is_challenged(page, context=None) -> bool:
+    """Return True while the Cloudflare interstitial is still blocking access."""
+    if context is not None and _has_cf_clearance(context):
+        return False
+
     try:
+        url = (page.url or '').lower()
         title = (page.title() or '').lower()
+    except Exception:
+        return True  # mid-navigation
+
+    if 'just a moment' in title or 'checking your browser' in title:
+        return True
+
+    # Landed on club-results without the interstitial title → cleared.
+    if 'my.acbl.org/club-results' in url:
+        return False
+
+    try:
         content = page.content().lower()
     except Exception:
-        return True  # mid-navigation; treat as not yet cleared
-    if 'just a moment' in title:
         return True
-    return any(m in content for m in CHALLENGE_MARKERS) and 'club-results' not in title
+
+    return any(m in content for m in INTERSTITIAL_MARKERS)
 
 
 def main() -> int:
@@ -84,7 +112,7 @@ def main() -> int:
         try:
             page.goto(CHECK_URL, wait_until='domcontentloaded', timeout=60000)
 
-            if not is_challenged(page):
+            if not is_challenged(page, context):
                 print("No challenge shown - the profile is already cleared. Nothing to do.")
                 return 0
 
@@ -95,8 +123,9 @@ def main() -> int:
             print()
 
             deadline = time.time() + SOLVE_TIMEOUT_SECONDS
+            last_heartbeat = time.time()
             while time.time() < deadline:
-                if not is_challenged(page):
+                if not is_challenged(page, context):
                     print("Challenge cleared - clearance cookie saved to the profile.")
                     for c in context.cookies('https://my.acbl.org'):
                         if c['name'] == 'cf_clearance':
@@ -105,6 +134,15 @@ def main() -> int:
                                 print(f"cf_clearance expires: {time.strftime('%Y-%m-%d', time.localtime(exp))}")
                     print("Automated club-results fetching should now work until the cookie expires.")
                     return 0
+                if time.time() - last_heartbeat >= 15:
+                    remaining = int(deadline - time.time())
+                    cookie = 'yes' if _has_cf_clearance(context) else 'no'
+                    print(
+                        f"Still waiting ({remaining}s left). "
+                        f"url={page.url!r} title={page.title()!r} cf_clearance={cookie}",
+                        flush=True,
+                    )
+                    last_heartbeat = time.time()
                 time.sleep(2)
 
             print("Timed out waiting for the challenge to be solved. Run the script again.")
