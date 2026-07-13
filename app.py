@@ -1729,6 +1729,7 @@ def create_sidebar() -> None:
     t = time.time()
 
     st.sidebar.caption(f"Build:{st.session_state.app_datetime}")
+    streamlitlib.render_memory_sidebar_caption(st)
 
     # Check if we need to handle validation failure
     validation_failed = st.session_state.get('player_id_validation_failed', False)
