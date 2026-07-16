@@ -19,6 +19,8 @@ import sys
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union
 
+from mlBridge.mlBridgeLib import cast_numeric_display_columns
+
 # todo: shouldn't other methods be abstract and initialized in main()?
 class PostmortemBase(ABC):
     """Base class containing standard mlBridge code shared across applications."""
@@ -112,7 +114,7 @@ class PostmortemBase(ABC):
                 st.info("Data is loading... Please wait for processing to complete.")
                 return None
 
-            result_df = con.execute(query).pl()
+            result_df = cast_numeric_display_columns(con.execute(query).pl())
             st.text(f"Result is a dataframe of {len(result_df)} rows.")
             
             # Import streamlitlib for display

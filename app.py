@@ -133,7 +133,7 @@ from mlBridge.mlBridgeAcblLib import (
     merge_clean_augment_tournament_dfs,
 )
 import streamlitlib.streamlitlib as streamlitlib # must be placed after sys.path.append. vscode re-format likes to move this to the top
-from mlBridge.mlBridgeLib import pd_options_display, contract_classes # must be placed after sys.path.append. vscode re-format likes to move this to the top
+from mlBridge.mlBridgeLib import pd_options_display, contract_classes, cast_numeric_display_columns # must be placed after sys.path.append. vscode re-format likes to move this to the top
 from mlBridge.mlBridgeAugmentLib import (
     AllAugmentations,
 )
@@ -160,7 +160,7 @@ def ShowDataFrameTable(df: Any, key: str, query: Optional[str] = None, show_sql_
     query_engine = st.session_state.get('query_engine', 'DuckDB')
     
     try:
-        result_df = get_db_connection().execute(query).pl()
+        result_df = cast_numeric_display_columns(get_db_connection().execute(query).pl())
         st.text(f"Result is a dataframe of {len(result_df)} rows.")
         if show_sql_query and st.session_state.show_sql_query:
             # Debug: if Pct_NS_Pred exists in result, show stats
@@ -572,6 +572,8 @@ def change_game_state(player_id: str, session_id: str) -> None: # todo: rename t
         pass
     
     assert df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {df.select(pl.col(pl.Object)).columns}"
+    df = cast_numeric_display_columns(df)
+    st.session_state.df = df
     con.register(table_name, df) # ugh, df['scores_l'] must be previously dropped otherwise this hangs. reason unknown.
     
     # (debug removed)
@@ -1613,6 +1615,7 @@ def run_ai_predictions_now() -> None:
     except Exception:
         pass
     assert st.session_state.df.select(pl.col(pl.Object)).is_empty(), f"Found Object columns: {st.session_state.df.select(pl.col(pl.Object)).columns}"
+    st.session_state.df = cast_numeric_display_columns(st.session_state.df)
     con.register(table_name, st.session_state.df)
     # Update schema string
     st.session_state.df_schema_string = create_schema_string(st.session_state.df, con)

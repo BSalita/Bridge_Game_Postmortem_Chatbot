@@ -241,8 +241,11 @@ def ShowDataFrameTable(table_df,key=None,output_method='aggrid',color_column=Non
         gb.configure_selection(selection_mode='single', use_checkbox=False)  # Enable single row selection
         gb.configure_default_column(cellStyle={'color': 'black', 'font-size': '12px'}, suppressMenu=True, wrapHeaderText=True, autoHeaderHeight=True)
         
-        # Configure numeric columns for proper sorting
+        # Configure numeric columns for proper sorting (Board is often object dtype from DuckDB/SQL).
+        numeric_sort_columns = {'Board', 'Tricks', 'DD_Tricks', 'DD_Tricks_Dummy', 'Board_Count', 'Board_Plays'}
         for col in table_df.columns:
+            if col in numeric_sort_columns and not pd.api.types.is_numeric_dtype(table_df[col]):
+                table_df[col] = pd.to_numeric(table_df[col], errors='coerce')
             if pd.api.types.is_numeric_dtype(table_df[col]):
                 gb.configure_column(col, type=['numericColumn'], filter='agNumberColumnFilter')
         
