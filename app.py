@@ -234,8 +234,17 @@ def create_schema_string(df: Any, con: Any) -> str:
     return df_schema_string
 
 
+def _normalize_session_id_arg(session_id: Any) -> Any:
+    """Treat 'latest' (case-insensitive) as None so callers pick the most recent game."""
+    if isinstance(session_id, str) and session_id.strip().lower() == 'latest':
+        return None
+    return session_id
+
+
 def change_game_state(player_id: str, session_id: str) -> None: # todo: rename to session_id?
     global acbl_api_key
+
+    session_id = _normalize_session_id_arg(session_id)
 
     # Clear prediction cache when loading a new game/session
     st.session_state.predictions_cached = False
@@ -715,7 +724,7 @@ def slash_about() -> str:
 
 # ---- URL Query Parameter Sync ----
 # Sidebar options below are kept in sync with the browser URL so links are
-# shareable/bookmarkable: ?player_id=...&session_id=...&show_sql_query=1&sd_samples=10
+# shareable/bookmarkable: ?player_id=...&session_id=...|latest&show_sql_query=1&sd_samples=10
 _URL_PARAM_KEYS = ('player_id', 'session_id', 'show_sql_query', 'sd_samples')
 
 
@@ -757,13 +766,17 @@ def apply_url_params_to_state() -> None:
         sid = qp['session_id']
         if isinstance(sid, str) and sid.strip():
             sid = sid.strip()
-            # Club session_ids are ints in game_urls_d; tournament session_ids are
-            # strings in tournament_session_urls_d. Prefer int when possible and
-            # let change_game_state normalize as needed.
-            try:
-                st.session_state.session_id = int(sid)
-            except ValueError:
-                st.session_state.session_id = sid
+            # 'latest' means most recent club/tournament game (same as omitting session_id).
+            if sid.lower() == 'latest':
+                st.session_state.session_id = None
+            else:
+                # Club session_ids are ints in game_urls_d; tournament session_ids are
+                # strings in tournament_session_urls_d. Prefer int when possible and
+                # let change_game_state normalize as needed.
+                try:
+                    st.session_state.session_id = int(sid)
+                except ValueError:
+                    st.session_state.session_id = sid
 
     if 'show_sql_query' in qp:
         v = str(qp['show_sql_query']).strip().lower()
@@ -1734,7 +1747,6 @@ def create_sidebar() -> None:
     t = time.time()
 
     st.sidebar.caption(f"Build:{st.session_state.app_datetime}")
-    streamlitlib.render_memory_sidebar_caption(st)
 
     # Check if we need to handle validation failure
     validation_failed = st.session_state.get('player_id_validation_failed', False)
@@ -2810,6 +2822,12 @@ class BridgeGamePostmortemChatbot(PostmortemBase):
         """Generate postmortem report using button selection."""
         # Use the global write_report function that respects selected_button
         write_report()
+
+    def main(self):
+        """Main entry: same as base, plus Memory footer on the main page."""
+        super().main()
+        # Memory footer on the main page (same pattern as Elo_Ratings / ffbridge apps).
+        st.caption(streamlitlib.get_memory_caption_line(st))
 
 
 def main() -> None:

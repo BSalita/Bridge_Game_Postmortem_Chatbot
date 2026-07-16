@@ -624,11 +624,14 @@ except ImportError:
     from memory_usage import format_memory_metrics, update_session_peak_memory
 
 
-def render_memory_sidebar_caption(st_module) -> None:
-    """Show live cgroup/process memory in the sidebar (updates each rerun)."""
+def get_memory_caption_line(st_module) -> str:
+    """Return live cgroup/process memory line (updates peak across reruns)."""
     metrics = update_session_peak_memory(st_module.session_state)
     peak = st_module.session_state.get("_peak_cgroup_bytes")
-    st_module.sidebar.caption(
-        format_memory_metrics(metrics, peak_cgroup_bytes=peak or None)
-    )
+    return format_memory_metrics(metrics, peak_cgroup_bytes=peak or None)
+
+
+def render_memory_sidebar_caption(st_module) -> None:
+    """Show live cgroup/process memory in the sidebar (updates each rerun)."""
+    st_module.sidebar.caption(get_memory_caption_line(st_module))
 
