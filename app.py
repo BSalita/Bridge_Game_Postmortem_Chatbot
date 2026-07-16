@@ -119,8 +119,10 @@ assert 'Authorization' not in acbl_api_key, "ACBL_API_KEY must not contain 'Auth
 
 # mlBridgeLib.pd_options_display()
 
-sys.path.append(str(pathlib.Path.cwd().joinpath('mlBridge')))  # global Requires "./mlBridge" be in extraPaths in .vscode/settings.json
-sys.path.append(str(pathlib.Path.cwd().joinpath('streamlitlib')))  # global
+_APP_DIR = pathlib.Path(__file__).resolve().parent
+for _p in (_APP_DIR, _APP_DIR / 'mlBridge', _APP_DIR / 'streamlitlib'):
+    if _p.is_dir() and str(_p) not in sys.path:
+        sys.path.append(str(_p))
 
 # streamlitlib, mlBridge must be placed after sys.path.append. vscode re-format likes to move them to the top
 from mlBridge.mlBridgeAcblLib import (
